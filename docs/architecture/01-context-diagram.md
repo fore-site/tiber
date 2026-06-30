@@ -10,35 +10,7 @@ The context diagram serves as the foundation for subsequent architecture documen
 
 ## Diagram
 
-flowchart LR
-
-    developer["Application Developer"]
-    admin["System Administrator"]
-    user["End User"]
-
-    client["Client Applications"]
-
-    ai["AI Providers"]
-
-    provider["Notification Providers"]
-
-    monitor["Monitoring Systems"]
-
-    tiber["Tiber"]
-
-    developer -->|Configures / Integrates| tiber
-
-    admin -->|Monitors| tiber
-
-    client -->|Notification Requests| tiber
-
-    tiber -->|Notification Delivery| provider
-
-    tiber -->|AI Content Enhancement| ai
-
-    provider -->|Delivers Messages| user
-
-    monitor <-->|Metrics / Health| tiber
+![context diagram](../diagrams/context-diagram.svg)
 
 ## Interaction Summary
 
