@@ -135,5 +135,6 @@ This section becomes a historical log as the project evolves.
 - [ ] Distributed tracing
 - [ ] Translation and digest creation
 - [ ] A/B testing for notification strategies, multi-region, tenant-specific models
+- [ ] Developer Experience (SDKs, CLIs, etc)
 
 ---
