@@ -36,7 +36,7 @@ This section becomes a historical log as the project evolves.
 ### Phase 1: Foundations and System Design
 
 - [ ] Repo scaffold (monorepo: `/backend`, `/frontend`, `/docs`)
-- [ ] Architecture doc + diagram (this doc is the seed)
+- [ ] Architecture doc + diagram
 - [ ] API contract first (OpenAPI spec — design before you build)
 - [ ] DB schema design: `users`, `notifications`, `delivery_logs`, `events`, `preferences`, `providers`
 - [ ] Docker Compose: API + Postgres + RabbitMQ + Redis, running locally
