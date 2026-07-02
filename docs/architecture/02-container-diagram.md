@@ -35,4 +35,4 @@ This diagram shows the internal containers that make up the Tiber platform; The 
 
 ## What This Diagram Does Not Show
 
-This diagram does not show the internal structure of any container consisting of components, business capabilities, or code organisation are covered in the Level 3 diagrams. It does not show the RabbitMQ exchange and queue topology (exchanges, routing keys, dead-letter bindings), which is documented separately in the messaging topology document. Deployment infrastructure, i.e how containers are hosted, scaled, and networked on Render and Fly.io is covered in the infrastructure and deployment documentation.
+This diagram does not show the internal structure of any container consisting of components, business capabilities, or code organisation are covered in the Level 3 diagrams. It does not show the RabbitMQ exchange and queue topology (exchanges, routing keys, dead-letter bindings).
