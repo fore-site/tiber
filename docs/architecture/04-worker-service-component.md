@@ -19,7 +19,38 @@ This diagram shows the business capabilities that make up the Tiber Worker Servi
 
 ## Key Decisions
 
-- **Thin payload with pre-resolved stable fields:** Three approaches were considered for what a notification job carries on the queue. A notification ID only (fetch everything from Postgres at processing time) would cause read amplification under load and couple Worker throughput to Postgres read capacity. A full payload carrying all data including user preferences and compliance rules would be self-contained but stale, i.e if preferences change between enqueue and delivery, the Worker acts on outdated state. The chosen approach is a middle path: the payload carries fields that are stable and expensive to recompute at dispatch time (rendered content, recipient identifiers, ML predictions from intake) and omits fields that can drift (DND windows, compliance rules). The Dispatch Policy Guard fetches only the drift-sensitive fields from Postgres at dispatch time, which is the minimal read necessary to guarantee freshness. Retry state, which are attempt count and max attempts, lives in the payload itself rather than in a separate Postgres table, meaning job state is self-contained and survives worker restarts without a database lookup.
+- **Thin payload with pre-resolved stable fields:** Three approaches were considered for what a notification job carries on the queue. A notification ID only (fetch everything from Postgres at processing time) would cause read amplification under load and couple Worker throughput to Postgres read capacity. A full payload carrying all data including user preferences and compliance rules would be self-contained but stale, i.e if preferences change between enqueue and delivery, the Worker acts on outdated state. The chosen approach is a middle path: the payload carries fields that are stable and expensive to recompute at dispatch time (rendered content, recipient identifiers) and omits fields that can drift (DND windows, compliance rules). The Dispatch Policy Guard fetches only the drift-sensitive fields from Postgres at dispatch time, which is the minimal read necessary to guarantee freshness. Retry state, which are attempt count and max attempts, lives in the payload itself rather than in a separate Postgres table, meaning job state is self-contained and survives worker restarts without a database lookup.
+
+```json
+{
+  "metadata": {
+    "notification_id": "uuid",
+    "project_id": "uuid",
+    "idempotency_key": "client-generated-key",
+    "correlation_id": "uuid",
+    "schema_version": 1,
+    "enqueued_at": "2025-01-01T08:45:00Z"
+  },
+  "delivery": {
+    "channel": "email",
+    "recipient": {
+      "email": "user@example.com"
+    }
+  },
+  "content": {
+    "subject": "Your order has shipped",
+    "body": "Hi Jane, your order #1234 is on its way."
+  },
+  "scheduling": {
+    "scheduled_at": "2025-01-01T09:00:00Z",
+    "send_time_basis": "ml_predicted"
+  },
+  "retry": {
+    "attempt": 1,
+    "max_attempts": 3
+  }
+}
+```
 
 - **Notification Processor is a pure orchestrator — all branching logic lives here:** The Notification Processor calls every other pipeline component in sequence but owns no delivery logic, retry logic, or outcome recording logic itself. This is an intentional design rule, not just a description. The consequence of the rule is that the Notification Processor is the only component that makes routing decisions: on provider success it routes to the Delivery Tracker; on provider failure it routes to the Retry Manager; on policy guard rejection it stops the pipeline and records a policy violation. If business logic ever accumulates in the Notification Processor beyond routing, it belongs in one of the components it calls. This keeps every component in the pipeline independently testable — the Notification Processor can be tested with mock implementations of every component it calls, and each component can be tested in complete isolation.
 
