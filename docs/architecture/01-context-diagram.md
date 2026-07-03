@@ -1,6 +1,7 @@
 # System Context Diagram
 
 **C4 Level:** 1. System Context
+
 **Container in focus:** N/A
 
 ---

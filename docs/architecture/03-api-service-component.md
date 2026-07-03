@@ -1,6 +1,7 @@
 # API Service Component Diagram
 
 **C4 Level:** 3. Components
+
 **Container in focus:** API Service (FastAPI)
 
 ---
