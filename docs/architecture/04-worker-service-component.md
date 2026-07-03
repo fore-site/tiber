@@ -4,19 +4,13 @@
 
 **Container in focus:** Worker Service (Celery)
 
----
-
 ## Purpose
 
 This diagram shows the business capabilities that make up the Tiber Worker Service and the dependencies between them. It is intended for engineers working on or reviewing the asynchronous delivery pipeline who need to understand how a notification job moves from the message queue to a delivered or dead-lettered outcome. The Worker Service owns one concern end to end: consume a job, process it through the pipeline, record the outcome, and notify the client. It does not own notification intake, scheduling decisions, or ML training data collection. Those belong to the API Service and ML Engine respectively.
 
----
-
 ## Diagram
 
 ![worker service](../diagrams/worker-service-component.svg)
-
----
 
 ## Key Decisions
 
@@ -66,8 +60,6 @@ This diagram shows the business capabilities that make up the Tiber Worker Servi
 - **ML and AI coordinators degrade gracefully and never block delivery:** If the ML Engine is unavailable at dispatch time, the ML Coordinator falls back to defaults (medium priority, immediate dispatch, no channel override) and logs the degradation. If the AI Gateway is unavailable, the AI Coordinator uses the original notification content as-is and logs the degradation. In both cases the pipeline continues without interruption. This implements the Vision document's principle that AI and ML are enhancements to delivery, not dependencies for it. A platform that cannot send a plain notification because an ML model is unreachable is not production-grade.
 
 - **Engagement Tracker belongs to the ML Engine, not the Worker Service:** Provider engagement events (opens, clicks, bounces, unsubscribes) arrive at the API Service as inbound provider webhooks, are validated and enqueued, and are consumed by the Engagement Tracker in the ML Engine container. Placing the Engagement Tracker in the Worker Service would conflate two unrelated concerns, i.e delivery pipeline processing and ML training data collection in the same container. The Worker Service's responsibility ends when a notification is delivered and its outcome is recorded. What the ML training pipeline does with that outcome afterwards is the ML Engine's concern.
-
----
 
 ## What This Diagram Does Not Show
 

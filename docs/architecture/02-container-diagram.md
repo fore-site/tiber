@@ -4,19 +4,13 @@
 
 **Container in focus:** N/A
 
----
-
 ## Purpose
 
 This diagram shows the internal containers that make up the Tiber platform; The deployable units, their technology choices, and how they communicate with each other and with external systems. It is intended for engineers and technical reviewers who need to understand the high-level architecture before working on any individual container. It does not show internal component structure; that is the concern of the Level 3 diagrams for the API Service, Worker Service, and ML Engine.
 
----
-
 ## Diagram
 
 ![container diagram](../diagrams/container-diagram.svg)
-
----
 
 ## Key Decisions
 
@@ -31,8 +25,6 @@ This diagram shows the internal containers that make up the Tiber platform; The 
 - **Provider abstraction with selective live integration:** The Worker Service dispatches to a provider abstraction layer that supports all five channels (email, push, SMS, webhook, in-app) through a common interface. Email and push are fully implemented with live provider integrations. SMS, webhook delivery, and in-app are implemented as documented mock adapters that satisfy the same interface. This is a deliberate scope decision. The abstraction proves extensibility without requiring five live integrations. The decision is architecturally visible here because all providers appear as a single external system, not five separate ones.
 
 - **PostgreSQL is the single source of truth for all persistent state:** Notifications, users, delivery logs, engagement events, ML training data, blackout dates, compliance rules, and webhook registrations all live in Postgres. Redis holds only ephemeral state with defined TTLs. This means Redis can be flushed or replaced without data loss, only active sessions, in-flight rate limit windows, and recent idempotency keys are affected.
-
----
 
 ## What This Diagram Does Not Show
 

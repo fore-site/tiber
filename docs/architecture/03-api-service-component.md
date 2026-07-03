@@ -4,19 +4,13 @@
 
 **Container in focus:** API Service (FastAPI)
 
----
-
 ## Purpose
 
 This diagram shows the business capabilities that make up the Tiber API Service and the dependencies between them. It is intended for engineers working on or reviewing the API Service who need to understand how responsibility is divided internally before reading or writing code. Each component represents a distinct, nameable capability, not a class, module, or framework concept. The diagram answers the question: what does the API Service actually do, and what is the boundary between each of those things?
 
----
-
 ## Diagram
 
 ![api service](../diagrams/api-service-component.svg)
-
----
 
 ## Key Decisions
 
@@ -39,8 +33,6 @@ This diagram shows the business capabilities that make up the Tiber API Service 
 - **Webhooks in the API Service owns registration only, not firing:** Client applications register their webhook endpoint URLs and subscribe to specific delivery events (delivered, failed, bounced) through this component. The actual dispatch of webhook callbacks when those events occur happens in the Worker Service, which queries the registered endpoints from Postgres at delivery time. Both containers read the same webhooks table in Postgres — the API Service writes to it, the Worker reads from it. This is a deliberate boundary: the API Service should not know about delivery outcomes, and the Worker Service should not own endpoint management.
 
 - **Observability treats Redis unavailability as unhealthy, not degraded:** Most health check implementations distinguish between unhealthy (the service cannot function) and degraded (the service is functioning with reduced capability). For Tiber, Redis unavailability is not a degraded state. It is an unhealthy state because the Authentication component fails closed when Redis is unreachable. A load balancer or deployment platform reading the `/health` endpoint needs to know that Redis down means the API Service is effectively down for authenticated requests. Reporting it as degraded would mask a full outage.
-
----
 
 ## What This Diagram Does Not Show
 

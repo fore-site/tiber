@@ -4,19 +4,13 @@
 
 **Container in focus:** N/A
 
----
-
 ## Purpose
 
 This diagram defines Tiber's system boundary and identifies every external actor and system it interacts with. It is intended for any reader be it technical or non-technical, who needs to understand what Tiber is, who uses it, and what it depends on before reading any further architecture detail. It deliberately omits internal structure; that is the concern of the Level 2 Container diagram.
 
----
-
 ## Diagram
 
 ![context diagram](../diagrams/context-diagram.svg)
-
----
 
 ## Key Decisions
 
@@ -27,8 +21,6 @@ This diagram defines Tiber's system boundary and identifies every external actor
 - **Client Applications interact with Tiber only via the REST API:** There is no SDK, no direct database access, and no message queue integration for external clients in this version. This is a deliberate boundary, it keeps the API as the single integration surface and makes versioning, auth enforcement, and rate limiting straightforward.
 
 - **Monitoring Systems have a bidirectional relationship:** Tiber exposes metrics and health endpoints; monitoring systems scrape them. Tiber does not push metrics to an external system. This is a pull-based observability model appropriate for the deployment targets.
-
----
 
 ## What This Diagram Does Not Show
 
