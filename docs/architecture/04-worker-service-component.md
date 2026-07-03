@@ -29,7 +29,7 @@ This diagram shows the business capabilities that make up the Tiber Worker Servi
     "idempotency_key": "client-generated-key",
     "correlation_id": "uuid",
     "schema_version": 1,
-    "enqueued_at": "2025-01-01T08:45:00Z"
+    "enqueued_at": "2026-01-01T08:45:00Z"
   },
   "delivery": {
     "channel": "email",
@@ -39,10 +39,10 @@ This diagram shows the business capabilities that make up the Tiber Worker Servi
   },
   "content": {
     "subject": "Your order has shipped",
-    "body": "Hi Jane, your order #1234 is on its way."
+    "body": "Hi Pascal, your order #1234 is on its way."
   },
   "scheduling": {
-    "scheduled_at": "2025-01-01T09:00:00Z",
+    "scheduled_at": "2026-01-01T09:00:00Z",
     "send_time_basis": "ml_predicted"
   },
   "retry": {
