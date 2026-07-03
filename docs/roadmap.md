@@ -10,17 +10,17 @@ Stack: FastAPI + Celery + Postgres + scikit-learn + Next.js
 
 Each release corresponds to a completed roadmap phase. Releases are cumulative, meaning each version includes all functionality from previous versions.
 
-| Version | Phase                                   | Status     |
-| ------- | --------------------------------------- | ---------- |
-| v0.1.0  | Phase 1: Foundations and System Design  | ⏳ Planned |
-| v0.2.0  | Phase 2: Core Notification Engine       | ⏳ Planned |
-| v0.3.0  | Phase 3: Provider Abstraction           | ⏳ Planned |
-| v0.4.0  | Phase 4: Data Simulator                 | ⏳ Planned |
-| v0.5.0  | Phase 5: Machine Learning Services      | ⏳ Planned |
-| v0.6.0  | Phase 6: AI/LLM Services                | ⏳ Planned |
-| v0.7.0  | Phase 7: Platform Features and Frontend | ⏳ Planned |
-| v0.8.0  | Phase 8: Observability                  | ⏳ Planned |
-| v1.0.0  | Production Release                      | ⏳ Planned |
+| Version | Phase                                   | Status  |
+| ------- | --------------------------------------- | ------- |
+| v0.1.0  | Phase 1: Foundations and System Design  | Ongoing |
+| v0.2.0  | Phase 2: Core Notification Engine       | Planned |
+| v0.3.0  | Phase 3: Provider Abstraction           | Planned |
+| v0.4.0  | Phase 4: Data Simulator                 | Planned |
+| v0.5.0  | Phase 5: Machine Learning Services      | Planned |
+| v0.6.0  | Phase 6: AI/LLM Services                | Planned |
+| v0.7.0  | Phase 7: Platform Features and Frontend | Planned |
+| v0.8.0  | Phase 8: Observability                  | Planned |
+| v1.0.0  | Production Release                      | Planned |
 
 ### Release History
 
