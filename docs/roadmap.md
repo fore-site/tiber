@@ -4,8 +4,6 @@
 
 Stack: FastAPI + Celery + Postgres + scikit-learn + Next.js
 
----
-
 ## Release Plan
 
 Each release corresponds to a completed roadmap phase. Releases are cumulative, meaning each version includes all functionality from previous versions.
@@ -24,13 +22,9 @@ Each release corresponds to a completed roadmap phase. Releases are cumulative, 
 
 ### Release History
 
-This section becomes a historical log as the project evolves.
-
 | Version | Date | Highlights      |
 | ------- | ---- | --------------- |
 | —       | —    | No releases yet |
-
----
 
 ## Roadmap
 
@@ -42,7 +36,6 @@ This section becomes a historical log as the project evolves.
 - [ ] DB schema design: `users`, `notifications`, `delivery_logs`, `events`, `preferences`, `providers`
 - [ ] Docker Compose: API + Postgres + RabbitMQ + Redis, running locally
 - [ ] GitHub Actions skeleton: lint (ruff) + test (pytest) on push
-- [ ] ADRs: "Why Celery over FastAPI BackgroundTasks," "Why RabbitMQ over Redis as broker (learning-driven, exchanges/routing keys vs. simple list queue)," "Why provider abstraction over direct integration," "AI vs. ML boundary definition"
 
 **Exit criteria:** `docker-compose up` gives a running API with `/health`, a real schema, CI green on an empty test suite.
 
