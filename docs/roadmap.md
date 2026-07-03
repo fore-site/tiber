@@ -1,6 +1,7 @@
 # Tiber Project Roadmap
 
 **An AI/ML-augmented production-grade notification platform**
+
 Stack: FastAPI + Celery + Postgres + scikit-learn + Next.js
 
 ---
@@ -136,5 +137,3 @@ This section becomes a historical log as the project evolves.
 - [ ] Translation and digest creation
 - [ ] A/B testing for notification strategies, multi-region, tenant-specific models
 - [ ] Developer Experience (SDKs, CLIs, etc)
-
----
