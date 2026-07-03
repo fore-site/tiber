@@ -1,6 +1,6 @@
 # Worker Service Component Diagram
 
-**C4 Level:** 3 – Components
+**C4 Level:** 3. Components
 **Container in focus:** Worker Service (Celery)
 
 ---
