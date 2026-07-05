@@ -8,7 +8,49 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 ## Diagram
 
-![domain model](../diagrams/domain-model.svg)
+```mermaid
+classDiagram
+
+direction TB
+
+class Workspace {
+    <<Future>>
+}
+
+class Project
+class APIKey
+class Template
+class Recipient
+class UserPreference
+class Notification
+class DeliveryAttempt
+class EngagementEvent
+class DeliveryPolicy
+class WebhookEndpoint
+class DeliveryChannel
+class Provider
+class WebhookEvent
+
+Workspace "1" --> "0..*" Project : contains
+
+Project "1" --> "0..*" APIKey : owns
+Project "1" --> "0..*" Template : owns
+Project "1" --> "0..*" Recipient : manages
+Project "1" --> "0..*" Notification : creates
+Project "1" --> "0..*" WebhookEndpoint : registers
+Project "1" --> "1" DeliveryPolicy : configures
+
+Recipient "1" --> "1" UserPreference : has
+
+Template "1" <-- "0..*" Notification : optionally uses
+
+Notification "1" --> "1..*" DeliveryAttempt : produces
+Notification "1" --> "0..*" EngagementEvent : generates
+
+DeliveryAttempt "0..*" --> "1" DeliveryChannel : sent via
+DeliveryAttempt "0..*" --> "1" Provider : delivered by
+DeliveryAttempt "1" --> "0..*" WebhookEvent : emits
+```
 
 ## Core Concepts
 
@@ -68,6 +110,8 @@ Each delivery attempt represents an immutable record of a single delivery execut
 - **Project is the tenancy boundary:** All persistent resources belong to exactly one project. Project ownership is enforced throughout the platform to ensure tenant isolation.
 
 - **Notifications are immutable:** After a notification has been accepted, its content is never modified. Retries generate additional delivery attempts rather than altering the original notification.
+
+- **Engagement events are modeled separately from delivery attempts:** Delivery attempts and engagement events represent different stages of the notification lifecycle and therefore are modeled as separate domain concepts. A Delivery Attempt records the platform's attempt to send a notification through a delivery provider and captures operational outcomes such as success, failure, retries, and provider responses. An Engagement Event records recipient interactions that occur after delivery, such as opens, clicks, bounces, unsubscribes, or push notification taps.
 
 - **Delivery history is modelled separately:** Delivery attempts are distinct from notifications to preserve a complete history of retries, failures, provider responses, and delivery outcomes.
 
