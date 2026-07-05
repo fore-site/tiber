@@ -8,49 +8,7 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 ## Diagram
 
-```mermaid
-classDiagram
-
-direction TB
-
-class Workspace {
-    <<Future>>
-}
-
-class Project
-class APIKey
-class Template
-class Recipient
-class UserPreference
-class Notification
-class DeliveryAttempt
-class EngagementEvent
-class DeliveryPolicy
-class WebhookEndpoint
-class DeliveryChannel
-class Provider
-class WebhookEvent
-
-Workspace "1" --> "0..*" Project : contains
-
-Project "1" --> "0..*" APIKey : owns
-Project "1" --> "0..*" Template : owns
-Project "1" --> "0..*" Recipient : manages
-Project "1" --> "0..*" Notification : creates
-Project "1" --> "0..*" WebhookEndpoint : registers
-Project "1" --> "1" DeliveryPolicy : configures
-
-Recipient "1" --> "1" UserPreference : has
-
-Template "1" <-- "0..*" Notification : optionally uses
-
-Notification "1" --> "1..*" DeliveryAttempt : produces
-Notification "1" --> "0..*" EngagementEvent : generates
-
-DeliveryAttempt "0..*" --> "1" DeliveryChannel : sent via
-DeliveryAttempt "0..*" --> "1" Provider : delivered by
-DeliveryAttempt "1" --> "0..*" WebhookEvent : emits
-```
+![domain model](../diagrams/domain-model.svg)
 
 ## Core Concepts
 
