@@ -2,9 +2,7 @@
 
 ## Purpose
 
-This diagram models the core business concepts within Tiber and the relationships between them.
-
-Unlike the C4 architecture diagrams, which describe the structure of the software system, the domain model focuses on the problem domain by identifying the entities Tiber manages, their responsibilities, and how they relate to one another.
+This diagram models the core business concepts within Tiber and the relationships between them. Unlike the C4 architecture diagrams, which describe the structure of the software system, the domain model focuses on the problem domain by identifying the entities Tiber manages, their responsibilities, and how they relate to one another.
 
 The model provides a shared ubiquitous language for the project and serves as the conceptual foundation for the database schema, REST API resources, authorization model, and event contracts while remaining independent of implementation details.
 
