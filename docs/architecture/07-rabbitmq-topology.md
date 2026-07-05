@@ -15,12 +15,13 @@ Tiber uses a single topic exchange named `notifications.exchange` to route notif
 
 Each notification is published with a routing key representing the target channel.
 
-| Routing Key                       | Destination Queue        |
-| --------------------------------- | ------------------------ |
-| `notification.email`              | `email.delivery.queue`   |
-| `notification.push`               | `push.delivery.queue`    |
-| `notification.sms` _(future)_     | `sms.delivery.queue`     |
-| `notification.webhook` _(future)_ | `webhook.delivery.queue` |
+| Routing Key             | Destination Queue        |
+| ----------------------- | ------------------------ |
+| `notification.email`    | `email.delivery.queue`   |
+| `notification.push`     | `push.delivery.queue`    |
+| `notification.sms`      | `sms.delivery.queue`     |
+| `notification.webhook`  | `webhook.delivery.queue` |
+| `notification.in_app`   | `in_app.delivery.queue`  |
 
 This routing strategy allows additional notification channels to be introduced without modifying publishers.
 
@@ -36,6 +37,9 @@ Examples include:
 
 - `email.delivery.queue`
 - `push.delivery.queue`
+- `sms.delivery.queue`
+- `webhook.delivery.queue`
+- `in_app.delivery.queue`
 
 ### Retry Queues
 
@@ -55,6 +59,9 @@ Examples include:
 
 - `email.dlq`
 - `push.dlq`
+- `sms.dlq`
+- `webhook.dlq`
+- `in_app.dlq`
 
 ## Key Decisions
 
@@ -64,9 +71,9 @@ Examples include:
 
 - **Publisher confirms:** The API Service publishes notification jobs using RabbitMQ Publisher Confirms. A notification request is only considered successfully queued after RabbitMQ acknowledges durable acceptance of the published message. This prevents silent message loss between the API Service and the broker.
 
-- **Thin message payload:** Notification jobs carry a self-contained payload containing stable delivery information such as recipient, rendered content, scheduling metadata, and retry state. The Worker Service only retrieves information that may legitimately change between enqueue and delivery, such as delivery policies or user preferences. This minimizes database access while ensuring policy decisions remain current at dispatch time.
+- **Thin message payload:** Notification jobs carry a self-contained payload containing stable delivery information such as recipient, rendered content, scheduling metadata, ML prediction metadata, and retry state. The Worker Service only retrieves information that may legitimately change between enqueue and delivery, such as delivery policies or user preferences. This minimizes database access while ensuring policy decisions remain current at dispatch time.
 
-- **Business scheduling is separate from messaging:** RabbitMQ is responsible only for transporting notification jobs. Business scheduling—such as delayed delivery requested by the client or ML-recommended send times—is handled by the Worker Service's Scheduler Executor. RabbitMQ retry queues are used exclusively for operational retry delays following delivery failures. This separation ensures business scheduling logic remains independent of messaging infrastructure.
+- **Business scheduling is separate from messaging:** RabbitMQ is responsible only for transporting notification jobs. Business scheduling decisions, such as delayed delivery requested by the client or ML-recommended send times, are made before publication and carried in the job payload as scheduling metadata. The Worker Service's Scheduler Executor uses that metadata to route immediate jobs or hold deferred jobs until their scheduled time. RabbitMQ retry queues are used exclusively for operational retry delays following delivery failures. This separation ensures business scheduling logic remains independent of messaging infrastructure.
 
 - **Broker-managed retry delays:** Retry delays are implemented using RabbitMQ retry queues rather than sleeping or delaying worker processes. Once the configured delay expires, RabbitMQ automatically returns the message to its original delivery queue for another delivery attempt. This keeps worker processes available to process new jobs while the broker manages retry timing.
 
