@@ -33,7 +33,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 
 ### Phase 1: Foundations and System Design
 
-- [ ] Repo scaffold (monorepo: `/backend`, `/frontend`, `/docs`)
+- [ ] Repo scaffold (monorepo: `/app`, `/dashboard`, `/docs`)
 - [ ] Architecture docs and diagrams complete: context, containers, API Service, Worker Service, ML Engine, domain model, RabbitMQ topology
 - [ ] API contract first (OpenAPI spec, design project-scoped routes before building)
 - [ ] DB schema design from the domain model: `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `providers`, `webhook_endpoints`, `webhook_events`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
