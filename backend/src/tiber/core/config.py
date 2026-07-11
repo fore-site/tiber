@@ -17,21 +17,21 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Database
-    database_url: str = "postgresql+asyncpg://tiber:tiber@localhost:5432/tiber"
-    database_sync_url: str = "postgresql+psycopg2://tiber:tiber@localhost:5432/tiber"
+    database_url: str = "postgresql+asyncpg://postgres:tiber@localhost:5432/tiber"
+    database_sync_url: str = "postgresql+psycopg://postgres:tiber@localhost:5432/tiber"
 
     # RabbitMQ 
     rabbitmq_url: str = "amqp://tiber:tiber@localhost:5672/"
     celery_broker_url: str = "amqp://tiber:tiber@localhost:5672/"
-    celery_result_backend: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/3"
 
-    # Redis
+    # Redis (auth state, rate limiting, idempotency)
     redis_url: str = "redis://localhost:6379/2"
 
     # Auth
     secret_key: str = "change-me-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 15
+    access_token_expire_minutes: int = 10
     refresh_token_expire_days: int = 7
 
     # Rate limiting
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
 
     # Idempotency
-    idempotency_ttl_seconds: int = 86400  # 24 hours
+    idempotency_ttl_seconds: int = 86400
 
     # Object storage
     storage_endpoint: str = "localhost:9000"
@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     storage_bucket_models: str = "tiber-models"
     storage_bucket_datasets: str = "tiber-datasets"
     storage_secure: bool = False
+
+    # Observability 
+    otlp_endpoint: str = ""
 
     # AI providers
     groq_api_key: str = ""
