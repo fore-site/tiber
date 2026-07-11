@@ -25,7 +25,7 @@ def set_correlation_id(correlation_id: str) -> None:
 
 
 # Structlog processor chain
-def add_correlation_id(
+def _add_correlation_id(
     logger: Any, method: str, event_dict: dict[str, Any]
 ) -> dict[str, Any]:
     event_dict["correlation_id"] = get_correlation_id()
@@ -37,7 +37,7 @@ def configure_logging() -> None:
 
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
-        add_correlation_id,
+        _add_correlation_id,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
