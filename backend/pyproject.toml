@@ -3,7 +3,7 @@ name = "tiber"
 version = "0.1.0"
 description = "An intelligent notification delivery infrastructure"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "aio-pika>=9.6.2",
     "alembic>=1.18.5",
@@ -22,6 +22,7 @@ dependencies = [
     "pandas>=3.0.3",
     "passlib[bcrypt]>=1.7.4",
     "prometheus-client>=0.25.0",
+    "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.5.0",
@@ -53,7 +54,7 @@ packages = ["src/tiber"]
 [tool.ruff]
 src = ["src"]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
  
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
