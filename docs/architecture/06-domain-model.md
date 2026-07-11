@@ -28,6 +28,8 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Delivery Attempt:** Represents a single attempt to deliver a notification through a provider. A notification may produce multiple delivery attempts as a result of retries or provider failures.
 
+- **Engagement Event:** Represents recipient interactions that occur after delivery.
+
 - **Delivery Channel:** Represents the communication medium used to deliver a notification, such as email, SMS, push notification, or webhook.
 
 - **Provider:** Represents the external delivery service responsible for sending notifications over a particular channel.
