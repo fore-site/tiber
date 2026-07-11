@@ -44,19 +44,13 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
 
 
 # Redis key namespaces
-# Keep all key patterns here to prevent collisions across components.
 
 class RedisKeys:
-    # Auth state
-    JWT_BLOCKLIST       = "auth:blocklist:{jti}"           # TTL = token remaining lifetime
-    API_KEY_REVOKED     = "auth:revoked:{key_id}"          # TTL = permanent (no expiry)
-    REFRESH_TOKEN       = "auth:refresh:{token_id}"        # TTL = refresh_token_expire_days
-
-    # Rate limiting (sliding window)
-    RATE_LIMIT          = "ratelimit:{client_id}:{window}"
-
-    # Idempotency
-    IDEMPOTENCY         = "idempotency:{project_id}:{key}" # TTL = idempotency_ttl_seconds
+    """
+    All key patterns in one place.
+    No key string is ever constructed outside of this class.
+    Use the static methods to generate keys with dynamic parts.
+    """
 
     @staticmethod
     def jwt_blocklist(jti: str) -> str:
