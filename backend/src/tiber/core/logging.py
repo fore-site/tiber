@@ -8,19 +8,24 @@ import structlog
 
 from tiber.core.config import get_settings
 
-# Correlation ID context variable
-# Set at request intake, propagated to all downstream log calls,
-# RabbitMQ message headers, and Postgres write operations.
-correlation_id_var: ContextVar[str] = ContextVar(
-    "correlation_id", default=""
-)
+# Request-scoped correlation ID used throughout the application.
+# Other layers may propagate this value to message headers,
+# database records, and telemetry as needed.
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 def get_correlation_id() -> str:
-    return correlation_id_var.get() or str(uuid4())
+    """Retrieve the current correlation ID from the context variable."""
+    cid = correlation_id_var.get()
+    if not cid:
+        # Generate a new correlation ID if not set
+        cid = str(uuid4())
+        correlation_id_var.set(cid)
+    return cid
 
 
 def set_correlation_id(correlation_id: str) -> None:
+    """Set the correlation ID in the context variable."""
     correlation_id_var.set(correlation_id)
 
 
@@ -33,6 +38,7 @@ def _add_correlation_id(
 
 
 def configure_logging() -> None:
+    """Configure logging with structlog and standard logging."""
     settings = get_settings()
 
     shared_processors: list[Any] = [
@@ -52,8 +58,11 @@ def configure_logging() -> None:
         renderer = structlog.processors.JSONRenderer()
 
     structlog.configure(
-        processors=shared_processors + [
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        processors=[
+            *shared_processors,
+            *[
+                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+            ],
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
@@ -77,4 +86,5 @@ def configure_logging() -> None:
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
+    """Retrieve a structlog logger instance for the specified name."""
     return structlog.get_logger(name)
