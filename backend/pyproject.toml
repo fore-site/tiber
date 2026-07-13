@@ -3,6 +3,19 @@ name = "tiber"
 version = "0.1.0"
 description = "An intelligent notification delivery infrastructure"
 readme = "README.md"
+
+authors = [
+    { name = "Ogunsanu Oluwaseun" }
+]
+license = "MIT"
+keywords = [
+    "notifications",
+    "fastapi",
+    "rabbitmq",
+    "celery",
+    "machine-learning"
+]
+
 requires-python = ">=3.14"
 dependencies = [
     "aio-pika>=9.6.2",
@@ -20,7 +33,7 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.43.0",
     "opentelemetry-sdk>=1.43.0",
     "pandas>=3.0.3",
-    "passlib[bcrypt]>=1.7.4",
+    "passlib[argon2]>=1.7.4",
     "prometheus-client>=0.25.0",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
@@ -37,10 +50,12 @@ dependencies = [
 dev = [
     "factory-boy>=3.3.3",
     "faker>=40.28.1",
-    "httpx>=0.28.1",
+    "pre-commit>=4.6.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
+    "respx>=0.23.1",
     "ruff>=0.15.20",
 ]
 
@@ -57,8 +72,20 @@ line-length = 88
 target-version = "py314"
  
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["E501"]
+select = [
+    "E",
+    "F",
+    "I",
+    "N",
+    "W",
+    "D",
+    "S",
+    "UP",
+    "B",
+    "SIM",
+    "RUF"
+]
+ignore = ["E501","D100","D104"]
  
 [tool.ruff.lint.isort]
 known-first-party = ["tiber"]
