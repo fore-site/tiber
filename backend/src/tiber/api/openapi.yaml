@@ -271,9 +271,8 @@ paths:
       tags: [Projects]
       summary: Archive or permanently delete a project
       description: |
-        Archives the project by default and prevents new notifications from being
-        accepted. Existing delivery history, engagement events, and audit
-        records are retained.
+        Archives the project by default and prevents new notifications from being accepted.
+        Existing delivery history, engagement events, and audit records are retained.
 
         To permanently delete a project, pass `?permanent=true`. This operation is irreversible,
         is only permitted when the project satisfies the server's deletion policy 
@@ -315,8 +314,8 @@ paths:
       tags: [API Keys]
       summary: Create an API key
       description: |
-        The raw key value (`tb_xxxxx`) is returned once in this response
-        and never again. Tiber stores only a SHA-256 hash.
+        The raw key value (`tb_xxxxx`) is returned once in this response and never again.
+        Tiber stores only a SHA-256 hash.
         Store the key securely immediately after creation.
       requestBody:
         required: true
@@ -331,6 +330,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIKeyWithSecret"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -349,6 +350,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIKeyList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -367,20 +370,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIKey"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
     delete:
       tags: [API Keys]
       summary: Revoke an API key
-      description: |
-        Revocation is immediate. The key is written to the Redis revocation
-        list and Postgres in the same operation. If either write fails,
-        the entire operation is rejected. Subsequent requests using this
-        key return 401 regardless of the key's natural expiry.
+      description: >
+        Revokes the API key immediately. Once revoked, the key can no
+        longer be used to authenticate requests and cannot be reactivated.
       responses:
         "204":
           description: API key revoked
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -393,6 +398,9 @@ paths:
     post:
       tags: [Templates]
       summary: Create a template
+      description: >
+        Creates a reusable notification template
+        for a specific delivery channel.
       requestBody:
         required: true
         content:
@@ -406,6 +414,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Template"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
         "422":
@@ -414,6 +424,7 @@ paths:
     get:
       tags: [Templates]
       summary: List templates
+      description: Returns templates belonging to the project.
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -429,6 +440,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TemplateList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /v1/projects/{project_id}/templates/{template_id}:
     parameters:
@@ -445,6 +458,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Template"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -465,6 +480,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Template"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -472,10 +489,26 @@ paths:
 
     delete:
       tags: [Templates]
-      summary: Delete a template
+      summary: Archive or permanently delete a Template
+      description: |
+        Archives the project by default and prevents it from being selected for new notifications.
+
+        To permanently delete a project, pass `?permanent=true`. This operation is irreversible.
+      parameters:
+        - name: permanent
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: |
+            When `true`, permanently deletes the template instead of archiving it.
+            If omitted or `false`, the template is archived.
       responses:
         "204":
-          description: Template deleted
+          description: Template archived or permanently deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -501,6 +534,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Recipient"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
         "422":
@@ -512,6 +547,13 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
+        - name: external_id
+          in: query
+          required: false
+          description: >
+            Filter recipients by an exact external identifier match.
+          schema:
+            type: string
       responses:
         "200":
           description: List of recipients
@@ -519,6 +561,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RecipientList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /v1/projects/{project_id}/recipients/{recipient_id}:
     parameters:
@@ -535,6 +579,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Recipient"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -554,6 +600,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Recipient"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -561,15 +609,31 @@ paths:
 
     delete:
       tags: [Recipients]
-      summary: Delete a recipient
+      summary: Archive or permanently delete a Recipient
+      description: |
+        Archives the recipient by default and prevents it from receiving new notifications.
+
+        To permanently delete a recipient, pass `?permanent=true`. This operation is irreversible.
+      parameters:
+        - name: permanent
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: |
+            When `true`, permanently deletes the recipient instead of archiving it.
+            If omitted or `false`, the recipient is archived.
       responses:
         "204":
-          description: Recipient deleted
+          description: Recipient archived or permanently deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
   # User Preferences
-  # Singleton per recipient — PUT upserts, no POST or list endpoint.
+  # Singleton per recipient, PUT upserts, no POST or list endpoint.
 
   /v1/projects/{project_id}/recipients/{recipient_id}/preferences:
     parameters:
@@ -581,7 +645,7 @@ paths:
       summary: Upsert recipient preferences
       description: |
         Creates or fully replaces preferences for this recipient.
-        Preferences are a singleton — there is no list endpoint.
+        Preferences are a singleton, there is no list endpoint.
       requestBody:
         required: true
         content:
@@ -595,6 +659,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserPreference"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -610,6 +676,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserPreference"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -620,6 +688,8 @@ paths:
       responses:
         "204":
           description: Preferences deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -635,8 +705,8 @@ paths:
       description: |
         Accepts a notification request, runs idempotency check,
         resolves the template if provided, applies the Delivery Policy
-        Resolver (user preferences → blackout dates → compliance),
-        and enqueues the job with ML predictions attached.
+        Resolver (user preferences → blackout dates → compliance), persists
+        the notification and enqueues it for asynchronous processing.
 
         Supply `Idempotency-Key` to make client retries safe.
         Duplicate keys within 24 hours return the original 201 response.
@@ -714,18 +784,56 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/projects/{project_id}/notifications/{notification_id}/cancellation:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/NotificationId"
+
+    put:
+      tags: [Notifications]
+      summary: Cancel a notification
+      description: |
+        Cancels a notification that has not yet been dispatched to a provider.
+
+        Only notifications in a cancellable state (for example `pending` or
+        `scheduled`) may be cancelled.
+
+        Notifications that are already processing, delivered,
+        failed, or previously cancelled cannot be cancelled.
+
+      responses:
+        "204":
+          description: Notification cancelled
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            The notification cannot be cancelled because it is no longer
+            in a cancellable state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Delivery Attempts
+
   /v1/projects/{project_id}/notifications/{notification_id}/delivery-attempts:
     parameters:
       - $ref: "#/components/parameters/ProjectId"
       - $ref: "#/components/parameters/NotificationId"
 
     get:
-      tags: [Notifications]
+      tags: [Delivery Attempts]
       summary: List delivery attempts
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
       description: |
         Returns all delivery attempts for a notification in chronological order.
         Each attempt records the provider response, outcome, and any policy
-        violation reason. This is the primary debugging surface for failed
+        violation reason. This is the primary diagnostic surface for failed
         or delayed notifications.
       responses:
         "200":
@@ -734,6 +842,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeliveryAttemptList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/projects/{project_id}/notifications/{notification_id}/delivery-attempts/{attempt_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/NotificationId"
+      - $ref: "#/components/parameters/AttemptId"
+
+    get:
+      tags: [Delivery Attempts]
+      summary: Get a delivery attempt
+      responses:
+        "200":
+          description: Delivery attempt found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryAttempt"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -986,6 +1115,13 @@ components:
       schema:
         $ref: "#/components/schemas/UUID"
 
+    AttemptId:
+      name: attempt_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/UUID"
+
     KeyId:
       name: key_id
       in: path
@@ -1178,6 +1314,19 @@ components:
 
     NotificationStatus:
       type: string
+      description: |
+        The current lifecycle state of the notification.
+
+        - `pending` — Accepted by the API and persisted. Awaiting scheduling
+          or worker pickup.
+        - `scheduled` — Waiting until the scheduled delivery time.
+        - `processing` — Currently being processed by a worker. Delivery
+          cancellation is no longer permitted.
+        - `delivered` — Successfully dispatched to the provider.
+        - `failed` — Processing or delivery failed after all retry attempts.
+        - `policy_rejected` — Delivery was intentionally blocked by the
+          project's delivery policy.
+        - `cancelled` — Cancelled before processing began.
       enum:
         - pending
         - scheduled
@@ -1355,7 +1504,7 @@ components:
 
     APIKey:
       type: object
-      required: [id, project_id, name, prefix, is_active, created_at]
+      required: [id, project_id, name, prefix, revoked, created_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -1366,16 +1515,22 @@ components:
           example: Production API Key
         prefix:
           type: string
-          description: First characters of the key for identification in UI.
+          description: >
+            Non-sensitive prefix of the API key used to identify
+            the key in dashboards and audit logs.
           example: tb_abc123
-        is_active:
+        revoked:
           type: boolean
+          description: Indicates whether the API key has been revoked.
         last_used_at:
           $ref: "#/components/schemas/Timestamp"
           nullable: true
         created_at:
           $ref: "#/components/schemas/Timestamp"
         revoked_at:
+          $ref: "#/components/schemas/Timestamp"
+          nullable: true
+        expires_at:
           $ref: "#/components/schemas/Timestamp"
           nullable: true
 
@@ -1387,7 +1542,7 @@ components:
           properties:
             key:
               type: string
-              description: Full API key value. Shown once — store it securely.
+              description: Full API key value. Shown once, store it securely.
               example: tb_abc123def456ghi789jkl012mno345pqr678stu901vwx
 
     CreateAPIKeyRequest:
@@ -1415,7 +1570,17 @@ components:
     Template:
       type: object
       required:
-        [id, project_id, name, slug, channel, body, created_at, updated_at]
+        [
+          id,
+          project_id,
+          name,
+          slug,
+          channel,
+          body,
+          archived,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -1435,6 +1600,9 @@ components:
         body:
           type: string
           description: Supports {{variable}} interpolation.
+        archived:
+          type: boolean
+          description: Indicates whether the template is archived.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -1487,37 +1655,41 @@ components:
 
     # Recipient
 
-    ChannelAddress:
+    RecipientChannels:
       type: object
       description: |
         Channel-specific addressing. At least one address must be provided.
         Addresses are used during delivery based on the notification channel.
       properties:
         email:
-          type: string
-          format: email
-          nullable: true
-        phone_number:
-          type: string
-          nullable: true
-          example: "+2348012345678"
-        device_token:
-          type: string
-          nullable: true
-          description: FCM or APNs push token.
-        webhook_url:
-          type: string
-          format: uri
-          nullable: true
+          type: array
+          items:
+            type: string
+            format: email
+        sms:
+          type: array
+          items:
+            type: string
+            example: "+2348012345678"
+        push:
+          type: array
+          items:
+            type: string
+            description: FCM push token.
+        webhook:
+          type: array
+          items:
+            type: string
+            format: uri
       anyOf:
         - required: [email]
-        - required: [phone_number]
-        - required: [device_token]
-        - required: [webhook_url]
+        - required: [sms]
+        - required: [push]
+        - required: [webhook]
 
     Recipient:
       type: object
-      required: [id, project_id, name, channels, created_at, updated_at]
+      required: [id, project_id, channels, archived, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -1529,8 +1701,12 @@ components:
           description: Your system's stable identifier for this recipient.
         name:
           type: string
+          nullable: true
         channels:
-          $ref: "#/components/schemas/ChannelAddress"
+          $ref: "#/components/schemas/RecipientChannels"
+        archived:
+          type: boolean
+          description: Indicates whether the recipient is archived.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -1538,7 +1714,7 @@ components:
 
     CreateRecipientRequest:
       type: object
-      required: [name, channels]
+      required: channels
       properties:
         external_id:
           type: string
@@ -1548,7 +1724,7 @@ components:
           minLength: 1
           maxLength: 200
         channels:
-          $ref: "#/components/schemas/ChannelAddress"
+          $ref: "#/components/schemas/RecipientChannels"
 
     UpdateRecipientRequest:
       type: object
@@ -1558,7 +1734,7 @@ components:
           minLength: 1
           maxLength: 200
         channels:
-          $ref: "#/components/schemas/ChannelAddress"
+          $ref: "#/components/schemas/RecipientChannels"
 
     RecipientList:
       type: object
@@ -1575,7 +1751,15 @@ components:
 
     UserPreference:
       type: object
-      required: [recipient_id, project_id, updated_at]
+      required:
+        [
+          recipient_id,
+          project_id,
+          preferred_channels,
+          opted_out_channels,
+          timezone,
+          updated_at,
+        ]
       properties:
         recipient_id:
           $ref: "#/components/schemas/UUID"
@@ -1583,14 +1767,20 @@ components:
           $ref: "#/components/schemas/UUID"
         preferred_channels:
           type: array
+          uniqueItems: true
           items:
             $ref: "#/components/schemas/Channel"
-          description: Ordered preference. First channel is tried first.
+          description: |
+            Ordered preference. 
+            First channel is tried first.
         opted_out_channels:
           type: array
+          uniqueItems: true
           items:
             $ref: "#/components/schemas/Channel"
-          description: Channels this recipient has opted out of entirely.
+          description: |
+            Channels this recipient has opted out of entirely.
+            Explicit opt-out takes precedence over preferred channels.
         quiet_hours:
           allOf:
             - $ref: "#/components/schemas/TimeWindow"
@@ -1612,6 +1802,7 @@ components:
 
     UpsertPreferencesRequest:
       type: object
+      required: [preferred_channels, opted_out_channels, timezone]
       properties:
         preferred_channels:
           type: array
@@ -1632,6 +1823,8 @@ components:
         timezone:
           type: string
           example: Africa/Lagos
+          nullable: true
+          description: May be `null` only when both `quiet_hours` and `delivery_window` are `null`.
 
     # Notification
 
@@ -1641,6 +1834,9 @@ components:
       properties:
         subject:
           type: string
+          description: |
+            Used by email-capable channels only.
+            Ignored for channels that do not support subjects.
           nullable: true
         body:
           type: string
@@ -1704,6 +1900,7 @@ components:
           nullable: true
         idempotency_key:
           type: string
+          readOnly: true
           nullable: true
         correlation_id:
           $ref: "#/components/schemas/UUID"
@@ -1716,10 +1913,6 @@ components:
           nullable: true
         delivered_at:
           $ref: "#/components/schemas/Timestamp"
-          nullable: true
-        intelligence:
-          allOf:
-            - $ref: "#/components/schemas/NotificationIntelligence"
           nullable: true
         created_at:
           $ref: "#/components/schemas/Timestamp"
@@ -1739,7 +1932,7 @@ components:
           nullable: true
           description: |
             Reference an existing template. Mutually exclusive with providing
-            content directly — if both are given, template takes precedence.
+            content directly. If both are given, an error is raised.
         template_variables:
           type: object
           additionalProperties:
@@ -1803,13 +1996,19 @@ components:
             The provider's own reference ID for this message.
             Use this to cross-reference with provider logs or support.
             Null on failed attempts.
-        error:
+        error_code:
+          type: string
+          nullable: true
+        error_message:
           type: string
           nullable: true
         policy_violation_reason:
           type: string
           nullable: true
           description: Set when status is policy_rejected.
+        latency_ms:
+          type: float
+          nullable: true
         created_at:
           $ref: "#/components/schemas/Timestamp"
 
