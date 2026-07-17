@@ -1847,7 +1847,6 @@ dependencies = [
 dev = [
     { name = "factory-boy" },
     { name = "faker" },
-    { name = "httpx" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1891,7 +1890,6 @@ requires-dist = [
 dev = [
     { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "faker", specifier = ">=40.28.1" },
-    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
