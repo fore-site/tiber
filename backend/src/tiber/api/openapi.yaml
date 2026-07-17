@@ -1,4 +1,4 @@
-openapi: 3.1.1
+openapi: 3.1.0
 
 info:
   title: Tiber API
@@ -489,24 +489,15 @@ paths:
 
     delete:
       tags: [Templates]
-      summary: Archive or permanently delete a Template
+      summary: Delete a Template
       description: |
-        Archives the project by default and prevents it from being selected for new notifications.
+        Permanently deletes the template.
 
-        To permanently delete a project, pass `?permanent=true`. This operation is irreversible.
-      parameters:
-        - name: permanent
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: false
-          description: |
-            When `true`, permanently deletes the template instead of archiving it.
-            If omitted or `false`, the template is archived.
+        Existing notifications that were created from this template are unaffected,
+        because rendered notification content is stored independently at creation time.
       responses:
         "204":
-          description: Template archived or permanently deleted
+          description: Template deleted.
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -687,7 +678,7 @@ paths:
       description: Resets the recipient to platform defaults.
       responses:
         "204":
-          description: Preferences deleted
+          description: Preferences deleted.
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -731,6 +722,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Notification"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "429":
@@ -765,6 +758,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NotificationList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /v1/projects/{project_id}/notifications/{notification_id}:
     parameters:
@@ -781,6 +776,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Notification"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -893,6 +890,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WebhookEndpoint"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
@@ -925,6 +924,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WebhookEndpoint"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -944,6 +945,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WebhookEndpoint"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -955,6 +958,8 @@ paths:
       responses:
         "204":
           description: Webhook endpoint deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -986,6 +991,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WebhookEventList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1020,6 +1027,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeliveryPolicy"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -1035,32 +1044,150 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeliveryPolicy"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
     delete:
       tags: [Delivery Policy]
       summary: Delete delivery policy
-      description: Removes all project-level delivery rules. Notifications
-        will be dispatched without policy constraints until a new policy
-        is created.
+      description: |
+        Deletes the project's delivery policy.
+
+        Subsequent notifications are evaluated using Tiber's default delivery
+        behavior until a new project delivery policy is configured.
       responses:
         "204":
           description: Delivery policy deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # Engagement Events
+
+  /v1/projects/{project_id}/engagement-events:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      tags: [Engagement Events]
+      operationId: listProjectEngagementEvents
+      summary: List engagement events
+      description: |
+        Returns engagement events recorded across all notifications within
+        the project. This endpoint is intended for analytics, reporting,
+        and auditing engagement activity.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: event_type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/EngagementEventType"
+        - name: recipient_id
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/parameters/RecipientId"
+        - name: notification_id
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/parameters/NotificationId"
+        - name: channel
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Channel"
+        - name: occurred_after
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Timestamp"
+        - name: occurred_before
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Timestamp"
+      responses:
+        "200":
+          description: Paginated list of engagement events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementEventList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/projects/{project_id}/engagement-events/{event_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EngagementEventId"
+
+    get:
+      tags: [Engagement Events]
+      operationId: getEngagementEvent
+      summary: Get an engagement event
+      description: |
+        Returns a single engagement event recorded for the project.
+      responses:
+        "200":
+          description: Engagement event found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementEvent"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/projects/{project_id}/notifications/{notification_id}/engagement-events:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/NotificationId"
+
+    get:
+      tags: [Engagement Events]
+      summary: List engagement events for a notification
+      description: |
+        Returns all engagement events recorded for a specific notification.
+        Events are reported by the delivery provider and recorded by Tiber
+        after the notification has been delivered.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: event_type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/EngagementEventType"
+      responses:
+        "200":
+          description: Paginated list of engagement events for this notification.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementEventList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   # Observability
 
   /health:
     get:
       tags: [Observability]
-      summary: Live dependency health check
+      summary: Service health check
       security: []
       description: |
         Checks live connectivity for Postgres, Redis, and RabbitMQ.
         Redis failure is reported as `unhealthy` (not degraded) because
-        authentication fails closed when Redis is unreachable — the
+        authentication fails closed when Redis is unreachable, the
         service is effectively down for authenticated requests.
       responses:
         "200":
@@ -1082,9 +1209,9 @@ paths:
       summary: Prometheus metrics
       security: []
       description: |
-        Prometheus-format metrics. Fully instrumented in Phase 8 with
-        queue depth, delivery success rate, retry count, model latency,
-        and AI degradation events.
+        Exposes Prometheus metrics for internal monitoring.
+        This endpoint is intended for infrastructure use and should
+        not be publicly accessible.
       responses:
         "200":
           description: Prometheus-format metrics
@@ -1117,6 +1244,13 @@ components:
 
     AttemptId:
       name: attempt_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/UUID"
+
+    EngagementEventId:
+      name: event_id
       in: path
       required: true
       schema:
@@ -1236,6 +1370,17 @@ components:
             error: rate_limit_exceeded
             message: Too many requests. Retry after 60 seconds.
             status: 429
+
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: forbidden
+            message: You do not have permission to access this resource
+            status: 403
 
   # Schemas
 
@@ -1570,17 +1715,7 @@ components:
     Template:
       type: object
       required:
-        [
-          id,
-          project_id,
-          name,
-          slug,
-          channel,
-          body,
-          archived,
-          created_at,
-          updated_at,
-        ]
+        [id, project_id, name, slug, channel, body, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -1600,9 +1735,6 @@ components:
         body:
           type: string
           description: Supports {{variable}} interpolation.
-        archived:
-          type: boolean
-          description: Indicates whether the template is archived.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -1714,7 +1846,7 @@ components:
 
     CreateRecipientRequest:
       type: object
-      required: channels
+      required: [name, channels]
       properties:
         external_id:
           type: string
@@ -1767,17 +1899,17 @@ components:
           $ref: "#/components/schemas/UUID"
         preferred_channels:
           type: array
-          uniqueItems: true
           items:
             $ref: "#/components/schemas/Channel"
+          uniqueItems: true
           description: |
             Ordered preference. 
             First channel is tried first.
         opted_out_channels:
           type: array
-          uniqueItems: true
           items:
             $ref: "#/components/schemas/Channel"
+          uniqueItems: true
           description: |
             Channels this recipient has opted out of entirely.
             Explicit opt-out takes precedence over preferred channels.
@@ -2007,7 +2139,8 @@ components:
           nullable: true
           description: Set when status is policy_rejected.
         latency_ms:
-          type: float
+          type: integer
+          format: int32
           nullable: true
         created_at:
           $ref: "#/components/schemas/Timestamp"
@@ -2037,9 +2170,22 @@ components:
 
     EngagementEvent:
       type: object
-      required: [id, notification_id, recipient_id, event_type, occurred_at]
+      required:
+        [
+          id,
+          project_id,
+          notification_id,
+          recipient_id,
+          event_type,
+          channel,
+          provider,
+          created_at,
+          occurred_at,
+        ]
       properties:
         id:
+          $ref: "#/components/schemas/UUID"
+        project_id:
           $ref: "#/components/schemas/UUID"
         notification_id:
           $ref: "#/components/schemas/UUID"
@@ -2047,9 +2193,22 @@ components:
           $ref: "#/components/schemas/UUID"
         event_type:
           $ref: "#/components/schemas/EngagementEventType"
+        channel:
+          $ref: "#/components/schemas/Channel"
+        provider:
+          $ref: "#/components/schemas/Provider"
+          description: The provider that reported this engagement event
         metadata:
           type: object
           additionalProperties: true
+          description: |
+            Provider-specific event payload.
+          example: |
+            ip_address: "192.168.1.5"
+            user_agent: Mozilla/5.0
+            link: "https://example.com/reset-password"
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
         occurred_at:
           $ref: "#/components/schemas/Timestamp"
 
@@ -2072,10 +2231,21 @@ components:
         - notification.delivered
         - notification.failed
         - notification.policy_rejected
+        - notification.cancelled
 
     WebhookEndpoint:
       type: object
-      required: [id, project_id, url, events, is_active, created_at, updated_at]
+      required:
+        [
+          id,
+          project_id,
+          url,
+          events,
+          secret_prefix,
+          archived,
+          created_at,
+          updated_at,
+        ]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -2088,7 +2258,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WebhookEventType"
-        is_active:
+        secret_prefix:
+          type: string
+          description: Prefix of the webhook signing secret.
+        archived:
           type: boolean
         created_at:
           $ref: "#/components/schemas/Timestamp"
@@ -2133,6 +2306,17 @@ components:
         meta:
           $ref: "#/components/schemas/PaginationMeta"
 
+    CreateWebhookResponse:
+      allOf:
+        - $ref: "#/components/schemas/WebhookEndpoint"
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: >
+                Shown only once. Store securely.
+
     # Webhook Delivery Event
 
     WebhookDeliveryEvent:
@@ -2152,6 +2336,11 @@ components:
           $ref: "#/components/schemas/UUID"
         endpoint_id:
           $ref: "#/components/schemas/UUID"
+          nullable: true
+        endpoint_url:
+          type: string
+          format: uri
+          description: Snapshot of the endpoint URL used when this webhook was dispatched.
         notification_id:
           $ref: "#/components/schemas/UUID"
         event_type:
@@ -2161,10 +2350,16 @@ components:
         response_status_code:
           type: integer
           nullable: true
+          description: |
+            HTTP status code returned by the webhook endpoint.
+            Null if no HTTP response was received (for example, connection failure or timeout)
           example: 200
         error:
           type: string
           nullable: true
+          description: |
+            Human-readable error describing why delivery failed.
+            Null when the webhook delivery succeeded
         attempt_number:
           type: integer
           minimum: 1
@@ -2187,6 +2382,9 @@ components:
     BlackoutPeriod:
       type: object
       required: [name, start_date, end_date]
+      description: |
+        Calendar dates during which notifications are not dispatched.
+        Dates are interpreted in UTC.
       properties:
         name:
           type: string
@@ -2200,13 +2398,16 @@ components:
           format: date
           example: "2026-12-26"
 
-    ComplianceRestriction:
+    ComplianceRule:
       type: object
       required: [name, allowed_window]
       properties:
         name:
           type: string
           example: Financial Services Communication Window
+        description:
+          type: string
+          example: SMS prohibited after 8PM
         allowed_window:
           $ref: "#/components/schemas/TimeWindow"
         channels:
@@ -2214,12 +2415,13 @@ components:
           items:
             $ref: "#/components/schemas/Channel"
           description: |
-            Channels this restriction applies to.
-            Empty array means the restriction applies to all channels.
+            Channels this rule applies to.
+            Empty array means the rule applies to all channels.
 
     DeliveryPolicy:
       type: object
-      required: [project_id, updated_at]
+      required:
+        [project_id, created_at, updated_at, blackout_periods, compliance_rules]
       properties:
         project_id:
           $ref: "#/components/schemas/UUID"
@@ -2228,11 +2430,13 @@ components:
           items:
             $ref: "#/components/schemas/BlackoutPeriod"
           default: []
-        compliance_restrictions:
+        compliance_rules:
           type: array
           items:
-            $ref: "#/components/schemas/ComplianceRestriction"
+            $ref: "#/components/schemas/ComplianceRule"
           default: []
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
 
@@ -2244,10 +2448,10 @@ components:
           items:
             $ref: "#/components/schemas/BlackoutPeriod"
           default: []
-        compliance_restrictions:
+        compliance_rules:
           type: array
           items:
-            $ref: "#/components/schemas/ComplianceRestriction"
+            $ref: "#/components/schemas/ComplianceRule"
           default: []
 
     # Health
@@ -2259,10 +2463,7 @@ components:
         status:
           type: string
           enum: [healthy, unhealthy]
-        error:
-          type: string
-          nullable: true
-        note:
+        message:
           type: string
           nullable: true
 
@@ -2286,3 +2487,5 @@ components:
               $ref: "#/components/schemas/DependencyCheck"
             rabbitmq:
               $ref: "#/components/schemas/DependencyCheck"
+        timestamp:
+          $ref: "#/components/schemas/Timestamp"
