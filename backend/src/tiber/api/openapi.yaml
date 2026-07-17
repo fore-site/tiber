@@ -4,6 +4,9 @@ info:
   title: Tiber API
   version: 1.0.0
   summary: Tiber API v1
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
   description: |
     Intelligent production-grade notification platform.
 
@@ -59,7 +62,7 @@ info:
     not a 409.
 
 servers:
-  - url: http://localhost:8000
+  - url: http://api.tiber.local:8000
     description: Local development
   - url: https://api.tiber.dev
     description: Production
@@ -100,6 +103,7 @@ paths:
     post:
       tags: [Auth]
       summary: Authenticate and obtain tokens
+      operationId: postv1authlogin
       security: []
       requestBody:
         required: true
@@ -126,6 +130,7 @@ paths:
     post:
       tags: [Auth]
       summary: Refresh an access token
+      operationId: postv1authrefresh
       security: []
       requestBody:
         required: true
@@ -151,6 +156,7 @@ paths:
     post:
       tags: [Auth]
       summary: Logout the current user
+      operationId: postv1authlogout
       description: |
         Revokes the current access token and refresh token immediately.
         Subsequent requests using either token are rejected
@@ -165,6 +171,7 @@ paths:
     get:
       tags: [Auth]
       summary: Get the current user
+      operationId: getv1authme
       description: |
         Returns the profile of the currently authenticated dashboard user.
       responses:
@@ -183,6 +190,7 @@ paths:
     post:
       tags: [Projects]
       summary: Create a project
+      operationId: postv1projects
       requestBody:
         required: true
         content:
@@ -210,6 +218,7 @@ paths:
     get:
       tags: [Projects]
       summary: List projects
+      operationId: getv1projects
       description: |
         Returns all projects within the authenticated user's account.
       parameters:
@@ -232,6 +241,7 @@ paths:
     get:
       tags: [Projects]
       summary: Get a project
+      operationId: getv1projectsprojectid
       responses:
         "200":
           description: Project found
@@ -247,6 +257,7 @@ paths:
     patch:
       tags: [Projects]
       summary: Update a project
+      operationId: patchv1projectsprojectid
       requestBody:
         required: true
         content:
@@ -270,6 +281,7 @@ paths:
     delete:
       tags: [Projects]
       summary: Archive or permanently delete a project
+      operationId: deletev1projectsprojectid
       description: |
         Archives the project by default and prevents new notifications from being accepted.
         Existing delivery history, engagement events, and audit records are retained.
@@ -313,6 +325,7 @@ paths:
     post:
       tags: [API Keys]
       summary: Create an API key
+      operationId: postv1projectsprojectidapikeys
       description: |
         The raw key value (`tb_xxxxx`) is returned once in this response and never again.
         Tiber stores only a SHA-256 hash.
@@ -340,6 +353,7 @@ paths:
     get:
       tags: [API Keys]
       summary: List API keys
+      operationId: getv1projectsprojectidapikeys
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -363,6 +377,7 @@ paths:
     get:
       tags: [API Keys]
       summary: Get an API key
+      operationId: getv1projectsprojectidapikeyskeyid
       responses:
         "200":
           description: API key found
@@ -378,6 +393,7 @@ paths:
     delete:
       tags: [API Keys]
       summary: Revoke an API key
+      operationId: deletev1projectsprojectidapikeyskeyid
       description: >
         Revokes the API key immediately. Once revoked, the key can no
         longer be used to authenticate requests and cannot be reactivated.
@@ -398,6 +414,7 @@ paths:
     post:
       tags: [Templates]
       summary: Create a template
+      operationId: postv1projectsprojectidtemplates
       description: >
         Creates a reusable notification template
         for a specific delivery channel.
@@ -424,6 +441,7 @@ paths:
     get:
       tags: [Templates]
       summary: List templates
+      operationId: getv1projectsprojectidtemplates
       description: Returns templates belonging to the project.
       parameters:
         - $ref: "#/components/parameters/Limit"
@@ -451,6 +469,7 @@ paths:
     get:
       tags: [Templates]
       summary: Get a template
+      operationId: getv1projectsprojectidtemplatestemplateid
       responses:
         "200":
           description: Template found
@@ -466,6 +485,7 @@ paths:
     patch:
       tags: [Templates]
       summary: Update a template
+      operationId: patchv1projectsprojectidtemplatestemplateid
       description: Slug is immutable after creation.
       requestBody:
         required: true
@@ -490,6 +510,7 @@ paths:
     delete:
       tags: [Templates]
       summary: Delete a Template
+      operationId: deletev1projectsprojectidtemplatestemplateid
       description: |
         Permanently deletes the template.
 
@@ -512,6 +533,7 @@ paths:
     post:
       tags: [Recipients]
       summary: Create a recipient
+      operationId: postv1projectsprojectidrecipients
       requestBody:
         required: true
         content:
@@ -535,6 +557,7 @@ paths:
     get:
       tags: [Recipients]
       summary: List recipients
+      operationId: getv1projectsprojectidrecipients
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -563,6 +586,7 @@ paths:
     get:
       tags: [Recipients]
       summary: Get a recipient
+      operationId: getv1projectsprojectidrecipientsrecipientid
       responses:
         "200":
           description: Recipient found
@@ -578,6 +602,7 @@ paths:
     patch:
       tags: [Recipients]
       summary: Update a recipient
+      operationId: patchv1projectsprojectidrecipientsrecipientid
       requestBody:
         required: true
         content:
@@ -601,6 +626,7 @@ paths:
     delete:
       tags: [Recipients]
       summary: Archive or permanently delete a Recipient
+      operationId: deletev1projectsprojectidrecipientsrecipientid
       description: |
         Archives the recipient by default and prevents it from receiving new notifications.
 
@@ -634,6 +660,7 @@ paths:
     put:
       tags: [Preferences]
       summary: Upsert recipient preferences
+      operationId: putv1projectsprojectidrecipientsrecipientidpreferences
       description: |
         Creates or fully replaces preferences for this recipient.
         Preferences are a singleton, there is no list endpoint.
@@ -660,6 +687,7 @@ paths:
     get:
       tags: [Preferences]
       summary: Get recipient preferences
+      operationId: getv1projectsprojectidrecipientsrecipientidpreferences
       responses:
         "200":
           description: Preferences found
@@ -675,6 +703,7 @@ paths:
     delete:
       tags: [Preferences]
       summary: Delete recipient preferences
+      operationId: deletev1projectsprojectidrecipientsrecipientidpreferences
       description: Resets the recipient to platform defaults.
       responses:
         "204":
@@ -693,6 +722,7 @@ paths:
     post:
       tags: [Notifications]
       summary: Send a notification
+      operationId: postv1projectsprojectidnotifications
       description: |
         Accepts a notification request, runs idempotency check,
         resolves the template if provided, applies the Delivery Policy
@@ -732,6 +762,7 @@ paths:
     get:
       tags: [Notifications]
       summary: List notifications
+      operationId: getv1projectsprojectidnotifications
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -769,6 +800,7 @@ paths:
     get:
       tags: [Notifications]
       summary: Get a notification
+      operationId: getv1projectsprojectidnotificationsnotificationid
       responses:
         "200":
           description: Notification found
@@ -789,6 +821,7 @@ paths:
     put:
       tags: [Notifications]
       summary: Cancel a notification
+      operationId: putv1projectsprojectidnotificationsnotificationidcancellation
       description: |
         Cancels a notification that has not yet been dispatched to a provider.
 
@@ -824,6 +857,7 @@ paths:
     get:
       tags: [Delivery Attempts]
       summary: List delivery attempts
+      operationId: getv1projectsprojectidnotificationsnotificationiddeliveryattempts
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -851,6 +885,7 @@ paths:
     get:
       tags: [Delivery Attempts]
       summary: Get a delivery attempt
+      operationId: getv1projectsprojectidnotificationsnotificationiddeliveryattemptsattemptid
       responses:
         "200":
           description: Delivery attempt found
@@ -872,6 +907,7 @@ paths:
     post:
       tags: [Webhooks]
       summary: Register a webhook endpoint
+      operationId: postv1projectsprojectidwebhooks
       description: |
         Registers an outbound callback URL that Tiber will call when
         subscribed notification lifecycle events occur. The Worker Service
@@ -889,7 +925,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WebhookEndpoint"
+                $ref: "#/components/schemas/CreateWebhookResponse"
         "403":
           $ref: "#/components/responses/Forbidden"
         "422":
@@ -898,6 +934,7 @@ paths:
     get:
       tags: [Webhooks]
       summary: List webhook endpoints
+      operationId: getv1projectsprojectidwebhooks
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -908,6 +945,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WebhookEndpointList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /v1/projects/{project_id}/webhooks/{webhook_id}:
     parameters:
@@ -917,6 +958,7 @@ paths:
     get:
       tags: [Webhooks]
       summary: Get a webhook endpoint
+      operationId: getv1projectsprojectidwebhookswebhookid
       responses:
         "200":
           description: Webhook endpoint found
@@ -932,6 +974,7 @@ paths:
     patch:
       tags: [Webhooks]
       summary: Update a webhook endpoint
+      operationId: patchv1projectsprojectidwebhookswebhookid
       requestBody:
         required: true
         content:
@@ -955,6 +998,7 @@ paths:
     delete:
       tags: [Webhooks]
       summary: Delete a webhook endpoint
+      operationId: deletev1projectsprojectidwebhookswebhookid
       responses:
         "204":
           description: Webhook endpoint deleted
@@ -971,6 +1015,7 @@ paths:
     get:
       tags: [Webhooks]
       summary: List webhook delivery events
+      operationId: getv1projectsprojectidwebhookswebhookidevents
       description: |
         Returns the delivery history of outbound callbacks for this endpoint.
         Each event records the HTTP response code, outcome, and attempt number.
@@ -1006,6 +1051,7 @@ paths:
     put:
       tags: [Delivery Policy]
       summary: Upsert delivery policy
+      operationId: putv1projectsprojectiddeliverypolicy
       description: |
         Creates or fully replaces the delivery policy for this project.
         A project has at most one delivery policy.
@@ -1037,6 +1083,7 @@ paths:
     get:
       tags: [Delivery Policy]
       summary: Get delivery policy
+      operationId: getv1projectsprojectiddeliverypolicy
       responses:
         "200":
           description: Delivery policy found
@@ -1052,6 +1099,7 @@ paths:
     delete:
       tags: [Delivery Policy]
       summary: Delete delivery policy
+      operationId: deletev1projectsprojectiddeliverypolicy
       description: |
         Deletes the project's delivery policy.
 
@@ -1087,16 +1135,8 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/EngagementEventType"
-        - name: recipient_id
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/parameters/RecipientId"
-        - name: notification_id
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/parameters/NotificationId"
+        - $ref: "#/components/parameters/RecipientIdQuery"
+        - $ref: "#/components/parameters/NotificationIdQuery"
         - name: channel
           in: query
           required: false
@@ -1155,6 +1195,7 @@ paths:
     get:
       tags: [Engagement Events]
       summary: List engagement events for a notification
+      operationId: getv1projectsprojectidnotificationsnotificationidengagementevents
       description: |
         Returns all engagement events recorded for a specific notification.
         Events are reported by the delivery provider and recorded by Tiber
@@ -1183,6 +1224,7 @@ paths:
     get:
       tags: [Observability]
       summary: Service health check
+      operationId: gethealth
       security: []
       description: |
         Checks live connectivity for Postgres, Redis, and RabbitMQ.
@@ -1196,6 +1238,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "503":
           description: One or more dependencies unhealthy
           content:
@@ -1207,6 +1251,7 @@ paths:
     get:
       tags: [Observability]
       summary: Prometheus metrics
+      operationId: getmetrics
       security: []
       description: |
         Exposes Prometheus metrics for internal monitoring.
@@ -1219,6 +1264,8 @@ paths:
             text/plain:
               schema:
                 type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
 # Components
 
@@ -1301,6 +1348,20 @@ components:
         maximum: 100
         default: 20
 
+    RecipientIdQuery:
+      name: recipient_id
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/UUID"
+
+    NotificationIdQuery:
+      name: notification_id
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/UUID"
+
     Offset:
       name: offset
       in: query
@@ -1323,6 +1384,7 @@ components:
             error: not_found
             message: Notification abc123 not found
             status: 404
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
 
     Unauthorized:
       description: Authentication failed or token revoked
@@ -1334,6 +1396,7 @@ components:
             error: unauthorized
             message: Invalid or expired token
             status: 401
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
 
     Conflict:
       description: Resource already exists
@@ -1345,6 +1408,7 @@ components:
             error: conflict
             message: A project with this slug already exists
             status: 409
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
 
     UnprocessableEntity:
       description: Request validation failed
@@ -1370,6 +1434,7 @@ components:
             error: rate_limit_exceeded
             message: Too many requests. Retry after 60 seconds.
             status: 429
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
 
     Forbidden:
       description: Access denied
@@ -1381,6 +1446,7 @@ components:
             error: forbidden
             message: You do not have permission to access this resource
             status: 403
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
 
   # Schemas
 
@@ -1527,8 +1593,7 @@ components:
           type: string
           format: email
         name:
-          type: string
-          nullable: true
+          type: [string, "null"]
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -1587,8 +1652,7 @@ components:
           example: my-application
           description: Immutable after creation.
         description:
-          type: string
-          nullable: true
+          type: [string, "null"]
         archived:
           type: boolean
           description: >
@@ -1630,9 +1694,8 @@ components:
           minLength: 1
           maxLength: 100
         description:
-          type: string
+          type: [string, "null"]
           maxLength: 500
-          nullable: true
 
     ProjectList:
       type: object
@@ -1729,8 +1792,7 @@ components:
         channel:
           $ref: "#/components/schemas/Channel"
         subject:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Supports {{variable}} interpolation.
         body:
           type: string
@@ -1769,8 +1831,7 @@ components:
           minLength: 1
           maxLength: 100
         subject:
-          type: string
-          nullable: true
+          type: [string, "null"]
         body:
           type: string
 
@@ -1828,12 +1889,10 @@ components:
         project_id:
           $ref: "#/components/schemas/UUID"
         external_id:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Your system's stable identifier for this recipient.
         name:
-          type: string
-          nullable: true
+          type: [string, "null"]
         channels:
           $ref: "#/components/schemas/RecipientChannels"
         archived:
@@ -1916,14 +1975,14 @@ components:
         quiet_hours:
           allOf:
             - $ref: "#/components/schemas/TimeWindow"
-          nullable: true
+          type: [object, "null"]
           description: |
             No notifications during this window. Notifications are
             rescheduled to after the window ends, not dropped.
         delivery_window:
           allOf:
             - $ref: "#/components/schemas/TimeWindow"
-          nullable: true
+          type: [object, "null"]
           description: Notifications are only dispatched within this window.
         timezone:
           type: string
@@ -1947,15 +2006,14 @@ components:
         quiet_hours:
           allOf:
             - $ref: "#/components/schemas/TimeWindow"
-          nullable: true
+          type: [object, "null"]
         delivery_window:
           allOf:
             - $ref: "#/components/schemas/TimeWindow"
-          nullable: true
+          type: [object, "null"]
         timezone:
-          type: string
+          type: [string, "null"]
           example: Africa/Lagos
-          nullable: true
           description: May be `null` only when both `quiet_hours` and `delivery_window` are `null`.
 
     # Notification
@@ -1965,11 +2023,10 @@ components:
       required: [body]
       properties:
         subject:
-          type: string
+          type: [string, "null"]
           description: |
             Used by email-capable channels only.
             Ignored for channels that do not support subjects.
-          nullable: true
         body:
           type: string
 
@@ -2027,13 +2084,14 @@ components:
           $ref: "#/components/schemas/NotificationStatus"
         content:
           $ref: "#/components/schemas/NotificationContent"
+        intelligence:
+          $ref: "#/components/schemas/NotificationIntelligence"
         template_id:
           $ref: "#/components/schemas/UUID"
           nullable: true
         idempotency_key:
-          type: string
+          type: [string, "null"]
           readOnly: true
-          nullable: true
         correlation_id:
           $ref: "#/components/schemas/UUID"
           description: |
@@ -2122,26 +2180,21 @@ components:
           $ref: "#/components/schemas/Provider"
           example: resend
         provider_message_id:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             The provider's own reference ID for this message.
             Use this to cross-reference with provider logs or support.
             Null on failed attempts.
         error_code:
-          type: string
-          nullable: true
+          type: [string, "null"]
         error_message:
-          type: string
-          nullable: true
+          type: [string, "null"]
         policy_violation_reason:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Set when status is policy_rejected.
         latency_ms:
-          type: integer
+          type: [integer, "null"]
           format: int32
-          nullable: true
         created_at:
           $ref: "#/components/schemas/Timestamp"
 
@@ -2203,7 +2256,7 @@ components:
           additionalProperties: true
           description: |
             Provider-specific event payload.
-          example: |
+          example:
             ip_address: "192.168.1.5"
             user_agent: Mozilla/5.0
             link: "https://example.com/reset-password"
@@ -2348,15 +2401,13 @@ components:
         status:
           $ref: "#/components/schemas/WebhookEventStatus"
         response_status_code:
-          type: integer
-          nullable: true
+          type: [integer, "null"]
           description: |
             HTTP status code returned by the webhook endpoint.
             Null if no HTTP response was received (for example, connection failure or timeout)
           example: 200
         error:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Human-readable error describing why delivery failed.
             Null when the webhook delivery succeeded
@@ -2464,8 +2515,7 @@ components:
           type: string
           enum: [healthy, unhealthy]
         message:
-          type: string
-          nullable: true
+          type: [string, "null"]
 
     HealthResponse:
       type: object
