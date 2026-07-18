@@ -16,6 +16,8 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Project:** Represents the primary tenancy boundary within Tiber. Every API key, template, recipient, notification, webhook endpoint, user preference, and delivery policy belongs to exactly one project.
 
+- **User:** Represents an authenticated person or administrator who owns projects and manages the resources associated with them through the dashboard or API.
+
 - **API Key:** Represents machine authentication for client applications submitting notification requests.
 
 - **Template:** Defines reusable notification content that can be rendered before delivery. Notifications may either reference a template or provide content directly.
@@ -44,6 +46,13 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 The following aggregate boundaries define the ownership of the primary business entities within Tiber.
 
+### User Aggregate
+
+The User aggregate is the account-level root for identity and ownership and owns:
+
+- Projects
+- The access context for managing those projects through the dashboard and administrative APIs
+
 ### Project Aggregate
 
 The Project aggregate is the root of tenant isolation and owns:
@@ -68,6 +77,8 @@ Each delivery attempt represents an immutable record of a single delivery execut
 ## Key Decisions
 
 - **Project is the tenancy boundary:** All persistent resources belong to exactly one project. Project ownership is enforced throughout the platform to ensure tenant isolation.
+
+- **Users are first-class actors:** An authenticated user owns and manages one or more projects, while machine clients authenticate through API keys.
 
 - **Notifications are immutable:** After a notification has been accepted, its content is never modified. Retries generate additional delivery attempts rather than altering the original notification.
 
