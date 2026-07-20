@@ -2269,6 +2269,10 @@ components:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
+        archived_at:
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
 
     CreateRecipientRequest:
       type: object
@@ -2581,12 +2585,11 @@ components:
     EngagementEventType:
       type: string
       enum:
-        - delivered
-        - opened
-        - clicked
-        - bounced
-        - complained
-        - unsubscribed
+        - open
+        - click
+        - bounce
+        - complaint
+        - unsubscribe
 
     EngagementEvent:
       type: object
