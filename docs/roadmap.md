@@ -36,7 +36,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [✅] Repo scaffold (monorepo: `/app`, `/dashboard`, `/docs`)
 - [✅] Architecture docs and diagrams complete: context, containers, API Service, Worker Service, ML Engine, domain model, RabbitMQ topology
 - [✅] API contract first (OpenAPI spec, design project-scoped routes before building)
-- [ ] DB schema design from the domain model: `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `providers`, `webhook_endpoints`, `webhook_events`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
+- [ ] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `providers`, `webhook_endpoints`, `webhook_events`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
 - [ ] Redis key design and TTLs for JWT blocklist, API key revocation, rate-limit counters, and idempotency cache
 - [ ] Docker Compose: API + worker + Postgres + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
 - [ ] `/health` distinguishes required dependencies; Redis unavailable means unhealthy because authenticated API requests fail closed
