@@ -99,6 +99,34 @@ tags:
 paths:
   # Auth
 
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a new account
+      operationId: postv1authregister
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      description: |
+        Creates a new developer or administrator account.
+        Returns an access token and refresh token on success
+        so the caller does not need a separate login request.
+
   /v1/auth/login:
     post:
       tags: [Auth]
@@ -120,6 +148,17 @@ paths:
                 $ref: "#/components/schemas/TokenResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Email address not verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: email_not_verified
+                message: Please verify your email address before signing in
+                status: 403
+                correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
       description: |
@@ -183,6 +222,237 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      tags: [Auth]
+      summary: Update the current user
+      operationId: patchv1authme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeRequest"
+      responses:
+        "200":
+          description: User profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      description: |
+        Updates the authenticated user's email address.
+        Returns 409 if the new email is already registered.
+
+    delete:
+      tags: [Auth]
+      summary: Delete the current user account
+      operationId: deletev1authme
+      responses:
+        "204":
+          description: Account deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      description: |
+        Permanently deletes the authenticated user's account
+        and revokes all associated tokens and API keys.
+        This action is irreversible.
+
+  /v1/auth/email/verify:
+    post:
+      tags: [Auth]
+      summary: Verify email address
+      operationId: postv1authemailverify
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailVerifyRequest"
+      responses:
+        "200":
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      description: |
+        Accepts the verification token sent to the user's email
+        after registration or after an email change via PATCH /v1/auth/me.
+        Sets the account as verified and returns a full access token
+        and refresh token. This is the first authenticated session for
+        email/password registered users.
+        Returns 401 if the token is invalid or expired. Use
+        /v1/auth/email/verify/resend to request a new token.
+
+  /v1/auth/email/verify/resend:
+    post:
+      tags: [Auth]
+      summary: Resend verification email
+      operationId: postv1authemailverifyresend
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailVerifyResendRequest"
+      responses:
+        "202":
+          description: Verification email accepted for delivery
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      description: |
+        Resends the verification email to the provided address.
+        Useful if the original token expired or the email was lost.
+        Always returns 202 regardless of whether the email is registered
+        or already verified — this prevents account enumeration.
+        Tokens from previous resend requests are invalidated.
+
+  /v1/auth/github:
+    get:
+      tags: [Auth]
+      summary: Initiate GitHub OAuth sign-in
+      operationId: getv1authgithub
+      security: []
+      responses:
+        "204":
+          description: Token revoked
+        "302":
+          description: Redirects the user to GitHub for authorisation
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          description: GitHub OAuth is unavailable or misconfigured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: oauth_unavailable
+                message: GitHub OAuth is currently unavailable
+                status: 503
+                correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+      description: |
+        Redirects the user to GitHub's OAuth authorisation page.
+        After the user grants access, GitHub redirects back to
+        /v1/auth/github/callback with an authorisation code.
+
+  /v1/auth/github/callback:
+    get:
+      tags: [Auth]
+      summary: GitHub OAuth callback
+      operationId: getv1authgithubcallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorisation code returned by GitHub.
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+          description: CSRF state token for request verification.
+      responses:
+        "200":
+          description: GitHub authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      description: |
+        Exchanges the GitHub authorisation code for a Tiber access token
+        and refresh token. Creates a new account if no account exists for
+        the GitHub identity. Returns the same TokenResponse as /v1/auth/login.
+
+  /v1/auth/password/change:
+    post:
+      tags: [Auth]
+      summary: Change password
+      operationId: postv1authpasswordchange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChangeRequest"
+      responses:
+        "204":
+          description: Password changed successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      description: |
+        Changes the password for the currently authenticated user.
+        Requires the current password as confirmation.
+        Returns 400 with error no_password_set if the account
+        was created via GitHub OAuth and has no password.
+
+  /v1/auth/password/reset-request:
+    post:
+      tags: [Auth]
+      summary: Request a password reset
+      operationId: postv1authpasswordresetrequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "202":
+          description: Reset request accepted
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      description: |
+        Accepts an email address and sends a password reset link
+        if an account with that address exists. Always returns 202
+        regardless of whether the email is registered.
+
+  /v1/auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: Reset password using a reset token
+      operationId: postv1authpasswordreset
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirm"
+      responses:
+        "204":
+          description: Password reset successful
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      description: |
+        Accepts the reset token from the email link and a new password.
+        Invalidates the reset token on use. Returns 401 if the token
+        is invalid or expired.
 
   # Projects
 
@@ -1448,6 +1718,19 @@ components:
             status: 403
             correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
 
+    BadRequest:
+      description: |
+        The request is valid but cannot be processed in its current state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: no_password_set
+            message: This account was created via GitHub OAuth and has no password
+            status: 400
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+
   # Schemas
 
   schemas:
@@ -1585,21 +1868,33 @@ components:
 
     User:
       type: object
-      required: [id, email, role, created_at, updated_at]
+      required: [id, email, role, is_verified, pending_email, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
         email:
           type: string
           format: email
-        name:
+        role:
+          $ref: "#/components/schemas/UserRole"
+        is_verified:
+          type: boolean
+          description: |
+            Whether the user has confirmed their email address.
+            Always True for accounts created via Github Oauth.
+            Unverified users cannot access protected endpoints.
+        pending_email:
           type: [string, "null"]
+          format: email
+          description: |
+            A new email address awaiting verification.
+            Set when the user submits a new email via PATCH /v1/auth/me.
+            Becomes the active email once verified via POST /v1/auth/email/verify.
+            Null if no email change is pending.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
-        role:
-          $ref: "#/components/schemas/UserRole"
 
     LoginRequest:
       type: object
@@ -1635,6 +1930,78 @@ components:
           type: integer
           description: Access token lifetime in seconds
           example: 900
+
+    RegisterRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: |
+            Required for email/password registration.
+            Omit when registering via GitHub OAuth.
+
+    EmailVerifyRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: The verification token received via email after registration.
+
+    EmailVerifyResendRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    UpdateMeRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    PasswordChangeRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    PasswordResetConfirm:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: The reset token received via email.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: The new password.
 
     # Project
 
