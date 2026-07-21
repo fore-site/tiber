@@ -2662,7 +2662,6 @@ components:
           url,
           events,
           secret_prefix,
-          archived,
           created_at,
           updated_at,
         ]
@@ -2681,8 +2680,6 @@ components:
         secret_prefix:
           type: string
           description: Prefix of the webhook signing secret.
-        archived:
-          type: boolean
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
