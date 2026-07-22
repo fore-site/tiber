@@ -46,7 +46,7 @@ CREATE TYPE engagement_event_type AS ENUM (
     'click',
     'bounce',
     'complaint',
-    'unsubscribe',
+    'unsubscribe'
 );
 
 CREATE TYPE send_time_basis AS ENUM (
@@ -339,7 +339,7 @@ CREATE TABLE notification_intelligence (
     priority_model_version           VARCHAR(100)     NULL,
     send_time_model_version          VARCHAR(100)     NULL,
     channel_preference_model_version VARCHAR(100)     NULL,
-    created_at                       TIMESTAMPTZ      NOT NULL DEFAULT NOW()
+    created_at                       TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
 
     CONSTRAINT notification_intelligence_priority_confidence_check CHECK (
         priority_confidence IS NULL
@@ -378,7 +378,7 @@ CREATE TABLE delivery_attempts (
     CONSTRAINT delivery_attempts_notification_attempt_unique
         UNIQUE (notification_id, attempt_number),
 
-    CONSTRAINT delivery_attempts_attempt_number_check CHECK (attempt_number > 0),
+    CONSTRAINT delivery_attempts_attempt_number_check CHECK (attempt_number > 0)
 );
 
 COMMENT ON TABLE  delivery_attempts                     IS 'Immutable record of each delivery attempt. Never updated or deleted.';
@@ -421,9 +421,9 @@ CREATE TABLE webhook_endpoints (
     url        TEXT        NOT NULL,
     events     webhook_event_type[]      NOT NULL,
     encrypted_signing_secret TEXT NOT NULL,
-    secret_prefix            VARCHAR(20) NOT NULL
+    secret_prefix            VARCHAR(20) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT webhook_endpoints_project_url_unique UNIQUE(project_id, url),
 
@@ -447,7 +447,7 @@ CREATE TABLE webhook_events (
     response_status_code SMALLINT             NULL,
     error                TEXT                 NULL,
     attempt_number       SMALLINT             NOT NULL DEFAULT 1,
-    created_at           TIMESTAMPTZ          NOT NULL DEFAULT NOW()
+    created_at           TIMESTAMPTZ          NOT NULL DEFAULT NOW(),
 
     CONSTRAINT webhook_events_unique_attempt
         UNIQUE (
@@ -501,7 +501,7 @@ CREATE TABLE compliance_rules (
     allowed_window_start TIME              NOT NULL,
     allowed_window_end   TIME              NOT NULL,
     channels             delivery_channel[] NULL,
-    created_at           TIMESTAMPTZ       NOT NULL DEFAULT NOW(),
+    created_at           TIMESTAMPTZ       NOT NULL DEFAULT NOW()
 
 );
 
@@ -521,7 +521,7 @@ CREATE TABLE engagement_events (
     occurred_at     TIMESTAMPTZ           NOT NULL,
     is_synthetic    BOOLEAN               NOT NULL DEFAULT FALSE,
     metadata        JSONB                 NULL,
-    created_at      TIMESTAMPTZ           NOT NULL DEFAULT NOW(),
+    created_at      TIMESTAMPTZ           NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE  engagement_events              IS 'Recipient interactions reported by delivery providers. Primary ML training data source.';
@@ -562,7 +562,7 @@ CREATE TABLE training_runs (
     error           TEXT                NULL,
     started_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
     completed_at    TIMESTAMPTZ         NULL,
-    created_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
 
     CONSTRAINT training_runs_dataset_size_check CHECK (
             dataset_size IS NULL
@@ -681,8 +681,6 @@ CREATE INDEX idx_providers_channel_health
 -- webhook_endpoints
 CREATE INDEX idx_webhook_endpoints_project_id
     ON webhook_endpoints (project_id);
-CREATE INDEX idx_webhook_endpoints_project_active
-    ON webhook_endpoints (project_id, is_active);
 
 -- webhook_events
 CREATE INDEX idx_webhook_events_endpoint_id
