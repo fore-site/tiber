@@ -167,7 +167,7 @@ CREATE TABLE api_keys (
     last_used_at TIMESTAMPTZ  NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     revoked_at   TIMESTAMPTZ  NULL,
-    expires_at TIMESTAMPTZ NULL,
+    expires_at TIMESTAMPTZ    NULL,
 
     CONSTRAINT api_keys_key_hash_unique UNIQUE (key_hash)
 );
