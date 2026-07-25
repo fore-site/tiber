@@ -74,8 +74,8 @@ class RedisKeys:
         return f"auth:jwt:blocklist:{jti}"
 
     @staticmethod
-    def api_key_revoked(key_hash: str) -> str:
-        """Generate a Redis key for a revoked API key."""
+    def api_key(key_hash: str) -> str:
+        """Generate a Redis key for an API key auth context."""
         return f"auth:apikey:{key_hash}"
 
     @staticmethod
@@ -84,9 +84,9 @@ class RedisKeys:
         return f"auth:refresh:{token}"
 
     @staticmethod
-    def idempotency(project_id: UUID | str, key: str) -> str:
+    def idempotency(project_id: UUID | str, idempotency_key: str) -> str:
         """Generate a Redis key for an idempotency entry."""
-        return f"idempotency:{project_id}:{key}"
+        return f"idempotency:{project_id}:{idempotency_key}"
 
 
 class RedisTTL:
