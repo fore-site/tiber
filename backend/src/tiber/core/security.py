@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
+from secrets import token_urlsafe
 from typing import Any
 from uuid import uuid4
 
@@ -81,29 +82,30 @@ def create_access_token(
     return access_token, jti
 
 
-def create_refresh_token(subject: str) -> tuple[str, str]:
-    """Create a JWT refresh token with the given subject.
+def create_refresh_token() -> str:
+    """Generate a cryptographically secure opaque refresh token.
 
-    Args:
-        subject (str): The subject (usually user ID) for the token.
+    The returned token contains no embedded user information and is
+    meaningless outside the server.
+
+    A corresponding server-side session must be created in Redis:
+
+        Key:
+            auth:refresh:{token}
+
+        Value:
+            {
+                "user_id": "<user_id>"
+            }
+
+    The Redis entry is the source of truth for refresh token validity.
+    Deleting the entry immediately revokes the refresh token.
 
     Returns:
-        (refresh_token, jti): A tuple containing the refresh token and its unique identifier (jti).
-
-    jti is written to redis blocklist on revocation.
-    Signature verification always happens before any Redis blocklist check.
+        A URL-safe opaque refresh token.
 
     """
-    jti = str(uuid4())
-    now = datetime.now(UTC)
-    expire = now + timedelta(days=settings.refresh_token_expire_days)
-
-    payload = {"sub": subject, "jti": jti, "iat": now, "exp": expire, "type": "refresh"}
-
-    refresh_token = jwt.encode(
-        payload, settings.secret_key, algorithm=settings.algorithm
-    )
-    return refresh_token, jti
+    return token_urlsafe(32)
 
 
 def decode_token(token: str) -> dict[str, Any]:
