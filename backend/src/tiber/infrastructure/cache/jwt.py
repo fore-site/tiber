@@ -4,8 +4,7 @@ from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
-from .keys import RedisKeys
-from .ttl import RedisTTL
+from tiber.core.redis import RedisKeys, RedisTTL
 
 
 class JWTBlocklistStore:

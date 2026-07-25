@@ -6,8 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 from redis.asyncio import Redis
 
-from .keys import RedisKeys
-from .ttl import RedisTTL
+from tiber.core.redis import RedisKeys, RedisTTL
 
 
 class CachedAPIKey(BaseModel):
