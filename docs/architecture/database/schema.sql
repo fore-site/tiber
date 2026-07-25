@@ -164,7 +164,6 @@ CREATE TABLE api_keys (
     name         VARCHAR(100) NOT NULL,
     key_hash     CHAR(64)  NOT NULL,
     key_prefix   VARCHAR(20)  NOT NULL,
-    last_used_at TIMESTAMPTZ  NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     revoked_at   TIMESTAMPTZ  NULL,
     expires_at TIMESTAMPTZ    NULL,
