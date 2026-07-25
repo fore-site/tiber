@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 from collections.abc import AsyncGenerator
+from datetime import timedelta
+from uuid import UUID
 
 import redis.asyncio as aioredis
 from redis.asyncio import Redis
@@ -51,3 +55,66 @@ async def get_redis() -> AsyncGenerator[Redis]:
         yield client
     finally:
         await client.aclose()
+
+
+class RedisKeys:
+    """All key patterns in one place.
+
+    No key string is ever constructed outside of this class.
+    Use the static methods to generate keys with dynamic parts.
+    """
+
+    def __new__(cls):
+        """Class cannot be instantiated."""
+        raise TypeError("RedisKeys cannot be instantiated.")
+
+    @staticmethod
+    def jwt_blocklist(jti: str) -> str:
+        """Generate a Redis key for a JWT blocklist entry."""
+        return f"auth:jwt:blocklist:{jti}"
+
+    @staticmethod
+    def api_key_revoked(key_hash: str) -> str:
+        """Generate a Redis key for a revoked API key."""
+        return f"auth:apikey:{key_hash}"
+
+    @staticmethod
+    def refresh_token(token: str) -> str:
+        """Generate a Redis key for a refresh token."""
+        return f"auth:refresh:{token}"
+
+    @staticmethod
+    def idempotency(project_id: UUID | str, key: str) -> str:
+        """Generate a Redis key for an idempotency entry."""
+        return f"idempotency:{project_id}:{key}"
+
+
+class RedisTTL:
+    """Centralised TTL definitions for Redis keys.
+
+    All durations are expressed as ``timedelta`` objects instead of raw
+    integers to improve readability and avoid unit conversion mistakes.
+
+    Dynamic TTLs (e.g. JWT blocklist entries) are computed by the owning
+    store rather than defined here.
+    """
+
+    def __new__(cls):
+        """Class is non-instantiable."""
+        raise TypeError("RedisTTL cannot be instantiated.")
+
+    #: Additional time added to JWT expiry when revoking tokens.
+    #: Helps tolerate minor clock skew between clients and servers.
+    CLOCK_SKEW = timedelta(seconds=30)
+
+    #: Idempotency entries remain valid for 24 hours, matching the API contract.
+    IDEMPOTENCY = timedelta(hours=24)
+
+    #: Distributed lock duration.
+    #: Prevents abandoned locks while giving workers enough time to complete.
+    DISTRIBUTED_LOCK = timedelta(seconds=60)
+
+    #: Prediction cache lifetime (reserved for future ML optimisation).
+    PREDICTION_CACHE = timedelta(hours=6)
+
+    API_KEY_CACHE = timedelta(hours=24)
