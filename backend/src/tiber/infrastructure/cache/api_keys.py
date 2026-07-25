@@ -15,51 +15,48 @@ class CachedAPIKey(BaseModel):
     PostgreSQL remains the source of truth.
     Redis stores a cached authentication snapshot.
 
-    found=False represents a cached negative lookup.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    found: bool
+    state: str
+    key_id: UUID | None = None
     project_id: UUID | None = None
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
 
     @classmethod
-    def not_found(cls) -> CachedAPIKey:
-        """Construct a cached negative lookup."""
-        return cls(
-            found=False,
-        )
+    def not_found(
+        cls,
+    ) -> CachedAPIKey:
+        """Construct a not found API key context."""
+        return cls(state="not_found")
 
     @classmethod
     def active(
         cls,
         *,
+        key_id: UUID,
         project_id: UUID,
         expires_at: datetime | None,
     ) -> CachedAPIKey:
         """Construct a cached active API key."""
         return cls(
-            found=True,
+            state="active",
+            key_id=key_id,
             project_id=project_id,
             expires_at=expires_at,
-            revoked_at=None,
         )
 
     @classmethod
     def revoked(
         cls,
         *,
-        project_id: UUID,
-        expires_at: datetime | None,
         revoked_at: datetime,
     ) -> CachedAPIKey:
         """Construct a cached revoked API key."""
         return cls(
-            found=True,
-            project_id=project_id,
-            expires_at=expires_at,
+            state="revoked",
             revoked_at=revoked_at,
         )
 
@@ -71,7 +68,7 @@ class APIKeyCache:
 
     - active API key
     - revoked API key
-    - non-existent API key
+    - not found
 
     PostgreSQL remains the source of truth.
     """
@@ -96,7 +93,7 @@ class APIKeyCache:
             Cache miss.
 
         """
-        value = await self._redis.get(RedisKeys.api_key_revoked(key_hash))
+        value = await self._redis.get(RedisKeys.api_key(key_hash))
 
         if value is None:
             return None
@@ -111,7 +108,7 @@ class APIKeyCache:
     ) -> None:
         """Cache an API key authentication snapshot."""
         await self._redis.set(
-            RedisKeys.api_key_revoked(key_hash),
+            RedisKeys.api_key(key_hash),
             entry.model_dump_json(),
             ex=RedisTTL.API_KEY_CACHE,
         )
@@ -122,4 +119,4 @@ class APIKeyCache:
         key_hash: str,
     ) -> None:
         """Remove an API key from the cache."""
-        await self._redis.delete(RedisKeys.api_key_revoked(key_hash))
+        await self._redis.delete(RedisKeys.api_key(key_hash))
