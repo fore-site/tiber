@@ -38,8 +38,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [✅] API contract first (OpenAPI spec, design project-scoped routes before building)
 - [✅] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `providers`, `webhook_endpoints`, `webhook_events`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
 - [✅] Redis keys with TTLs design and implementation for JWT blocklist, API key authentication cache, and idempotency cache
-- [ ] Docker Compose: PostgreSQL + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
-- [ ] GitHub Actions skeleton: lint (ruff) + test (pytest) on push
+- [✅] Docker Compose: PostgreSQL + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
+- [✅] GitHub Actions skeleton: lint (ruff) + test (pytest) on push
 
 **Exit criteria:** `docker compose up` provisions the local infrastructure stack, the schema is ready to be migrated with Alembic, RabbitMQ/Redis/Postgres are reachable, and CI is green on an empty test suite.
 
