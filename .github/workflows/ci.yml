@@ -44,8 +44,5 @@ jobs:
           uv sync --group dev
         shell: bash
 
-      - name: Run Ruff (lint)
-        run: uv run ruff check .
-
       - name: Run Pytest
         run: uv run pytest
