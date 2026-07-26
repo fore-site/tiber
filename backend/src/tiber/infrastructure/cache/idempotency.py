@@ -81,6 +81,7 @@ class IdempotencyStore:
             ),
             response.model_dump_json(),
             ex=RedisTTL.IDEMPOTENCY,
+            nx=True,
         )
 
     async def delete(

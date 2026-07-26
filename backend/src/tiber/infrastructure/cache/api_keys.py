@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -19,7 +20,7 @@ class CachedAPIKey(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    state: str
+    state: Literal["active", "revoked", "not_found"]
     key_id: UUID | None = None
     project_id: UUID | None = None
     expires_at: datetime | None = None
@@ -107,10 +108,17 @@ class APIKeyCache:
         entry: CachedAPIKey,
     ) -> None:
         """Cache an API key authentication snapshot."""
+        if entry.state == "active":
+            ttl = RedisTTL.API_KEY_ACTIVE
+        elif entry.state == "revoked":
+            ttl = RedisTTL.API_KEY_REVOKED
+        else:
+            ttl = RedisTTL.API_KEY_NOT_FOUND
+
         await self._redis.set(
             RedisKeys.api_key(key_hash),
             entry.model_dump_json(),
-            ex=RedisTTL.API_KEY_CACHE,
+            ex=ttl,
         )
 
     async def delete(
@@ -118,5 +126,5 @@ class APIKeyCache:
         *,
         key_hash: str,
     ) -> None:
-        """Remove an API key from the cache."""
+        """Remove an API key from the cache. Not for usage in revocation flow."""
         await self._redis.delete(RedisKeys.api_key(key_hash))
