@@ -57,6 +57,8 @@ dev = [
     "pytest-mock>=3.15.1",
     "respx>=0.23.1",
     "ruff>=0.15.20",
+    "types-passlib>=1.7.7.20260211",
+    "types-python-jose>=3.5.0.20260408",
 ]
 
 [build-system]
@@ -86,6 +88,10 @@ select = [
     "RUF"
 ]
 ignore = ["E501","D100","D104"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/test_*.py" = ["S101"]
+"**/tests/*" = ["S101"]
  
 [tool.ruff.lint.isort]
 known-first-party = ["tiber"]
@@ -94,7 +100,21 @@ known-first-party = ["tiber"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
- 
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+pythonpath = ["."]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+]
+markers = [
+    "unit: Fast isolated unit tests",
+    "integration: Tests requiring external services",
+    "e2e: End-to-end tests",
+]
+
 [tool.coverage.run]
 source = ["src/tiber"]
 omit = ["tests/*"]
