@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,6 +19,10 @@ class Settings(BaseSettings):
     app_name: str = "Tiber"
     app_version: str = "0.1.0"
     debug: bool = False
+    cors_enabled: bool = True
+    cors_allow_origins: list[str] = ["http://localhost:3000"]
+    cors_allow_methods: list[str] = ["*"]
+    cors_allow_headers: list[str] = ["*"]
 
     # Database
     database_url: str = "postgresql+asyncpg://postgres:tiber@localhost:5432/tiber"
@@ -25,10 +30,10 @@ class Settings(BaseSettings):
 
     # RabbitMQ
     rabbitmq_url: str = "amqp://tiber:tiber@localhost:5672/"
-    celery_result_backend: str = "redis://localhost:6379/3"
+    celery_result_backend: str = "redis://localhost:6379/1"
 
     # Redis (auth state, rate limiting, idempotency)
-    redis_url: str = "redis://localhost:6379/2"
+    redis_url: str = "redis://localhost:6379/0"
 
     # Auth
     secret_key: str = ""
@@ -72,6 +77,18 @@ class Settings(BaseSettings):
     def celery_broker_url(self):
         """Both celery url and rabbitmq url are redis string."""
         return self.rabbitmq_url
+
+    @property
+    def rabbitmq_user(self):
+        """Extract rabbitmq user."""
+        parsed = urlparse(self.rabbitmq_url)
+        return parsed.username or ""
+
+    @property
+    def rabbitmq_password(self):
+        """Extract rabbitmq password."""
+        parsed = urlparse(self.rabbitmq_url)
+        return parsed.password or ""
 
 
 @lru_cache

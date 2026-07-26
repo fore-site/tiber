@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
 from datetime import timedelta
 from uuid import UUID
 
@@ -42,19 +41,6 @@ def get_redis_client() -> Redis:
     Suitable for use outside of FastAPI's dependency system.
     """
     return aioredis.Redis(connection_pool=get_pool())
-
-
-# FastAPI dependency
-async def get_redis() -> AsyncGenerator[Redis]:
-    """Yield a Redis client per request.
-
-    Use as: redis: Redis = Depends(get_redis)
-    """
-    client = get_redis_client()
-    try:
-        yield client
-    finally:
-        await client.aclose()
 
 
 class RedisKeys:
