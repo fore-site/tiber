@@ -117,4 +117,6 @@ class RedisTTL:
     #: Prediction cache lifetime (reserved for future ML optimisation).
     PREDICTION_CACHE = timedelta(hours=6)
 
-    API_KEY_CACHE = timedelta(hours=24)
+    API_KEY_ACTIVE = timedelta(minutes=5)
+    API_KEY_REVOKED = timedelta(days=30)
+    API_KEY_NOT_FOUND = timedelta(seconds=60)
