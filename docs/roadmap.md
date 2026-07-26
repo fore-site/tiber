@@ -31,37 +31,40 @@ Each release corresponds to a completed roadmap phase. Releases are cumulative, 
 
 The roadmap is the implementation guide for the architecture in `docs/architecture/`. If a task exposes a design choice, prefer the architecture decisions over framework defaults: project-scoped resources, RabbitMQ for durable work routing, Redis only for ephemeral/auth state, Postgres as the source of truth, in-process ML/AI boundaries, and graceful degradation for intelligence features.
 
-### Phase 1: Foundations and System Design
+### Phase 1: Foundations, Architecture, and Local Infrastructure
 
 - [✅] Repo scaffold (monorepo: `/app`, `/dashboard`, `/docs`)
 - [✅] Architecture docs and diagrams complete: context, containers, API Service, Worker Service, ML Engine, domain model, RabbitMQ topology
 - [✅] API contract first (OpenAPI spec, design project-scoped routes before building)
 - [✅] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `providers`, `webhook_endpoints`, `webhook_events`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
-- [✅] Redis keys with TTLs design and implementation for JWT blocklist, API key authentication, and idempotency cache
-- [ ] Docker Compose: API + worker + Postgres + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
-- [ ] `/health` distinguishes required dependencies; Redis unavailable means unhealthy because authenticated API requests fail closed
+- [✅] Redis keys with TTLs design and implementation for JWT blocklist, API key authentication cache, and idempotency cache
+- [✅] Deployment architecture documented for local development
+- [ ] Docker Compose: PostgreSQL + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
 - [ ] GitHub Actions skeleton: lint (ruff) + test (pytest) on push
 
-**Exit criteria:** `docker-compose up` gives a running API and worker with `/health`, project-scoped schema migrations, RabbitMQ/Redis/Postgres reachable, CI green on an empty test suite.
+**Exit criteria:** `docker compose up` provisions the local infrastructure stack, the schema is ready to be migrated with Alembic, RabbitMQ/Redis/Postgres are reachable, and CI is green on an empty test suite.
 
-### Phase 2: Core Notification Engine
+### Phase 2: Application Bootstrap and Core Notification Engine
 
+- [ ] FastAPI API service bootstrap: app factory, configuration, dependency injection, `/health`, and request/response plumbing
+- [ ] Celery Worker service bootstrap: Celery app, RabbitMQ connection, queue bindings, task routing, and worker startup
+- [ ] Alembic migration execution path for project-scoped schema initialization and extension creation
 - [ ] Project-scoped `POST /notifications`: authenticate, validate, persist immutable notification, enqueue (idempotency key required)
 - [ ] Idempotency Guard runs before template resolution and scheduling; duplicate keys within 24 hours return the original persisted 201 response
+- [ ] Template rendering (basic variables into a message body) with direct-content notifications still allowed
+- [ ] Delivery Policy Resolver at intake: user preferences first, blackout/calendar constraints second, compliance restrictions last
+- [ ] Minimal preference and delivery-policy read model with safe defaults; full management surfaces arrive in Phase 7
+- [ ] Scheduling support (send-at-time, not just immediate) and worker execution at the scheduled time
 - [ ] Job payload follows the Worker architecture: thin payload with stable fields, `correlation_id`, `schema_version`, `scheduled_at`, `send_time_basis`, ML prediction metadata, and retry attempt state
 - [ ] RabbitMQ publisher uses `notifications.exchange`, channel routing keys, durable messages, and publisher confirms
-- [ ] Celery worker pipeline: Notification Processor (orchestrator), Scheduler Executor, Dispatch Policy Guard, Provider Manager, Retry Manager, Delivery Tracker
-- [ ] Retry with exponential backoff via RabbitMQ retry queues; route exhausted jobs to channel-specific DLQs
-- [ ] Scheduling support (send-at-time, not just immediate) and worker execution at the scheduled time
-- [ ] Minimal preference and delivery-policy read model with safe defaults; full management surfaces arrive in Phase 7
-- [ ] Delivery Policy Resolver at intake: user preferences first, blackout/calendar constraints second, compliance restrictions last
+- [ ] Celery worker pipeline: Notification Processor (orchestrator), Scheduler Executor, Dispatch Policy Guard, Provider Manager (single stub transport), Retry Manager, Delivery Tracker
 - [ ] Dispatch Policy Guard re-checks drift-sensitive DND/compliance constraints before delivery and re-queues on soft violations
+- [ ] Retry with exponential backoff via RabbitMQ retry queues; route exhausted jobs to channel-specific DLQs
 - [ ] Rate limiting on ingestion using Redis counters
-- [ ] Template rendering (basic variables into a message body) with direct-content notifications still allowed
 - [ ] Delivery status tracking through immutable delivery attempts and logs
 - [ ] Unit tests for business logic, integration tests for the full enqueue→deliver flow
 
-**Exit criteria:** A project-scoped notification can be created, de-duplicated, scheduled, routed through RabbitMQ, and tracked through pending → processing → delivered/failed or policy-rejected, with retries visible in delivery attempts and DLQs.
+**Exit criteria:** A project-scoped notification can be created, de-duplicated, scheduled, published to RabbitMQ, processed by the worker pipeline, and tracked through pending → processing → delivered/failed or policy-rejected, with `/health` reporting dependency-specific status.
 
 ### Phase 3: Provider Abstraction and Multi-Channel Delivery
 
@@ -118,8 +121,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] Project management as the active tenancy boundary; Workspace remains explicitly future scope
 - [ ] User preferences (channel opt-in/out, quiet hours, delivery windows, timezone, channel priorities)
 - [ ] Delivery policy management for project-level blackout dates and compliance restrictions
-- [ ] Auth (API key or JWT): signature validation first, Redis revocation/blocklist check second, fail closed with 503 when Redis is unavailable
-- [ ] API key lifecycle management with revocation dual-written to Postgres and Redis from the caller's perspective
+- [ ] Auth (API key or JWT): JWT access-token signature validation first, Redis blocklist check second, fail closed with 503 when Redis is unavailable; API key auth uses the Redis authentication cache with PostgreSQL fallback on cache miss or Redis failure
+- [ ] API key lifecycle management with PostgreSQL as the source of truth and Redis auth-cache invalidation/refresh on create, revoke, and expiry events
 - [ ] Next.js dashboard: notification feed with status/channel/priority, "trigger test notification" form
 - [ ] Explainability panel: "why was this flagged high priority," showing the feature trace
 - [ ] Simulated data viewer: charts of synthetic engagement (sells the simulator work visually)
@@ -139,8 +142,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 
 ### Phase 9: Deployment, Docs, Demo
 
-- [ ] Deploy backend + worker + Postgres to Render/Fly.io
-- [ ] Provision RabbitMQ via CloudAMQP free tier (or paid PaaS tier) and a Redis instance for auth state, rate limiting, and idempotency
+- [ ] Deploy backend + worker + Postgres to Render/Fly.io (or similar)
+- [ ] Provision RabbitMQ via CloudAMQP free tier (or paid PaaS tier) and a Redis instance for auth state, auth cache, rate limiting, and idempotency
 - [ ] Provision S3-compatible object storage for model artefacts and training datasets
 - [ ] Deploy frontend to Vercel, wired to live backend
 - [ ] Final README: architecture diagram, ADRs, model metrics with honest numbers (including weaknesses), "what's deferred to V2 and why," "what I'd change at 10x scale"
