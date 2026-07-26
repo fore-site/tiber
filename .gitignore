@@ -220,3 +220,4 @@ __marimo__/
 docs/release_guide.md
 docs/architecture/codebase_structure.md
 docs/validation-strategy.md
+docker-compose.override.yml
