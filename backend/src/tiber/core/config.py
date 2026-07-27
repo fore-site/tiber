@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     cors_enabled: bool = True
+    docs_enabled: bool = True
+    redoc_enabled: bool = True
+    openapi_enabled: bool = True
     cors_allow_origins: list[str] = ["http://localhost:3000"]
     cors_allow_methods: list[str] = ["*"]
     cors_allow_headers: list[str] = ["*"]

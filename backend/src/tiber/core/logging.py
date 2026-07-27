@@ -1,6 +1,6 @@
 import logging
 import sys
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Any
 from uuid import uuid4
 
@@ -16,23 +16,27 @@ correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
 
 def get_correlation_id() -> str:
     """Retrieve the current correlation ID from the context variable."""
-    cid = correlation_id_var.get()
-    if not cid:
-        # Generate a new correlation ID if not set
-        cid = str(uuid4())
-        correlation_id_var.set(cid)
-    return cid
+    return correlation_id_var.get()
 
 
-def set_correlation_id(correlation_id: str) -> None:
+def set_correlation_id(correlation_id: str) -> Token[str]:
     """Set the correlation ID in the context variable."""
-    correlation_id_var.set(correlation_id)
+    return correlation_id_var.set(correlation_id)
+
+
+def reset_correlation_id(token: Token[str]) -> None:
+    """Reset the context."""
+    correlation_id_var.reset(token)
 
 
 # Structlog processor chain
 def _add_correlation_id(
     logger: Any, method: str, event_dict: dict[str, Any]
 ) -> dict[str, Any]:
+    correlation_id = get_correlation_id()
+    if not correlation_id:
+        set_correlation_id(str(uuid4()))
+
     event_dict["correlation_id"] = get_correlation_id()
     return event_dict
 
@@ -49,6 +53,8 @@ def configure_logging() -> None:
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
     ]
+
+    renderer: structlog.typing.Processor
 
     if settings.debug:
         # Human-readable output in development
