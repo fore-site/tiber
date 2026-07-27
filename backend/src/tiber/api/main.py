@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..api.routers.health import router as health_router
 from ..core.config import get_settings
+from ..core.database import engine
 from ..core.logging import get_logger, reset_correlation_id, set_correlation_id
 
 logger = get_logger(__name__)
@@ -22,6 +23,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     try:
         yield
     finally:
+        logger.info("Closing database engine")
+        await engine.dispose()
+
         logger.info("Shutting down Tiber API service")
 
 
