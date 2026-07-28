@@ -2875,14 +2875,11 @@ components:
     # Health
 
     DependencyCheck:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-          enum: [healthy, unhealthy]
-        message:
-          type: [string, "null"]
+      type: string
+      enum:
+        - up
+        - degraded
+        - down
 
     HealthResponse:
       type: object
@@ -2890,7 +2887,7 @@ components:
       properties:
         status:
           type: string
-          enum: [healthy, unhealthy]
+          enum: [healthy, degraded, unhealthy]
         version:
           type: string
           example: 0.1.0
