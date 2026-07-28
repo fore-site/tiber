@@ -1690,6 +1690,7 @@ components:
             error: validation_error
             message: Request validation failed
             status: 422
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
             details:
               - field: channel
                 message: Value must be one of email, push, sms, webhook, in_app
@@ -1763,7 +1764,7 @@ components:
 
     ValidationErrorResponse:
       type: object
-      required: [error, message, status, details]
+      required: [error, message, status, details, correlation_id]
       properties:
         error:
           type: string
@@ -1786,6 +1787,9 @@ components:
               message:
                 type: string
                 example: Value must be one of email, push, sms, webhook, in_app
+        correlation_id:
+          $ref: "#/components/schemas/UUID"
+          description: Correlation identifier that can be supplied to support teams for debugging.
 
     PaginationMeta:
       type: object
