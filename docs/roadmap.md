@@ -45,7 +45,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 
 ### Phase 2: Application Bootstrap and Core Notification Engine
 
-- [ ] FastAPI API service bootstrap: app factory, configuration, dependency injection, `/health`, and request/response plumbing
+- [✅] FastAPI API service bootstrap: app factory, configuration, dependency injection, `/health`, and response plumbing
 - [ ] Celery Worker service bootstrap: Celery app, RabbitMQ connection, queue bindings, task routing, and worker startup
 - [ ] Alembic migration execution path for project-scoped schema initialization and extension creation
 - [ ] Project-scoped `POST /notifications`: authenticate, validate, persist immutable notification, enqueue (idempotency key required)
