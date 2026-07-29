@@ -75,9 +75,9 @@ async def tiber_exception_handler(request: Request, exc: Exception) -> JSONRespo
         )
 
     elif isinstance(exc, HTTPException):
-        status_code = (exc.status_code,)
-        error_code = ("http_error",)
-        message = (str(exc.detail),)
+        status_code = exc.status_code
+        error_code = "http_error"
+        message = str(exc.detail)
 
         logger.warning(
             "HTTP exception",
