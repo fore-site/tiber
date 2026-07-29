@@ -2,29 +2,25 @@ import logging
 import sys
 from contextvars import ContextVar, Token
 from typing import Any
-from uuid import uuid4
 
 import structlog
 
 from tiber.core.config import get_settings
 
-# Request-scoped correlation ID used throughout the application.
-# Other layers may propagate this value to message headers,
-# database records, and telemetry as needed.
-correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
+correlation_id_var: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
-def get_correlation_id() -> str:
+def get_correlation_id() -> str | None:
     """Retrieve the current correlation ID from the context variable."""
     return correlation_id_var.get()
 
 
-def set_correlation_id(correlation_id: str) -> Token[str]:
+def set_correlation_id(correlation_id: str) -> Token[str | None]:
     """Set the correlation ID in the context variable."""
     return correlation_id_var.set(correlation_id)
 
 
-def reset_correlation_id(token: Token[str]) -> None:
+def reset_correlation_id(token: Token[str | None]) -> None:
     """Reset the context."""
     correlation_id_var.reset(token)
 
@@ -34,10 +30,10 @@ def _add_correlation_id(
     logger: Any, method: str, event_dict: dict[str, Any]
 ) -> dict[str, Any]:
     correlation_id = get_correlation_id()
-    if not correlation_id:
-        set_correlation_id(str(uuid4()))
 
-    event_dict["correlation_id"] = get_correlation_id()
+    if correlation_id is not None:
+        event_dict["correlation_id"] = get_correlation_id()
+
     return event_dict
 
 
