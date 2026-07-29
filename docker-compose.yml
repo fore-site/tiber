@@ -52,6 +52,7 @@ services:
       - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro 
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -99,6 +100,59 @@ services:
     volumes:
       - ./backend/src/tiber/infrastructure/minio/init.sh:/init.sh:ro
     entrypoint: ["/bin/sh", "/init.sh"]
+    networks:
+      - tiber
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: tiber-backend
+    container_name: tiber-api
+    restart: unless-stopped
+    command: ["uv", "run", "uvicorn", "tiber.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    env_file: ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_SYNC_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - tiber
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: tiber-backend
+    container_name: tiber-worker
+    restart: unless-stopped
+    command: ["uv", "run", "celery", "-A", "tiber.worker.celery_app", "worker", "--without-mingle", "--without-gossip", "--loglevel=info"]
+    env_file: ./backend/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_SYNC_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - tiber
 
