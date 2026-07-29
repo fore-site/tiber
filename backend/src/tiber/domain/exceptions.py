@@ -11,6 +11,7 @@ class TiberError(Exception):
     """Base class for all Tiber domain exceptions."""
 
     error_code = "internal_error"
+    status_code = 500
 
     pass
 
@@ -22,6 +23,7 @@ class NotFoundError(TiberError):
     """Base class for all "not found" errors."""
 
     error_code = "not_found"
+    status_code = 404
 
     def __init__(self, entity: str, identifier: str) -> None:
         """Initialize a NotFoundError with the entity type and identifier."""
@@ -160,6 +162,7 @@ class PolicyViolationError(TiberError):
     """
 
     error_code = "policy_violated"
+    status_code = 409
 
     def __init__(self, policy_type: str, message: str) -> None:
         """Initialize a PolicyViolationError with the policy type and message."""
@@ -172,6 +175,7 @@ class ProjectScopeViolationError(TiberError):
     """Raised when an operation is attempted outside the scope of a project."""
 
     error_code = "project_scope_violated"
+    status_code = 403
 
     def __init__(self, project_id: str, message: str) -> None:
         """Initialize a ProjectScopeViolationError with the project ID and message."""
@@ -182,20 +186,11 @@ class ProjectScopeViolationError(TiberError):
         self.message = message
 
 
-class APIKeyRevokedError(TiberError):
-    """Raised when an operation is attempted with a revoked API key."""
-
-    error_code = "apikey_revoked"
-
-    def __init__(self) -> None:
-        """Initialize an APIKeyRevokedError."""
-        super().__init__("API key has been revoked.")
-
-
 class AuthenticationFailedError(TiberError):
     """Raised when authentication fails."""
 
     error_code = "authentication_failed"
+    status_code = 401
 
     def __init__(self, message: str) -> None:
         """Initialize an AuthenticationFailedError with a message."""
@@ -210,6 +205,7 @@ class RateLimitExceededError(TiberError):
     """Raised when a rate limit is exceeded."""
 
     error_code = "ratelimit_exceeded"
+    status_code = 429
 
     def __init__(self, retry_after: int | None) -> None:
         """Initialize a RateLimitExceededError."""
@@ -224,6 +220,7 @@ class DeliveryFailedError(TiberError):
     """Raised when a delivery attempt fails."""
 
     error_code = "delivery_failed"
+    status_code = 502
 
     def __init__(self, message: str) -> None:
         """Initialize a DeliveryFailedError with a message."""
@@ -235,6 +232,7 @@ class ProviderUnavailableError(TiberError):
     """Raised when a provider is unavailable."""
 
     error_code = "provider_unavailable"
+    status_code = 503
 
     def __init__(self, provider: str) -> None:
         """Initialize a ProviderUnavailableError."""
@@ -246,6 +244,7 @@ class PermissionDeniedError(TiberError):
     """Raised when a caller is authenticated but lacks permission for the requested operation."""
 
     error_code = "permission_denied"
+    status_code = 403
 
     def __init__(self) -> None:
         """Initialize a PermissionDeniedError."""
