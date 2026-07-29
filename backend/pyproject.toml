@@ -95,7 +95,7 @@ ignore = ["E501","D100","D104"]
  
 [tool.ruff.lint.isort]
 known-first-party = ["tiber"]
- 
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -118,3 +118,6 @@ markers = [
 [tool.coverage.run]
 source = ["src/tiber"]
 omit = ["tests/*"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
