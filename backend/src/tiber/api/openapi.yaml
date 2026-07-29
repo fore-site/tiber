@@ -1714,7 +1714,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
           example:
-            error: forbidden
+            error: permission_denied
             message: You do not have permission to access this resource
             status: 403
             correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
