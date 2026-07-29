@@ -98,6 +98,7 @@ async def tiber_exception_handler(request: Request, exc: Exception) -> JSONRespo
             path=request.url.path,
             error_code=error_code,
             status_code=status_code,
+            detail=str(exc),
         )
 
     response = error_response(
