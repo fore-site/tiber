@@ -33,7 +33,6 @@ class Settings(BaseSettings):
 
     # RabbitMQ
     rabbitmq_url: str = "amqp://tiber:tiber@localhost:5672/"
-    celery_result_backend: str = "redis://localhost:6379/1"
 
     # Redis (auth state, rate limiting, idempotency)
     redis_url: str = "redis://localhost:6379/0"
