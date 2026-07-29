@@ -19,7 +19,7 @@ class ErrorResponse(BaseModel):
         examples=[404],
     )
 
-    correlation_id: str = Field(
+    correlation_id: str | None = Field(
         description="Correlation identifier used for request tracing.",
     )
 
