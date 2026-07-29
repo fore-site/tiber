@@ -162,7 +162,7 @@ class PolicyViolationError(TiberError):
     """
 
     error_code = "policy_violated"
-    status_code = 409
+    status_code = 422
 
     def __init__(self, policy_type: str, message: str) -> None:
         """Initialize a PolicyViolationError with the policy type and message."""
