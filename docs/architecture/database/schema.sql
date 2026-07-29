@@ -1,6 +1,6 @@
 -- Tiber Database Schema
 -- Version: 0.1.0
--- PostgreSQL 16+
+-- PostgreSQL 18+
 
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";  -- gen_random_uuid()
