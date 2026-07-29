@@ -6,12 +6,17 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from ..api.routers.health import router as health_router
 from ..core.config import get_settings
 from ..core.database import engine
 from ..core.logging import get_logger, reset_correlation_id, set_correlation_id
+from .exception_handlers import (
+    tiber_exception_handler,
+    validation_exception_handler,
+)
+from .routers.health import router as health_router
 
 logger = get_logger(__name__)
 
@@ -41,6 +46,9 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.openapi_enabled else None,
         lifespan=lifespan,
     )
+
+    app.add_exception_handler(Exception, tiber_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
     if settings.cors_enabled:
         app.add_middleware(
