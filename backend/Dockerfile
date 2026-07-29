@@ -1,4 +1,7 @@
 FROM python:3.14-slim
+
+ENV PYTHONUNBUFFERED=1d
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md alembic.ini ./
