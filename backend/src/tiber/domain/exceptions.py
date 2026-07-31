@@ -249,3 +249,20 @@ class PermissionDeniedError(TiberError):
     def __init__(self) -> None:
         """Initialize a PermissionDeniedError."""
         super().__init__("You do not have permission to access this resource.")
+
+
+class IdempotencyKeyConflictError(TiberError):
+    """Raised when an idempotency key is reused with a different request payload.
+
+    A duplicate submission with the identical payload is not an error —
+    it returns the original cached response. This exception is raised only
+    when the same key is submitted with a payload that differs from the
+    original request, indicating a client-side logic error.
+    """
+
+    error_code = "idempotency_key_conflict"
+    status_code = 409
+
+    def __init__(self) -> None:
+        """Initialize an IdempotencyKeyConflictError."""
+        super().__init__("Duplicate key passed with different request payload.")
