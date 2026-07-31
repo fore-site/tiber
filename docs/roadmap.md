@@ -46,8 +46,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 ### Phase 2: Application Bootstrap and Core Notification Engine
 
 - [✅] FastAPI API service bootstrap: app factory, configuration, dependency injection, `/health`, and response plumbing
-- [ ] Celery Worker service bootstrap: Celery app, RabbitMQ connection, queue bindings, task routing, and worker startup
-- [ ] Alembic migration execution path for project-scoped schema initialization and extension creation
+- [✅] Celery Worker service bootstrap: Celery app, RabbitMQ connection, queue bindings, task routing, and worker startup
+- [✅] Alembic migration execution path for project-scoped schema initialization and extension creation
 - [ ] Project-scoped `POST /notifications`: authenticate, validate, persist immutable notification, enqueue (idempotency key required)
 - [ ] Idempotency Guard runs before template resolution and scheduling; duplicate keys within 24 hours return the original persisted 201 response
 - [ ] Template rendering (basic variables into a message body) with direct-content notifications still allowed
