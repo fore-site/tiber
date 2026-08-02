@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from ..enums import Channel, NotificationStatus, SendTimeBasis
+from ..enums import DeliveryChannel, NotificationStatus, SendTimeBasis
 from ..exceptions import InvalidNotificationStateError, InvalidStateTransitionError
 from ..value_objects import NotificationContent
 
@@ -16,7 +16,7 @@ class Notification:
     project_id: UUID
     recipient_id: UUID
     correlation_id: UUID
-    channel: Channel
+    channel: DeliveryChannel
     content: NotificationContent
     status: NotificationStatus = NotificationStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -59,7 +59,7 @@ class Notification:
                 )
 
         # 3. email channel requires subject; other channels must not have one
-        if self.channel == Channel.EMAIL:
+        if self.channel == DeliveryChannel.EMAIL:
             if self.content.subject is None:
                 raise InvalidNotificationStateError(
                     "Email notifications must have a subject"
