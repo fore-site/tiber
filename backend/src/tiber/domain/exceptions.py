@@ -266,3 +266,30 @@ class IdempotencyKeyConflictError(TiberError):
     def __init__(self) -> None:
         """Initialize an IdempotencyKeyConflictError."""
         super().__init__("Duplicate key passed with different request payload.")
+
+
+class InvalidStateTransitionError(TiberError):
+    """Raised when a notification status transition is not allowed."""
+
+    error_code = "invalid_state_transition"
+    status_code = 409
+
+    def __init__(self, current: str, target: str) -> None:
+        """Initialize an InvalidStateTransition error with the current and target states."""
+        super().__init__(
+            f"Cannot transition Notification from '{current}' to '{target}'."
+        )
+        self.current = current
+        self.target = target
+
+
+class InvalidNotificationStateError(TiberError):
+    """Raised when a Notification invariant is violated."""
+
+    error_code = "invalid_notification_state"
+    status_code = 422
+
+    def __init__(self, message: str) -> None:
+        """Initialize an InvalidNotificationStateError with a message."""
+        self.message = message
+        super().__init__(message)
