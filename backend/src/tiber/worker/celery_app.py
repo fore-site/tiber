@@ -26,6 +26,9 @@ celery_app.conf.update(
     task_routes=task_routes,
     # Task execution
     task_acks_late=True,  # Require explicit ack after task runs (safe for retries)
+    # Let RabbitMQ reject exhausted task failures so the delivery queue's
+    # dead-letter exchange receives them instead of Celery acknowledging them.
+    task_acks_on_failure_or_timeout=False,
     task_queues=TASK_QUEUES,
     task_default_exchange=NOTIFICATIONS_EXCHANGE.name,
     # Routing is channel-aware: the publisher stamps each job with a

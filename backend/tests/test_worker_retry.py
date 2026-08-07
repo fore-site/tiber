@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from tiber.worker.celery_app import celery_app
 from tiber.worker.retry import exponential_backoff, is_retry_exhausted
+
+
+def test_failures_are_rejected_for_dlq_delivery():
+    """Celery must not ACK exhausted failures before RabbitMQ dead-letters them."""
+    assert celery_app.conf.task_acks_late is True
+    assert celery_app.conf.task_acks_on_failure_or_timeout is False
 
 
 def test_backoff_starts_at_base():
