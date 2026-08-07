@@ -7,7 +7,11 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from tiber.core.config import get_settings
-from tiber.infrastructure.persistence.models.base import Base
+from tiber.infrastructure.models import (  # noqa: F401  # register models into Base.metadata for autogenerate
+    NotificationModel,
+    ProjectModel,
+)
+from tiber.infrastructure.models.base import Base
 
 # Load the Alembic configuration
 config = context.config
