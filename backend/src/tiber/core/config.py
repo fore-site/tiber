@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # Idempotency
     idempotency_ttl_seconds: int = 86400
 
+    # Notification delivery retry (exponential backoff, bounded max attempts)
+    notification_retry_max_attempts: int = 4
+    notification_retry_base_delay_seconds: int = 30
+    notification_retry_backoff_factor: int = 2
+    notification_retry_max_delay_seconds: int = 3600
+
     # Object storage
     storage_endpoint: str = "localhost:9000"
     storage_access_key: str = "minioadmin"

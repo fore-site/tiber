@@ -31,6 +31,11 @@ class NotificationCreateRequest(BaseModel):
 
     template_id: UUID | None = None
 
+    template_variables: dict[str, Any] | None = Field(
+        default=None,
+        description="Variables substituted into the template when ``template_id`` is set.",
+    )
+
     subject: str | None = Field(
         default=None,
         max_length=255,

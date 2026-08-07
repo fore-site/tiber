@@ -15,6 +15,7 @@ class NotificationStatus(StrEnum):
     """Enum values for notification statuses."""
 
     PENDING = "pending"
+    PROCESSING = "processing"
     DELIVERED = "delivered"
     FAILED = "failed"
     POLICY_REJECTED = "policy_rejected"

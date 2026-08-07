@@ -3,11 +3,16 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from ...application.services import NotificationService
 from ...infrastructure.models import ProjectModel
-from ..dependencies import get_authenticated_project, get_notification_service
+from ...infrastructure.rate_limit.ingestion_rate_limiter import IngestionRateLimiter
+from ..dependencies import (
+    get_authenticated_project,
+    get_ingestion_rate_limiter,
+    get_notification_service,
+)
 from ..schemas.notification import (
     NotificationCreateRequest,
     NotificationResponse,
@@ -31,6 +36,10 @@ async def create_notification(
         NotificationService,
         Depends(get_notification_service),
     ],
+    limiter: Annotated[
+        IngestionRateLimiter,
+        Depends(get_ingestion_rate_limiter),
+    ],
     idempotency_key: Annotated[
         str,
         Header(alias="Idempotency-Key"),
@@ -44,7 +53,15 @@ async def create_notification(
 
     Requires an ``Idempotency-Key`` header. A repeated submission with the
     same key within 24h returns the originally persisted notification.
+
+    Ingestion is rate-limited per project: once the project's windowed quota is
+    exhausted the request is rejected with ``429 Too Many Requests``.
     """
+    if not await limiter.is_allowed(project.id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Ingestion rate limit exceeded.",
+        )
     notification = await service.create_notification(
         project_id=project.id,
         recipient_id=payload.recipient_id,
@@ -52,6 +69,7 @@ async def create_notification(
         subject=payload.subject,
         body=payload.body,
         template_id=payload.template_id,
+        template_variables=payload.template_variables,
         idempotency_key=idempotency_key,
         correlation_id=UUID(correlation_id) if correlation_id else uuid4(),
         scheduled_at=payload.scheduled_at,

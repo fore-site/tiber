@@ -93,6 +93,25 @@ class Notification:
             **changes,
         )
 
+    def with_content(self, content: NotificationContent) -> Notification:
+        """Return this notification with a replaced content snapshot."""
+        return replace(self, content=content)
+
+    def mark_processing(self) -> Notification:
+        """Transition the notification from pending to the in-flight processing state.
+
+        Marks the notification as being actively worked by a worker so that a
+        duplicate or concurrent dispatch of the same id will no longer see it as
+        PENDING and therefore will not re-deliver. Processing is transient - a
+        terminal transition (delivered/failed/...) is expected next.
+        """
+        if self.status != NotificationStatus.PENDING:
+            raise InvalidStateTransitionError(
+                self.status, NotificationStatus.PROCESSING
+            )
+
+        return self._transition(status=NotificationStatus.PROCESSING)
+
     def mark_cancelled(self) -> Notification:
         """Transition the notification to the cancelled state."""
         if self.status != NotificationStatus.PENDING:
@@ -117,8 +136,15 @@ class Notification:
         )
 
     def mark_delivered(self) -> Notification:
-        """Transition the notification to the delivered state."""
-        if self.status != NotificationStatus.PENDING:
+        """Transition the notification to the delivered state.
+
+        Allowed from both PENDING (immediate dispatch) and PROCESSING
+        (after the processing guard has run).
+        """
+        if self.status not in (
+            NotificationStatus.PENDING,
+            NotificationStatus.PROCESSING,
+        ):
             raise InvalidStateTransitionError(self.status, NotificationStatus.DELIVERED)
 
         return self._transition(
@@ -127,8 +153,15 @@ class Notification:
         )
 
     def mark_failed(self) -> Notification:
-        """Transition the notification to the failed state."""
-        if self.status != NotificationStatus.PENDING:
+        """Transition the notification to the failed state.
+
+        Allowed from both PENDING (immediate dispatch) and PROCESSING
+        (after the processing guard has run).
+        """
+        if self.status not in (
+            NotificationStatus.PENDING,
+            NotificationStatus.PROCESSING,
+        ):
             raise InvalidStateTransitionError(self.status, NotificationStatus.FAILED)
 
         return self._transition(status=NotificationStatus.FAILED)

@@ -28,7 +28,10 @@ celery_app.conf.update(
     task_acks_late=True,  # Require explicit ack after task runs (safe for retries)
     task_queues=TASK_QUEUES,
     task_default_exchange=NOTIFICATIONS_EXCHANGE.name,
-    task_default_routing_key="notification.created",
+    # Routing is channel-aware: the publisher stamps each job with a
+    # ``notification.{channel}`` key; this is only the fallback for the (rare)
+    # case where no explicit routing key is supplied at publish time.
+    task_default_routing_key="notification.email",
     task_reject_on_worker_lost=True,  # If worker dies, re-queue the message
     task_track_started=False,
     task_default_retry_delay=30,  # Default retry delay in seconds

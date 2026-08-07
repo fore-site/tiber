@@ -72,6 +72,23 @@ class TemplateNotFoundError(NotFoundError):
         super().__init__("Template", template_id)
 
 
+class TemplateChannelMismatchError(TiberError):
+    """Raised when a notification uses a template for a different channel."""
+
+    error_code = "template_channel_mismatch"
+    status_code = 422
+
+    def __init__(self, template_id: str, template_channel: str, channel: str) -> None:
+        """Initialize a TemplateChannelMismatchError."""
+        super().__init__(
+            f"Template '{template_id}' is for channel '{template_channel}', "
+            f"not '{channel}'"
+        )
+        self.template_id = template_id
+        self.template_channel = template_channel
+        self.channel = channel
+
+
 class UserPreferenceNotFoundError(NotFoundError):
     """Raised when a user preference is not found."""
 

@@ -74,6 +74,11 @@ class RedisKeys:
         """Generate a Redis key for an idempotency entry."""
         return f"idempotency:{project_id}:{idempotency_key}"
 
+    @staticmethod
+    def ingestion_rate_limit(project_id: UUID | str) -> str:
+        """Generate the Redis key for the per-project ingestion rate counter."""
+        return f"ratelimit:ingestion:{project_id}"
+
 
 class RedisTTL:
     """Centralised TTL definitions for Redis keys.
@@ -95,6 +100,10 @@ class RedisTTL:
 
     #: Idempotency entries remain valid for 24 hours, matching the API contract.
     IDEMPOTENCY = timedelta(hours=24)
+
+    #: Ingestion rate-limit window (matches the configured window; the counter
+    #: is given this TTL on its first increment of each window).
+    INGESTION_RATE_LIMIT = timedelta(seconds=60)
 
     #: Distributed lock duration.
     #: Prevents abandoned locks while giving workers enough time to complete.
