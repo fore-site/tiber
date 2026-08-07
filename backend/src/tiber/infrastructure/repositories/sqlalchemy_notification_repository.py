@@ -18,9 +18,14 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         self._session = session
 
     async def save(self, notification: Notification) -> Notification:
-        """Persist a notification."""
+        """Insert a notification, or update the row with the same ID.
+
+        Notifications are immutable domain entities; state transitions
+        (delivered/failed/... ) produce a *new* entity with the same id, so
+        persistence must update rather than re-insert.
+        """
         model = self._to_model(notification)
-        self._session.add(model)
+        await self._session.merge(model)
         await self._session.flush()
         return notification
 
