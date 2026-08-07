@@ -56,25 +56,31 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
 
     @staticmethod
     def _to_model(entity: Notification) -> NotificationModel:
-        return NotificationModel(
-            id=entity.id,
-            project_id=entity.project_id,
-            recipient_id=entity.recipient_id,
-            template_id=entity.template_id,
-            correlation_id=entity.correlation_id,
-            channel=entity.channel,
-            status=entity.status,
-            idempotency_key=entity.idempotency_key,
-            subject=entity.content.subject,
-            body=entity.content.body,
-            template_variables=entity.template_variables,
-            scheduled_at=entity.scheduled_at,
-            send_time_basis=entity.send_time_basis,
-            policy_violation_reason=entity.policy_violation_reason,
-            delivered_at=entity.delivered_at,
-            created_at=entity.created_at,
-            updated_at=entity.updated_at,
-        )
+        # NOTE: JSONB columns must not be passed an explicit Python None - the
+        # asyncpg driver serializes None as JSON "null" rather than SQL NULL,
+        # which would trip the IS NULL / jsonb_typeof checks. Only include
+        # template_variables when it actually has a value.
+        fields: dict = {
+            "id": entity.id,
+            "project_id": entity.project_id,
+            "recipient_id": entity.recipient_id,
+            "template_id": entity.template_id,
+            "correlation_id": entity.correlation_id,
+            "channel": entity.channel,
+            "status": entity.status,
+            "idempotency_key": entity.idempotency_key,
+            "subject": entity.content.subject,
+            "body": entity.content.body,
+            "scheduled_at": entity.scheduled_at,
+            "send_time_basis": entity.send_time_basis,
+            "policy_violation_reason": entity.policy_violation_reason,
+            "delivered_at": entity.delivered_at,
+            "created_at": entity.created_at,
+            "updated_at": entity.updated_at,
+        }
+        if entity.template_variables is not None:
+            fields["template_variables"] = entity.template_variables
+        return NotificationModel(**fields)
 
     @staticmethod
     def _to_entity(model: NotificationModel) -> Notification:
