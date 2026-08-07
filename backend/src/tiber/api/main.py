@@ -17,6 +17,7 @@ from .exception_handlers import (
     validation_exception_handler,
 )
 from .routers.health import router as health_router
+from .routers.notification import router as notification_router
 
 logger = get_logger(__name__)
 
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
             reset_correlation_id(token)
 
     app.include_router(health_router)
+    app.include_router(notification_router)
     return app
 
 
