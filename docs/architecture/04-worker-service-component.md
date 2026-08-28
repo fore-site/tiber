@@ -39,7 +39,7 @@ The Worker Service owns one concern end to end: consume a job, process it throug
     "body": "Hi Pascal, your order #1234 is on its way."
   },
   "scheduling": {
-    "scheduled_at": "2026-01-01T09:00:00Z",
+    "scheduled_time": "2026-01-01T09:00:00Z",
     "send_time_basis": "ml_predicted"
   },
   "intelligence": {
@@ -69,7 +69,7 @@ The Worker Service owns one concern end to end: consume a job, process it throug
 
 - **Retry state is carried in the job payload, not stored in Postgres:** The Retry Manager increments the `attempt` field in the job payload and re-queues the modified payload with a backoff delay. No separate retry state table exists in Postgres. This means retry tracking is self-contained in the message — a worker restart, a broker failover, or a deployment during active retries does not lose retry history because the state travels with the job. The tradeoff is that retry history is not queryable from Postgres during a retry cycle. On terminal failure (attempt count exceeds max attempts), the Retry Manager routes the job to the dead-letter queue and the Delivery Tracker writes a failed outcome record to Postgres, which becomes the permanent and queryable record of the failure.
 
-- **Dispatch Policy Guard re-checks only drift-sensitive constraints:** The API Service Delivery Policy Resolver performs full constraint evaluation at intake time. The Worker's Dispatch Policy Guard is deliberately narrower. It re-checks only DND windows and compliance rules, the two constraint types most likely to change between enqueue and delivery. It does not re-run channel preference resolution, ML send-time confirmation, or template rendering. On soft constraint failure (DND window active) it re-queues the job with a short delay for dispatch outside the window. On hard constraint failure (compliance violation) it stops the pipeline, logs the violation with a reason, and records the outcome as policy-rejected in Postgres. This dual enforcement model is documented in ADR-002.
+- **Dispatch Policy Guard re-checks only drift-sensitive constraints:** The API Service Delivery Policy Resolver performs full constraint evaluation at intake time. The Worker's Dispatch Policy Guard is deliberately narrower. It re-checks only DND windows and compliance rules, the two constraint types most likely to change between enqueue and delivery. It does not re-run channel preference resolution, ML send-time confirmation, or template rendering. On soft constraint failure (DND window active) it re-queues the job with a short delay for dispatch outside the window. On hard constraint failure (compliance violation) it stops the pipeline, logs the violation with a reason, and records the outcome as policy-rejected in Postgres.
 
 - **Delivery Tracker writes before Webhook Dispatcher fires:** The Delivery Tracker writes the outcome to Postgres as the authoritative record before triggering the Webhook Dispatcher. If the Webhook Dispatcher fails, i.e the client endpoint is unreachable, returns a non-2xx response, or exhausts its own retry budget, then the delivery record in Postgres is unaffected. The notification is considered delivered regardless of whether the client received the webhook callback. This ordering matters: a webhook is a notification of an outcome, not the outcome itself. The Webhook Dispatcher maintains its own independent retry logic with a separate backoff policy and a separate dead-letter path for exhausted webhook deliveries.
 
@@ -79,4 +79,4 @@ The Worker Service owns one concern end to end: consume a job, process it throug
 
 ## What This Diagram Does Not Show
 
-This diagram does not show internal class or function structure within any component, that is Level 4 detail and is not diagrammed. The provider adapter interface and the specific adapters (email, push, mock adapters for SMS and in-app) are implementation details visible at the code level, not at this diagram's level of abstraction. The ML Engine's internal structure including the Engagement Tracker, training pipeline, and inference interface is covered in the Level 3 ML Engine component diagram.
+This diagram does not show internal class or function structure within any component. The provider adapter interface and the specific adapters (email, push, mock adapters for SMS and in-app) are implementation details visible at the code level, not at this diagram's level of abstraction. The ML Engine's internal structure including the Engagement Tracker, training pipeline, and inference interface 

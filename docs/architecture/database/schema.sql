@@ -23,12 +23,11 @@ CREATE TYPE user_role AS ENUM (
 
 CREATE TYPE notification_status AS ENUM (
     'pending',
-    'scheduled',
     'processing',
+    'policy_rejected',
+    'cancelled',
     'delivered',
     'failed',
-    'policy_rejected',
-    'cancelled'
 );
 
 CREATE TYPE delivery_attempt_status AS ENUM (
@@ -79,11 +78,6 @@ CREATE TYPE training_run_status AS ENUM (
     'failed'
 );
 
-CREATE TYPE auth_token_type AS ENUM (
-    'email_verification',
-    'password_reset'
-);
-
 CREATE TYPE webhook_event_type AS ENUM (
     'notification.delivered',
     'notification.failed',
@@ -115,14 +109,13 @@ COMMENT ON COLUMN users.pending_email IS 'New email awaiting verification after 
 COMMENT ON COLUMN users.github_id     IS 'GitHub user ID for OAuth accounts. NULL for email/password accounts.';
 
 -- Auth Tokens
--- Short-lived tokens for email verification and password reset
+-- Short-lived tokens for Password reset. Email verification uses OTP.
 -- Tokens are hashed before storage. Raw values are sent to users via email only.
 
 CREATE TABLE auth_tokens (
     id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     token_hash CHAR(64)  NOT NULL,
-    token_type auth_token_type  NOT NULL,
     expires_at TIMESTAMPTZ  NOT NULL,
     used_at    TIMESTAMPTZ  NULL,
     created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -132,7 +125,6 @@ CREATE TABLE auth_tokens (
 
 COMMENT ON TABLE  auth_tokens            IS 'Short-lived hashed tokens for email verification, and password reset flows.';
 COMMENT ON COLUMN auth_tokens.token_hash IS 'SHA-256 hex hash of the raw token. The raw token is sent to the user via email and never stored.';
-COMMENT ON COLUMN auth_tokens.token_type IS 'Discriminator: email_verification | password_reset.';
 COMMENT ON COLUMN auth_tokens.used_at    IS 'Set when the token is consumed. Used tokens cannot be reused regardless of expiry.';
 
 -- Projects
@@ -323,6 +315,7 @@ COMMENT ON COLUMN notifications.body              IS 'Rendered body after templa
 COMMENT ON COLUMN notifications.template_variables IS 'Variables supplied by the caller for template interpolation. Stored for auditability.';
 COMMENT ON COLUMN notifications.send_time_basis   IS 'How scheduled_at was determined: explicit (caller-provided), ml_predicted, or immediate.';
 COMMENT ON COLUMN notifications.policy_violation_reason IS 'Populated when status is policy_rejected. Records which policy was violated and why.';
+COMMENT ON COLUMN notifications.scheduled_at IS 'Earliest dispatch time. Delivery must not begin before this timestamp.';
 
 -- Notification Intelligence
 -- ML predictions attached at intake. Stored separately to keep the notifications
