@@ -9,8 +9,7 @@ from ..enums import UserRole
 class User:
     """User entity - a platform account that owns projects.
 
-    Mirrors the ``users`` table (docs/architecture/database/schema.sql). An
-    account is identified by email and owns projects. OAuth (GitHub) accounts
+    An account is identified by email and owns projects. OAuth (GitHub) accounts
     have a ``github_id`` and no ``password_hash``; email/password accounts
     have a ``password_hash``.
     """

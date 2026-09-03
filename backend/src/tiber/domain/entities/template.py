@@ -9,7 +9,6 @@ from ..enums import DeliveryChannel
 class Template:
     """Template entity - reusable notification content.
 
-    Mirrors the ``templates`` table (docs/architecture/database/schema.sql).
     ``subject`` is required for email and must be absent for other channels,
     enforced both here and by the ``templates_subject_check`` DB constraint.
     Supports ``{{variable}}`` interpolation.

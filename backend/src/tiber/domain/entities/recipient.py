@@ -6,12 +6,7 @@ from uuid import UUID
 
 @dataclass(frozen=True)
 class Recipient:
-    """Recipient entity - the intended destination of a notification.
-
-    Mirrors the ``recipients`` table (docs/architecture/database/schema.sql).
-    ``addresses`` is a non-empty mapping of channel -> channel-specific address
-    (e.g. {"email": "a@b.io"}).
-    """
+    """Recipient entity - the intended destination of a notification."""
 
     id: UUID
     project_id: UUID
