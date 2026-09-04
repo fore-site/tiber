@@ -376,33 +376,6 @@ CREATE TABLE delivery_attempts (
 COMMENT ON TABLE  delivery_attempts                     IS 'Immutable record of each delivery attempt. Never updated or deleted.';
 COMMENT ON COLUMN delivery_attempts.provider_message_id IS 'The provider''s own reference ID (e.g. Resend''s email_id). Used to correlate inbound provider engagement webhooks back to a specific attempt.';
 
--- Providers
--- Persisted record of configured external delivery services and health state.
--- Distinct from infrastructure/providers/ adapters which are the code that calls them.
-
-CREATE TABLE providers (
-    id              UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
-    name            VARCHAR(100)     NOT NULL,
-    channel         delivery_channel NOT NULL,
-    is_active       BOOLEAN          NOT NULL DEFAULT TRUE,
-    is_healthy      BOOLEAN          NOT NULL DEFAULT TRUE,
-    last_checked_at TIMESTAMPTZ      NULL,
-    configuration   JSONB            NULL,
-    created_at      TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT providers_name_channel_unique UNIQUE (name, channel),
-
-    CONSTRAINT providers_configuration_check CHECK (
-            configuration IS NULL
-            OR jsonb_typeof(configuration) = 'object'
-        )
-);
-
-COMMENT ON TABLE  providers               IS 'Configured external delivery services. Tracks health state for failover decisions by the Provider Manager.';
-COMMENT ON COLUMN providers.configuration IS 'Provider-specific configuration. Must be encrypted at the application layer before storage — never store plaintext credentials.';
-COMMENT ON COLUMN providers.is_healthy    IS 'Updated by the periodic health monitor. Used by the Provider Manager to select healthy adapters for delivery.';
-
 -- Webhook Endpoints
 -- Client-registered outbound callback destinations.
 -- API Service owns registration. Worker Service owns firing.
@@ -665,10 +638,6 @@ CREATE INDEX idx_delivery_attempts_provider_message_id
     WHERE provider_message_id IS NOT NULL;
 CREATE INDEX idx_delivery_attempts_status
     ON delivery_attempts (status);
-
--- providers
-CREATE INDEX idx_providers_channel_health
-    ON providers (channel, is_active, is_healthy);
 
 -- webhook_endpoints
 CREATE INDEX idx_webhook_endpoints_project_id
