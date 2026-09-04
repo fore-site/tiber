@@ -9,7 +9,6 @@ from ..enums import DeliveryAttemptStatus, DeliveryChannel
 class DeliveryAttempt:
     """DeliveryAttempt entity - a single immutable attempt to deliver a notification.
 
-    Mirrors the ``delivery_attempts`` table (docs/architecture/database/schema.sql).
     Attempts are immutable records: retries generate additional attempts rather
     than mutating existing ones.
     """
