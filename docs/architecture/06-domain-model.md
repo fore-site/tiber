@@ -28,13 +28,11 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Notification:** Represents a request accepted by Tiber to deliver a message to a recipient. A notification is immutable once accepted and progresses through scheduling, delivery, retries, and completion.
 
-- **Delivery Attempt:** Represents a single attempt to deliver a notification through a provider. A notification may produce multiple delivery attempts as a result of retries or provider failures.
+- **Delivery Attempt:** Represents a single attempt to deliver a notification through an external delivery service identified by name. A notification may produce multiple delivery attempts as a result of retries or service failures.
 
 - **Engagement Event:** Represents recipient interactions that occur after delivery.
 
 - **Delivery Channel:** Represents the communication medium used to deliver a notification, such as email, SMS, push notification, or webhook.
-
-- **Provider:** Represents the external delivery service responsible for sending notifications over a particular channel.
 
 - **Webhook Endpoint:** Represents an outbound callback destination registered by a project to receive notification lifecycle events.
 
@@ -88,7 +86,7 @@ Each delivery attempt represents an immutable record of a single delivery execut
 
 - **Templates are optional:** Notifications may either reference a reusable template or contain fully rendered content supplied by the client application.
 
-- **Delivery channels and providers are separate concepts:** A delivery channel represents how a notification is sent (Email, SMS, Push), while a provider represents who performs the delivery (Resend, Expo, Twilio, SMTP, etc.). Separating these concepts allows providers to be replaced or added without changing the business model.
+- **Delivery channel and service name are separate values:** A delivery channel represents how a notification is sent (Email, SMS, Push), while each delivery attempt records the external service name as a string. Adapters can be replaced or added without introducing a persisted service entity.
 
 ## What this diagram does not show
 
