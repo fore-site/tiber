@@ -36,7 +36,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [✅] Repo scaffold (monorepo: `/app`, `/dashboard`, `/docs`)
 - [✅] Architecture docs and diagrams complete: context, containers, API Service, Worker Service, ML Engine, domain model, RabbitMQ topology
 - [✅] API contract first (OpenAPI spec, design project-scoped routes before building)
-- [✅] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `providers`, `webhook_endpoints`, `webhook_events`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
+- [✅] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `webhook_endpoints`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
 - [✅] Redis keys with TTLs design and implementation for JWT blocklist, API key authentication cache, and idempotency cache
 - [✅] Docker Compose: PostgreSQL + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
 - [✅] GitHub Actions skeleton: test (pytest) on push
@@ -73,7 +73,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] SMS, webhook, in-app adapters : built against the same interface, using mock/sandbox implementations, clearly documented as drop-in-ready
 - [ ] Provider Manager returns typed success/failure outcomes only; retry/dead-letter decisions remain in the Notification Processor and Retry Manager
 - [ ] Failover logic: if primary provider fails health check or delivery, fall back to secondary (can be demonstrated with email primary + a second email provider, or live/mock pairing)
-- [ ] Provider health monitoring (simple periodic check + status table)
+- [ ] Delivery service health monitoring (simple periodic check + operational status view)
 - [ ] Outbound webhook registration API and Worker Webhook Dispatcher for lifecycle callbacks (`delivered`, `failed`, `bounced`) with independent webhook retry/dead-letter handling
 
 **Exit criteria:** The same notification can route through any of the 5 channels via one interface; failover is demonstrable end-to-end on at least one channel, and recorded delivery outcomes can trigger registered webhook callbacks without affecting the delivery record.

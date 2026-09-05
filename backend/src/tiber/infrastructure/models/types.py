@@ -11,7 +11,6 @@ from ...domain.enums import (
     SendTimeBasis,
     TrainingRunStatus,
     UserRole,
-    WebhookEventStatus,
     WebhookEventType,
 )
 
@@ -38,8 +37,6 @@ NotificationStatusType = _pg_enum(NotificationStatus, name="notification_status"
 DeliveryAttemptStatusType = _pg_enum(
     DeliveryAttemptStatus, name="delivery_attempt_status"
 )
-
-WebhookEventStatusType = _pg_enum(WebhookEventStatus, name="webhook_event_status")
 
 EngagementEventTypeType = _pg_enum(EngagementEventType, name="engagement_event_type")
 

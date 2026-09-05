@@ -35,11 +35,6 @@ CREATE TYPE delivery_attempt_status AS ENUM (
     'failed'
 );
 
-CREATE TYPE webhook_event_status AS ENUM (
-    'delivered',
-    'failed'
-);
-
 CREATE TYPE engagement_event_type AS ENUM (
     'open',
     'click',
@@ -228,8 +223,8 @@ CREATE TABLE user_preferences (
     id                    UUID              PRIMARY KEY DEFAULT gen_random_uuid(),
     recipient_id          UUID              NOT NULL REFERENCES recipients (id) ON DELETE CASCADE,
     project_id            UUID              NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
-    preferred_channels    delivery_channel[] NULL,
-    opted_out_channels    delivery_channel[] NULL,
+    preferred_channels    delivery_channel[] NOT NULL DEFAULT '{}',
+    opted_out_channels    delivery_channel[] NOT NULL DEFAULT '{}',
     quiet_hours_start     TIME               NULL,
     quiet_hours_end       TIME               NULL,
     delivery_window_start TIME               NULL,
@@ -399,31 +394,6 @@ COMMENT ON TABLE  webhook_endpoints        IS 'Client-registered endpoints that 
 COMMENT ON COLUMN webhook_endpoints.events IS 'Subscribed event types: notification.delivered, notification.failed, notification.cancelled, notification.policy_rejected.';
 COMMENT ON COLUMN webhook_endpoints.encrypted_signing_secret IS 'Encrypted webhook signing secret used to compute HMAC signatures for outbound webhook requests. The plaintext secret is returned only once during endpoint creation';
 COMMENT ON COLUMN webhook_endpoints.secret_prefix IS 'First characters of the signing secret displayed in the dashboard to identify the active secret without revealing it.';
-
--- Webhook Events
--- Delivery record of each outbound webhook callback attempt.
-
-CREATE TABLE webhook_events (
-    id                   UUID                 PRIMARY KEY DEFAULT gen_random_uuid(),
-    endpoint_id          UUID                 NOT NULL REFERENCES webhook_endpoints (id) ON DELETE CASCADE,
-    notification_id      UUID                 NOT NULL REFERENCES notifications (id) ON DELETE RESTRICT,
-    event_type webhook_event_type             NOT NULL,
-    status               webhook_event_status NOT NULL,
-    response_status_code SMALLINT             NULL,
-    error                TEXT                 NULL,
-    attempt_number       SMALLINT             NOT NULL DEFAULT 1,
-    created_at           TIMESTAMPTZ          NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT webhook_events_unique_attempt
-        UNIQUE (
-            endpoint_id,
-            notification_id,
-            attempt_number
-        )
-);
-
-COMMENT ON TABLE  webhook_events                     IS 'Delivery record of outbound webhook callbacks. Tracked independently from notification delivery outcomes.';
-COMMENT ON COLUMN webhook_events.response_status_code IS 'HTTP status code returned by the client endpoint. NULL if the request could not be made at all.';
 
 -- Delivery Policies
 -- Singleton per project. Parent record for blackout_periods and compliance_rules.
@@ -642,14 +612,6 @@ CREATE INDEX idx_delivery_attempts_status
 -- webhook_endpoints
 CREATE INDEX idx_webhook_endpoints_project_id
     ON webhook_endpoints (project_id);
-
--- webhook_events
-CREATE INDEX idx_webhook_events_endpoint_id
-    ON webhook_events (endpoint_id);
-CREATE INDEX idx_webhook_events_notification_id
-    ON webhook_events (notification_id);
-CREATE INDEX idx_webhook_events_status
-    ON webhook_events (endpoint_id, status);
 
 -- blackout_periods
 CREATE INDEX idx_blackout_periods_policy_id

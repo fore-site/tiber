@@ -42,10 +42,8 @@
     <text class="label" x="585" y="635">generates</text>
     <path class="line" d="M 400 760 L 250 830" />
     <path class="line" d="M 450 760 V 830" />
-    <path class="line" d="M 500 760 L 650 830" />
     <text class="label" x="320" y="805">sent via</text>
     <text class="label" x="475" y="805">delivered by</text>
-    <text class="label" x="595" y="805">emits</text>
   </g>
 
   <g class="entities">
@@ -63,6 +61,5 @@
     <g transform="translate(540 680)"><rect class="entity" width="200" height="80" rx="4"/><text class="name" x="100" y="48">EngagementEvent</text></g>
     <g transform="translate(150 830)"><rect class="entity" width="190" height="50" rx="4"/><text class="name" x="95" y="32">DeliveryChannel</text></g>
     <g transform="translate(380 830)"><rect class="entity" width="150" height="50" rx="4"/><text class="name" x="75" y="25">provider</text><text class="field" x="75" y="42">&lt;&lt;value_object&gt;&gt;</text></g>
-    <g transform="translate(570 830)"><rect class="entity" width="160" height="50" rx="4"/><text class="name" x="80" y="32">WebhookEvent</text></g>
   </g>
 </svg>
