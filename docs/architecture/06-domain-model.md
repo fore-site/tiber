@@ -24,8 +24,6 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Recipient:** Represents the intended destination of a notification. A recipient encapsulates channel-specific addressing information such as email addresses or push notification tokens.
 
-- **User Preference:** Represents recipient-specific delivery preferences including preferred channels, quiet hours, delivery windows, timezone, and opt-in or opt-out settings.
-
 - **Notification:** Represents a request accepted by Tiber to deliver a message to a recipient. A notification is immutable once accepted and progresses through scheduling, delivery, retries, and completion.
 
 - **Delivery Attempt:** Represents a single attempt to deliver a notification through an external delivery service identified by name. A notification may produce multiple delivery attempts as a result of retries or service failures.
@@ -35,8 +33,6 @@ The model provides a shared ubiquitous language for the project and serves as th
 - **Delivery Channel:** Represents the communication medium used to deliver a notification, such as email, SMS, push notification, or webhook.
 
 - **Webhook Endpoint:** Represents an outbound callback destination registered by a project to receive notification lifecycle events.
-
-- **Webhook Event:** Represents an event emitted by Tiber and delivered to a registered webhook endpoint after significant lifecycle changes such as successful delivery or permanent failure.
 
 - **Delivery Policy:** Represents project-level rules governing when and how notifications may be delivered, including compliance restrictions, blackout periods, and other operational policies.
 

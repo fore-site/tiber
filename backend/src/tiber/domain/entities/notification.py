@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
 
 from ..enums import DeliveryChannel, NotificationStatus, SendTimeBasis
@@ -24,7 +23,7 @@ class Notification:
 
     # Optional / nullable fields
     template_id: UUID | None = None
-    template_variables: dict[str, Any] | None = None
+    template_variables: dict[str, str] | None = None
     idempotency_key: str | None = None
     send_at: datetime | None = None
     send_time_basis: SendTimeBasis = SendTimeBasis.IMMEDIATE

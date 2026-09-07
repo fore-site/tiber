@@ -7,7 +7,6 @@ from .project import Project
 from .recipient import Recipient
 from .template import Template
 from .user import User
-from .user_preference import UserPreference
 from .webhook_endpoint import WebhookEndpoint
 
 __all__ = [
@@ -20,6 +19,5 @@ __all__ = [
     "Recipient",
     "Template",
     "User",
-    "UserPreference",
     "WebhookEndpoint",
 ]

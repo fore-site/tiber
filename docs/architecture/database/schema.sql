@@ -216,25 +216,6 @@ COMMENT ON COLUMN recipients.external_id IS 'Caller''s stable identifier for thi
 COMMENT ON COLUMN recipients.addresses IS 'Channel-specific delivery addresses for the recipient. Keys correspond to supported delivery channels (email, sms, push, webhook, etc.).';
 COMMENT ON COLUMN recipients.archived_at IS 'Soft delete. Archived recipients cannot receive new notifications.';
 
--- User Preferences
--- Singleton per recipient.
-
-CREATE TABLE user_preferences (
-    id                    UUID              PRIMARY KEY DEFAULT gen_random_uuid(),
-    recipient_id          UUID              NOT NULL REFERENCES recipients (id) ON DELETE CASCADE,
-    project_id            UUID              NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
-    preferred_channels    delivery_channel[] NOT NULL DEFAULT '{}',
-    opted_out_channels    delivery_channel[] NOT NULL DEFAULT '{}',
-    updated_at            TIMESTAMPTZ        NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT user_preferences_recipient_unique UNIQUE (recipient_id),
-
-);
-
-COMMENT ON TABLE  user_preferences                      IS 'Recipient-level delivery preferences. Singleton per recipient. Evaluated by the Delivery Policy Resolver at notification intake.';
-COMMENT ON COLUMN user_preferences.preferred_channels   IS 'Ordered channel preference. First channel is tried first.';
-COMMENT ON COLUMN user_preferences.opted_out_channels   IS 'Channels this recipient has opted out of. Notifications targeting these channels are rejected at intake.';
-
 -- Notifications
 -- Immutable after acceptance. Status is the only mutable field post-creation.
 -- Notifications cannot be deleted.

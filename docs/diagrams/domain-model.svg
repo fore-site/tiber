@@ -32,8 +32,6 @@
     <text class="label" x="455" y="410">creates</text>
     <path class="line" d="M 465 300 L 570 390" />
     <text class="label" x="535" y="350">configures</text>
-    <path class="line" d="M 300 470 L 245 540" />
-    <text class="label" x="330" y="510">has</text>
     <path class="line" d="M 560 520 L 700 440" />
     <text class="label" x="635" y="485">optionally uses</text>
     <path class="line" d="M 480 580 L 430 680" />
@@ -53,7 +51,6 @@
     <g transform="translate(80 390)"><rect class="entity" width="150" height="80" rx="4"/><text class="name" x="75" y="48">APIKey</text></g>
     <g transform="translate(260 390)"><rect class="entity" width="170" height="80" rx="4"/><text class="name" x="85" y="48">Recipient</text></g>
     <g transform="translate(700 390)"><rect class="entity" width="170" height="80" rx="4"/><text class="name" x="85" y="48">Template</text></g>
-    <g transform="translate(150 540)"><rect class="entity" width="190" height="80" rx="4"/><text class="name" x="95" y="48">UserPreference</text></g>
     <g transform="translate(490 390)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">DeliveryPolicy</text></g>
     <g transform="translate(680 540)"><rect class="entity" width="180" height="80" rx="4"/><text class="name" x="90" y="48">WebhookEndpoint</text></g>
     <g transform="translate(400 500)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">Notification</text></g>
