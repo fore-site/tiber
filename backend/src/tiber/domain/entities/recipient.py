@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
+
+from ..enums import DeliveryChannel
 
 
 @dataclass(frozen=True)
@@ -10,7 +11,7 @@ class Recipient:
 
     id: UUID
     project_id: UUID
-    addresses: dict[str, Any]
+    addresses: dict[str, str]
     external_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -20,3 +21,11 @@ class Recipient:
         """Validate the recipient's state after initialization."""
         if not self.addresses:
             raise ValueError("Recipient addresses must not be empty")
+
+        # Validate address keys
+        normalized_addresses = {
+            DeliveryChannel(key.lower()).value: value
+            for key, value in self.addresses.items()
+        }
+
+        object.__setattr__(self, "addresses", normalized_addresses)

@@ -225,33 +225,15 @@ CREATE TABLE user_preferences (
     project_id            UUID              NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
     preferred_channels    delivery_channel[] NOT NULL DEFAULT '{}',
     opted_out_channels    delivery_channel[] NOT NULL DEFAULT '{}',
-    quiet_hours_start     TIME               NULL,
-    quiet_hours_end       TIME               NULL,
-    delivery_window_start TIME               NULL,
-    delivery_window_end   TIME               NULL,
-    timezone              VARCHAR(100)       NOT NULL DEFAULT 'UTC',
     updated_at            TIMESTAMPTZ        NOT NULL DEFAULT NOW(),
 
     CONSTRAINT user_preferences_recipient_unique UNIQUE (recipient_id),
 
-    CONSTRAINT user_preferences_quiet_hours_check
-        CHECK (
-            (quiet_hours_start IS NULL AND quiet_hours_end IS NULL)
-            OR (quiet_hours_start IS NOT NULL AND quiet_hours_end IS NOT NULL)
-        ),
-
-    CONSTRAINT user_preferences_delivery_window_check
-        CHECK (
-            (delivery_window_start IS NULL AND delivery_window_end IS NULL)
-            OR (delivery_window_start IS NOT NULL AND delivery_window_end IS NOT NULL)
-        )
 );
 
 COMMENT ON TABLE  user_preferences                      IS 'Recipient-level delivery preferences. Singleton per recipient. Evaluated by the Delivery Policy Resolver at notification intake.';
 COMMENT ON COLUMN user_preferences.preferred_channels   IS 'Ordered channel preference. First channel is tried first.';
 COMMENT ON COLUMN user_preferences.opted_out_channels   IS 'Channels this recipient has opted out of. Notifications targeting these channels are rejected at intake.';
-COMMENT ON COLUMN user_preferences.quiet_hours_start    IS 'Start of quiet hours in the recipient''s timezone. Notifications during quiet hours are rescheduled, not dropped.';
-COMMENT ON COLUMN user_preferences.timezone             IS 'IANA timezone identifier used for quiet hours and delivery window evaluation.';
 
 -- Notifications
 -- Immutable after acceptance. Status is the only mutable field post-creation.
@@ -269,7 +251,7 @@ CREATE TABLE notifications (
     subject           TEXT                NULL,
     body              TEXT                NOT NULL,
     template_variables JSONB              NULL,
-    scheduled_at      TIMESTAMPTZ         NULL,
+    send_at      TIMESTAMPTZ         NULL,
     send_time_basis   send_time_basis     NOT NULL DEFAULT 'immediate',
     policy_violation_reason TEXT          NULL,
     delivered_at      TIMESTAMPTZ         NULL,
@@ -310,7 +292,7 @@ COMMENT ON COLUMN notifications.body              IS 'Rendered body after templa
 COMMENT ON COLUMN notifications.template_variables IS 'Variables supplied by the caller for template interpolation. Stored for auditability.';
 COMMENT ON COLUMN notifications.send_time_basis   IS 'How scheduled_at was determined: explicit (caller-provided), ml_predicted, or immediate.';
 COMMENT ON COLUMN notifications.policy_violation_reason IS 'Populated when status is policy_rejected. Records which policy was violated and why.';
-COMMENT ON COLUMN notifications.scheduled_at IS 'Earliest dispatch time. Delivery must not begin before this timestamp.';
+COMMENT ON COLUMN notifications.send_at IS 'Earliest dispatch time. Delivery must not begin before this timestamp.';
 
 -- Notification Intelligence
 -- ML predictions attached at intake. Stored separately to keep the notifications
