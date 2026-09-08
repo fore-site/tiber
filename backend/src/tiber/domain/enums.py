@@ -44,13 +44,6 @@ class DeliveryAttemptStatus(StrEnum):
     FAILED = "failed"
 
 
-class WebhookEventStatus(StrEnum):
-    """Status of a webhook event."""
-
-    DELIVERED = "delivered"
-    FAILED = "failed"
-
-
 class EngagementEventType(StrEnum):
     """Type of an engagement event."""
 

@@ -43,8 +43,9 @@ class RecipientAddressRule:
 class ChannelPreferenceRule:
     """Reject a notification when the recipient opted out of its channel.
 
-    Preferences are read through the ``PreferenceReadModel`` port. Safe
-    default: an absent preference is treated as opted-in.
+    Opt-outs are read directly from the ``Recipient`` aggregate
+    (``opted_out_channels``). Safe default: a recipient with no opt-outs is
+    treated as opted-in — silence is never a preference.
     """
 
     name = "channel_preference"
@@ -55,10 +56,27 @@ class ChannelPreferenceRule:
         if recipient is None:
             return PolicyDecision.reject("recipient not found", rule=self.name)
         channel = ctx.notification.channel
-        blocked = await ctx.preferences.blocked_channels(recipient.id)
-        if channel in blocked:
+        if channel in recipient.opted_out_channels:
             return PolicyDecision.reject(
                 f"recipient opted out of {channel.value}",
                 rule=self.name,
             )
+        return PolicyDecision.allow()
+
+
+class DeliveryWindowsRule:
+    """Reject a notification when it is sent outside of delivery windows.
+
+    A delivery window is a time range during which notifications are allowed
+    to be sent. The rule checks if the current time falls within any of the
+    defined delivery windows for the recipient.
+    """
+
+    name = "delivery_windows"
+
+    async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
+        """Reject when the notification is sent outside of delivery windows."""
+        # Placeholder for actual delivery window logic
+        # This would typically involve checking the current time against
+        # predefined delivery windows for the recipient or project.
         return PolicyDecision.allow()

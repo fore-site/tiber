@@ -11,7 +11,7 @@ class Recipient:
 
     id: UUID
     project_id: UUID
-    addresses: dict[DeliveryChannel, str]
+    addresses: dict[str, str]
     opted_out_channels: list[DeliveryChannel] = field(default_factory=list)
     external_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))

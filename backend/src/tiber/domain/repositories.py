@@ -5,7 +5,7 @@ Concrete implementations live in infrastructure/persistence/repositories/.
 Use cases in application/ depend only on these interfaces,
 never on the SQLAlchemy implementations directly.
 
-One repository per domain entity - twelve total, mirroring the domain model.
+One repository per persisted domain entity, mirroring the domain model.
 Delivery Channel is an enum, not an entity, so it has no repository.
 """
 
@@ -21,13 +21,10 @@ from .entities import (
     EngagementEvent,
     Notification,
     Project,
-    Provider,
     Recipient,
     Template,
     User,
-    UserPreference,
     WebhookEndpoint,
-    WebhookEvent,
 )
 
 
@@ -165,27 +162,6 @@ class RecipientRepository(Protocol):
         ...
 
 
-# User Preference
-
-
-class UserPreferenceRepository(Protocol):
-    """Contract for user preference data access."""
-
-    async def save(self, preference: UserPreference) -> UserPreference:
-        """Save a user preference to the repository."""
-        ...
-
-    async def get_by_recipient(
-        self, recipient_id: UUID, project_id: UUID
-    ) -> UserPreference | None:
-        """Get a user preference by its recipient."""
-        ...
-
-    async def delete_by_recipient(self, recipient_id: UUID, project_id: UUID) -> None:
-        """Delete a user preference by its recipient."""
-        ...
-
-
 # Notification
 
 
@@ -203,38 +179,6 @@ class DeliveryAttemptRepository(Protocol):
         self, notification_id: UUID
     ) -> list[DeliveryAttempt]:
         """List all delivery attempts for a notification."""
-        ...
-
-
-# Provider
-# Represents the persisted record of a configured external delivery service
-# and its health state. Distinct from infrastructure/providers/ adapters,
-# which are the code that calls those services.
-
-
-class ProviderRepository(Protocol):
-    """Contract for provider data access."""
-
-    async def save(self, provider: Provider) -> Provider:
-        """Save a provider to the repository."""
-        ...
-
-    async def get_by_id(self, id: UUID) -> Provider | None:
-        """Get a provider by its ID."""
-        ...
-
-    async def get_by_channel_and_name(self, channel: str, name: str) -> Provider | None:
-        """Get a provider by its channel and name."""
-        ...
-
-    async def list_active_by_channel(self, channel: str) -> list[Provider]:
-        """List all active providers for a channel."""
-        ...
-
-    async def update_health(
-        self, id: UUID, is_healthy: bool, last_checked_at: object
-    ) -> None:
-        """Update the health status of a provider."""
         ...
 
 
@@ -260,33 +204,6 @@ class WebhookEndpointRepository(Protocol):
         self, project_id: UUID, event_type: str
     ) -> list[WebhookEndpoint]:
         """List all webhook endpoints for a project and event type."""
-        ...
-
-
-# Webhook Event
-# Represents the delivery record of an outbound webhook callback.
-# Distinct from WebhookEndpoint, which is the registered destination.
-
-
-class WebhookEventRepository(Protocol):
-    """Contract for webhook event data access."""
-
-    async def save(self, event: WebhookEvent) -> WebhookEvent:
-        """Save a webhook event to the repository."""
-        ...
-
-    async def get_by_id(self, id: UUID) -> WebhookEvent | None:
-        """Get a webhook event by its ID."""
-        ...
-
-    async def list_by_notification(self, notification_id: UUID) -> list[WebhookEvent]:
-        """List all webhook events for a notification."""
-        ...
-
-    async def list_by_endpoint(
-        self, endpoint_id: UUID, limit: int, offset: int
-    ) -> list[WebhookEvent]:
-        """List all webhook events for an endpoint."""
         ...
 
 

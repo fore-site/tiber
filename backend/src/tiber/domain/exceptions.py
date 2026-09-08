@@ -89,16 +89,6 @@ class TemplateChannelMismatchError(TiberError):
         self.channel = channel
 
 
-class UserPreferenceNotFoundError(NotFoundError):
-    """Raised when a user preference is not found."""
-
-    error_code = "preference_not_found"
-
-    def __init__(self, user_preference_id: str) -> None:
-        """Initialize a UserPreferenceNotFoundError with the user preference ID."""
-        super().__init__("User Preference", user_preference_id)
-
-
 class APIKeyNotFoundError(NotFoundError):
     """Raised when an API key is not found."""
 
@@ -109,16 +99,6 @@ class APIKeyNotFoundError(NotFoundError):
         super().__init__("API Key", api_key_id)
 
 
-class ProviderNotFoundError(NotFoundError):
-    """Raised when a provider is not found."""
-
-    error_code = "provider_not_found"
-
-    def __init__(self, provider_id: str) -> None:
-        """Initialize a ProviderNotFoundError with the provider ID."""
-        super().__init__("Provider", provider_id)
-
-
 class WebhookEndpointNotFoundError(NotFoundError):
     """Raised when a webhook endpoint is not found."""
 
@@ -127,16 +107,6 @@ class WebhookEndpointNotFoundError(NotFoundError):
     def __init__(self, webhook_endpoint_id: str) -> None:
         """Initialize a WebhookEndpointNotFoundError with the webhook endpoint ID."""
         super().__init__("Webhook Endpoint", webhook_endpoint_id)
-
-
-class WebhookEventNotFoundError(NotFoundError):
-    """Raised when a webhook event is not found."""
-
-    error_code = "webhook_event_not_found"
-
-    def __init__(self, webhook_event_id: str) -> None:
-        """Initialize a WebhookEventNotFoundError with the webhook event ID."""
-        super().__init__("Webhook Event", webhook_event_id)
 
 
 class DeliveryPolicyNotFoundError(NotFoundError):
