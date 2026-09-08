@@ -389,22 +389,23 @@ COMMENT ON TABLE  blackout_periods           IS 'Calendar periods during which n
 COMMENT ON COLUMN blackout_periods.start_date IS 'Inclusive start date.';
 COMMENT ON COLUMN blackout_periods.end_date   IS 'Inclusive end date.';
 
--- Compliance Rules
+-- Delivery Windows
 
-CREATE TABLE compliance_rules (
+CREATE TABLE delivery_windows (
     id                   UUID              PRIMARY KEY DEFAULT gen_random_uuid(),
     delivery_policy_id   UUID              NOT NULL REFERENCES delivery_policies (id) ON DELETE CASCADE,
     name                 VARCHAR(255)      NOT NULL,
     description          TEXT              NULL,
     allowed_window_start TIME              NOT NULL,
     allowed_window_end   TIME              NOT NULL,
-    channels             delivery_channel[] NULL,
-    created_at           TIMESTAMPTZ       NOT NULL DEFAULT NOW()
+    channel              delivery_channel  NOT NULL,
+    created_at           TIMESTAMPTZ       NOT NULL DEFAULT NOW(),
 
+    CONSTRAINT delivery_windows_policy_name_unique UNIQUE (delivery_policy_id, name)
 );
 
-COMMENT ON TABLE  compliance_rules          IS 'Hard delivery constraints for regulatory compliance. Evaluated after blackout periods. Violations reject the notification — they are never rescheduled.';
-COMMENT ON COLUMN compliance_rules.channels IS 'Channels this rule applies to. NULL means the rule applies to all channels.';
+COMMENT ON TABLE  delivery_windows            IS 'Hard delivery constraints for regulatory compliance. Evaluated after blackout periods. Violations reject the notification — they are never rescheduled. Multiple windows per channel are permitted and composed as OR (any matching window allows delivery).';
+COMMENT ON COLUMN delivery_windows.channel    IS 'Single delivery channel this rule applies to.';
 
 -- Engagement Events
 
