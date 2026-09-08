@@ -51,7 +51,7 @@
     <g transform="translate(80 390)"><rect class="entity" width="150" height="80" rx="4"/><text class="name" x="75" y="48">APIKey</text></g>
     <g transform="translate(260 390)"><rect class="entity" width="170" height="80" rx="4"/><text class="name" x="85" y="48">Recipient</text></g>
     <g transform="translate(700 390)"><rect class="entity" width="170" height="80" rx="4"/><text class="name" x="85" y="48">Template</text></g>
-    <g transform="translate(490 390)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">DeliveryPolicy</text></g>
+    <g transform="translate(490 390)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">DeliveryConstraint</text></g>
     <g transform="translate(680 540)"><rect class="entity" width="180" height="80" rx="4"/><text class="name" x="90" y="48">WebhookEndpoint</text></g>
     <g transform="translate(400 500)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">Notification</text></g>
     <g transform="translate(330 680)"><rect class="entity" width="200" height="80" rx="4"/><text class="name" x="100" y="35">DeliveryAttempt</text><text class="field" x="100" y="59">service_name: string</text></g>

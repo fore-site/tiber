@@ -6,7 +6,7 @@ from ..value_objects import BlackoutPeriod, DeliveryWindow
 
 
 @dataclass(frozen=True)
-class DeliveryPolicy:
+class DeliveryConstraint:
     """Domain entity representing Project-level delivery rule."""
 
     id: UUID

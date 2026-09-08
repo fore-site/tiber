@@ -36,7 +36,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [✅] Repo scaffold (monorepo: `/app`, `/dashboard`, `/docs`)
 - [✅] Architecture docs and diagrams complete: context, containers, API Service, Worker Service, ML Engine, domain model, RabbitMQ topology
 - [✅] API contract first (OpenAPI spec, design project-scoped routes before building)
-- [✅] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `user_preferences`, `notifications`, `delivery_attempts`, `delivery_channels`, `webhook_endpoints`, `delivery_policies`, `engagement_events`, `model_versions`, `training_runs`
+- [✅] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `notifications`, `delivery_attempts`, `webhook_endpoints`, `delivery_constraints`, `engagement_events`, `model_versions`, `training_runs` (channel opt-outs live on recipients; `delivery_channels` is an enum, not a table)
 - [✅] Redis keys with TTLs design and implementation for JWT blocklist, API key authentication cache, and idempotency cache
 - [✅] Docker Compose: PostgreSQL + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
 - [✅] GitHub Actions skeleton: test (pytest) on push

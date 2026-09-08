@@ -1,6 +1,7 @@
 # Redis Cache Specification
 
 **Audience:** Tiber engineers
+
 **Scope:** All Redis key patterns, TTL values, value formats, access patterns, cache strategies, and failure behaviour.
 
 Redis is a dependency for Tiber's authentication layer. If Redis is unreachable, the API Service fallls back to Postgres in some instances and fails close in others such as jwt revocation.
@@ -14,8 +15,7 @@ All key strings are constructed exclusively inside `core/redis.py:RedisKeys`. No
 ```
 auth:jwt:blocklist:{jti}              JWT access token blocklist
 auth:refresh:{token_id}               Refresh token store
-auth:apikey:context:{key_hash}        API key auth context cache
-auth:apikey:revoked:{key_hash}        API key revocation signal
+auth:apikey:{key_hash}                API key auth context cache & revocation signal
 idempotency:{project_id}:{key}        Idempotency response cache
 ```
 

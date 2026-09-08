@@ -1,6 +1,6 @@
 from .api_key import APIKey
 from .delivery_attempt import DeliveryAttempt
-from .delivery_policy import DeliveryPolicy
+from .delivery_constraint import DeliveryConstraint
 from .engagement_event import EngagementEvent
 from .notification import Notification
 from .project import Project
@@ -12,7 +12,7 @@ from .webhook_endpoint import WebhookEndpoint
 __all__ = [
     "APIKey",
     "DeliveryAttempt",
-    "DeliveryPolicy",
+    "DeliveryConstraint",
     "EngagementEvent",
     "Notification",
     "Project",

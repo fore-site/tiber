@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from ..entities import DeliveryPolicy, Notification, Recipient
+from ..entities import DeliveryConstraint, Notification, Recipient
 
 
 @dataclass(frozen=True)
@@ -45,5 +45,5 @@ class PolicyContext:
 
     notification: Notification
     recipient: Recipient | None
-    delivery_policy: DeliveryPolicy | None = None
+    delivery_constraint: DeliveryConstraint | None = None
     now: datetime = field(default_factory=lambda: datetime.now(UTC))

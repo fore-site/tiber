@@ -358,25 +358,25 @@ COMMENT ON COLUMN webhook_endpoints.events IS 'Subscribed event types: notificat
 COMMENT ON COLUMN webhook_endpoints.encrypted_signing_secret IS 'Encrypted webhook signing secret used to compute HMAC signatures for outbound webhook requests. The plaintext secret is returned only once during endpoint creation';
 COMMENT ON COLUMN webhook_endpoints.secret_prefix IS 'First characters of the signing secret displayed in the dashboard to identify the active secret without revealing it.';
 
--- Delivery Policies
--- Singleton per project. Parent record for blackout_periods and compliance_rules.
+-- Delivery Constraints
+-- Singleton per project. Parent record for blackout_periods and delivery_windows.
 
-CREATE TABLE delivery_policies (
+CREATE TABLE delivery_constraints (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID        NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT delivery_policies_project_unique UNIQUE (project_id)
+    CONSTRAINT delivery_constraints_project_unique UNIQUE (project_id)
 );
 
-COMMENT ON TABLE delivery_policies IS 'Project-level delivery rules. Singleton per project. Parent for blackout_periods and compliance_rules.';
+COMMENT ON TABLE delivery_constraints IS 'Project-level delivery rules. Singleton per project. Parent for blackout_periods and delivery_windows.';
 
 -- Blackout Periods
 
 CREATE TABLE blackout_periods (
     id                 UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    delivery_policy_id UUID         NOT NULL REFERENCES delivery_policies (id) ON DELETE CASCADE,
+    delivery_constraint_id UUID         NOT NULL REFERENCES delivery_constraints (id) ON DELETE CASCADE,
     name               VARCHAR(255) NOT NULL,
     start_date         DATE         NOT NULL,
     end_date           DATE         NOT NULL,
@@ -393,7 +393,7 @@ COMMENT ON COLUMN blackout_periods.end_date   IS 'Inclusive end date.';
 
 CREATE TABLE delivery_windows (
     id                   UUID              PRIMARY KEY DEFAULT gen_random_uuid(),
-    delivery_policy_id   UUID              NOT NULL REFERENCES delivery_policies (id) ON DELETE CASCADE,
+    delivery_constraint_id   UUID              NOT NULL REFERENCES delivery_constraints (id) ON DELETE CASCADE,
     name                 VARCHAR(255)      NOT NULL,
     description          TEXT              NULL,
     allowed_window_start TIME              NOT NULL,
@@ -401,10 +401,10 @@ CREATE TABLE delivery_windows (
     channel              delivery_channel  NOT NULL,
     created_at           TIMESTAMPTZ       NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT delivery_windows_policy_name_unique UNIQUE (delivery_policy_id, name)
+    CONSTRAINT delivery_windows_constraint_name_unique UNIQUE (delivery_constraint_id, name)
 );
 
-COMMENT ON TABLE  delivery_windows            IS 'Hard delivery constraints for regulatory compliance. Evaluated after blackout periods. Violations reject the notification — they are never rescheduled. Multiple windows per channel are permitted and composed as OR (any matching window allows delivery).';
+COMMENT ON TABLE  delivery_windows            IS 'Hard delivery window constraints for regulatory compliance. Evaluated after blackout periods. Violations reject the notification — they are never rescheduled. Multiple windows per channel are permitted and composed as OR (any matching window allows delivery).';
 COMMENT ON COLUMN delivery_windows.channel    IS 'Single delivery channel this rule applies to.';
 
 -- Engagement Events
@@ -578,14 +578,14 @@ CREATE INDEX idx_webhook_endpoints_project_id
     ON webhook_endpoints (project_id);
 
 -- blackout_periods
-CREATE INDEX idx_blackout_periods_policy_id
-    ON blackout_periods (delivery_policy_id);
+CREATE INDEX idx_blackout_periods_constraint_id
+    ON blackout_periods (delivery_constraint_id);
 CREATE INDEX idx_blackout_periods_dates
     ON blackout_periods (start_date, end_date);
 
--- compliance_rules
-CREATE INDEX idx_compliance_rules_policy_id
-    ON compliance_rules (delivery_policy_id);
+-- delivery_windows
+CREATE INDEX idx_delivery_windows_constraint_id
+    ON delivery_windows (delivery_constraint_id);
 
 -- engagement_events
 CREATE INDEX idx_engagement_events_notification_id

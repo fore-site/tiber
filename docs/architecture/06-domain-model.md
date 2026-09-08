@@ -14,7 +14,7 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Workspace _(Future)_:** Represents the highest tenancy boundary in Tiber, grouping one or more projects under a shared organization. Workspace support is planned for a future release; the current implementation uses Project as the effective tenancy boundary
 
-- **Project:** Represents the primary tenancy boundary within Tiber. Every API key, template, recipient, notification, webhook endpoint, user preference, and delivery policy belongs to exactly one project.
+- **Project:** Represents the primary tenancy boundary within Tiber. Every API key, template, recipient, notification, webhook endpoint, and delivery constraint belongs to exactly one project.
 
 - **User:** Represents an authenticated person or administrator who owns projects and manages the resources associated with them through the dashboard or API.
 
@@ -34,7 +34,7 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Webhook Endpoint:** Represents an outbound callback destination registered by a project to receive notification lifecycle events.
 
-- **Delivery Policy:** Represents project-level rules governing when and how notifications may be delivered, including compliance restrictions, blackout periods, and other operational policies.
+- **Delivery Constraint:** Represents project-level rules governing when notifications may be delivered, including blackout periods and delivery windows. Recipient-level channel opt-outs live on the Recipient itself.
 
 ## Aggregate Boundaries
 
@@ -54,10 +54,9 @@ The Project aggregate is the root of tenant isolation and owns:
 - API Keys
 - Templates
 - Recipients
-- User Preferences
-- Notifications
+- User Preferences (now carried on Recipient as opted-out channels)
 - Webhook Endpoints
-- Delivery Policies
+- Delivery Constraints
 
 ### Notification Aggregate
 
