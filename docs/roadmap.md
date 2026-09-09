@@ -51,13 +51,13 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] Project-scoped `POST /notifications`: authenticate, validate, persist immutable notification, enqueue (idempotency key required)
 - [ ] Idempotency Guard runs before template resolution and scheduling; duplicate keys within 24 hours return the original persisted 201 response
 - [ ] Template rendering (basic variables into a message body) with direct-content notifications still allowed
-- [ ] Delivery Policy Resolver at intake: user preferences first, blackout/calendar constraints second, compliance restrictions last
+- [ ] Delivery Policy Resolver at intake: channel opt-outs and address availability first (hard, reject), blackout periods second (soft, adjust send time), delivery windows last (hard, reject)
 - [ ] Minimal preference and delivery-policy read model with safe defaults; full management surfaces arrive in Phase 7
 - [ ] Scheduling support (send-at-time, not just immediate) and worker execution at the scheduled time
 - [ ] Job payload follows the Worker architecture: thin payload with stable fields, `correlation_id`, `schema_version`, `scheduled_at`, `send_time_basis`, ML prediction metadata, and retry attempt state
 - [ ] RabbitMQ publisher uses `notifications.exchange`, channel routing keys, durable messages, and publisher confirms
 - [ ] Celery worker pipeline: Notification Processor (orchestrator), Scheduler Executor, Dispatch Policy Guard, Provider Manager (single stub transport), Retry Manager, Delivery Tracker
-- [ ] Dispatch Policy Guard re-checks drift-sensitive DND/compliance constraints before delivery and re-queues on soft violations
+- [ ] Dispatch Policy Guard re-runs the drift-sensitive subset of the chain before delivery (opt-outs, blackout periods, delivery windows — no address re-check): blackout violations re-queue after the blackout ends, hard violations (delivery windows, opt-outs) record policy-rejected
 - [ ] Retry with exponential backoff via RabbitMQ retry queues; route exhausted jobs to channel-specific DLQs
 - [ ] Rate limiting on ingestion using Redis counters
 - [ ] Delivery status tracking through immutable delivery attempts and logs
@@ -118,8 +118,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 ### Phase 7: Platform Features and Frontend
 
 - [ ] Project management as the active tenancy boundary; Workspace remains explicitly future scope
-- [ ] User preferences (channel opt-in/out, quiet hours, delivery windows, timezone, channel priorities)
-- [ ] Delivery policy management for project-level blackout dates and compliance restrictions
+- [ ] Recipient channel opt-out management (`opted_out_channels` on Recipient)
+- [ ] Delivery constraint management: project-level blackout periods and per-channel delivery windows
 - [ ] Auth (API key or JWT): JWT access-token signature validation first, Redis blocklist check second, fail closed with 503 when Redis is unavailable; API key auth uses the Redis authentication cache with PostgreSQL fallback on cache miss or Redis failure
 - [ ] API key lifecycle management with PostgreSQL as the source of truth and Redis auth-cache invalidation/refresh on create, revoke, and expiry events
 - [ ] Next.js dashboard: notification feed with status/channel/priority, "trigger test notification" form

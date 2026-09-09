@@ -10,7 +10,6 @@ from uuid import uuid4
 from tiber.application.ports.channel_provider import ProviderResult
 from tiber.application.services import (
     DispatchPolicyGuard,
-    InMemoryPreferenceReadModel,
     NotificationDeliveryProcessor,
     NotificationTemplateResolver,
     PolicyResolver,
@@ -44,9 +43,13 @@ class FakeRecipientRepository:
         """Initialize with a single recipient."""
         self._recipient = recipient
 
-    async def get_by_id(self, id):
-        """Return the recipient if the id matches."""
-        return self._recipient if self._recipient.id == id else None
+    async def get_by_id(self, id, project_id=None):
+        """Return the recipient if id and project scope match."""
+        if self._recipient.id != id:
+            return None
+        if project_id is not None and self._recipient.project_id != project_id:
+            return None
+        return self._recipient
 
 
 class FakeDeliveryAttemptRepository:
@@ -149,19 +152,14 @@ def build(
 async def test_policy_violation_marks_policy_rejected_without_attempt():
     """A worker-time policy rejection marks policy_rejected, records no attempt."""
     notification = make_notification()
+    # Opt the recipient out of email so the preference rule rejects.
     recipient = Recipient(
         id=notification.recipient_id,
         project_id=notification.project_id,
         addresses={"email": "a@b.io"},
+        opted_out_channels=[DeliveryChannel.EMAIL],
     )
-    # Block the recipient's email channel so the preference rule rejects.
-    guard = DispatchPolicyGuard(
-        PolicyResolver(
-            preferences=InMemoryPreferenceReadModel(
-                {recipient.id: frozenset({DeliveryChannel.EMAIL})}
-            )
-        )
-    )
+    guard = DispatchPolicyGuard(PolicyResolver())
     processor, notif_repo, provider = build(
         notification=notification, recipient=recipient, guard=guard
     )

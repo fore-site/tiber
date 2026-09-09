@@ -5,9 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import DeliveryAttempt
 from ...domain.enums import DeliveryAttemptStatus, DeliveryChannel
-from ...domain.repositories.delivery_attempt_repository import (
-    DeliveryAttemptRepository,
-)
+from ...domain.repositories import DeliveryAttemptRepository
 from ...infrastructure.models.delivery_attempt import DeliveryAttemptModel
 
 

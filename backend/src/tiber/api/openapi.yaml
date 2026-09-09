@@ -1095,8 +1095,7 @@ paths:
       description: |
         Cancels a notification that has not yet been dispatched to a provider.
 
-        Only notifications in a cancellable state (for example `pending` or
-        `scheduled`) may be cancelled.
+        Only notifications in a cancellable state (`pending`) may be cancelled.
 
         Notifications that are already processing, delivered,
         failed, or previously cancelled cannot be cancelled.
@@ -1272,40 +1271,6 @@ paths:
       responses:
         "204":
           description: Webhook endpoint deleted
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /v1/projects/{project_id}/webhooks/{webhook_id}/events:
-    parameters:
-      - $ref: "#/components/parameters/ProjectId"
-      - $ref: "#/components/parameters/WebhookId"
-
-    get:
-      tags: [Webhooks]
-      summary: List webhook delivery events
-      operationId: getv1projectsprojectidwebhookswebhookidevents
-      description: |
-        Returns the delivery history of outbound callbacks for this endpoint.
-        Each event records the HTTP response code, outcome, and attempt number.
-        Useful for diagnosing failed webhook deliveries independently
-        of notification delivery outcomes.
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
-        - name: status
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/schemas/WebhookEventStatus"
-      responses:
-        "200":
-          description: List of webhook delivery events
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WebhookEventList"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -1815,32 +1780,21 @@ components:
       description: |
         The current lifecycle state of the notification.
 
-        - `pending` — Accepted by the API and persisted. Awaiting scheduling
-          or worker pickup.
-        - `scheduled` — Waiting until the scheduled delivery time.
-        - `processing` — Currently being processed by a worker. Delivery
-          cancellation is no longer permitted.
+        - `pending` — Accepted by the API, passed validation, persisted, handed off to the messaging infrastructure and undergoing processing/delivery.
         - `delivered` — Successfully dispatched to the provider.
-        - `failed` — Processing or delivery failed after all retry attempts.
-        - `policy_rejected` — Delivery was intentionally blocked by the
-          project's delivery policy.
+        - `failed` — Delivery failed after all retry attempts were exhausted.
+        - `policy_rejected` — Persisted but intentionally prevented from entering the delivery pipeline because a delivery policy was violated.
         - `cancelled` — Cancelled before processing began.
       enum:
         - pending
-        - scheduled
-        - processing
-        - delivered
-        - failed
         - policy_rejected
         - cancelled
+        - delivered
+        - failed
 
     DeliveryAttemptStatus:
       type: string
       enum: [succeeded, failed, policy_rejected]
-
-    WebhookEventStatus:
-      type: string
-      enum: [delivered, failed]
 
     TimeWindow:
       type: object
@@ -1855,14 +1809,6 @@ components:
           type: string
           pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
           example: "17:00"
-
-    Provider:
-      type: string
-      enum:
-        - resend
-        - sendgrid
-        - fcm
-        - mock
 
     UserRole:
       type: string
@@ -2216,7 +2162,7 @@ components:
 
     # Recipient
 
-    RecipientChannels:
+    RecipientAddresses:
       type: object
       description: |
         Channel-specific addressing. At least one address must be provided.
@@ -2250,7 +2196,7 @@ components:
 
     Recipient:
       type: object
-      required: [id, project_id, channels, archived, created_at, updated_at]
+      required: [id, project_id, addresses, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -2259,13 +2205,16 @@ components:
         external_id:
           type: [string, "null"]
           description: Your system's stable identifier for this recipient.
-        name:
-          type: [string, "null"]
-        channels:
-          $ref: "#/components/schemas/RecipientChannels"
-        archived:
-          type: boolean
-          description: Indicates whether the recipient is archived.
+        addresses:
+          $ref: "#/components/schemas/RecipientAddresses"
+        opted_out_channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/Channel"
+          uniqueItems: true
+          description: |
+            Channels this recipient has opted out of entirely.
+            Explicit opt-out takes precedence over preferred channels.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -2277,25 +2226,17 @@ components:
 
     CreateRecipientRequest:
       type: object
-      required: [name, channels]
+      required: [addresses]
       properties:
         external_id:
           type: string
           maxLength: 255
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
         channels:
           $ref: "#/components/schemas/RecipientChannels"
 
     UpdateRecipientRequest:
       type: object
       properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
         channels:
           $ref: "#/components/schemas/RecipientChannels"
 
@@ -2336,14 +2277,7 @@ components:
           description: |
             Ordered preference. 
             First channel is tried first.
-        opted_out_channels:
-          type: array
-          items:
-            $ref: "#/components/schemas/Channel"
-          uniqueItems: true
-          description: |
-            Channels this recipient has opted out of entirely.
-            Explicit opt-out takes precedence over preferred channels.
+
         quiet_hours:
           allOf:
             - $ref: "#/components/schemas/TimeWindow"
@@ -2549,7 +2483,7 @@ components:
         channel:
           $ref: "#/components/schemas/Channel"
         provider:
-          $ref: "#/components/schemas/Provider"
+          type: string
           example: resend
         provider_message_id:
           type: [string, "null"]
@@ -2620,7 +2554,7 @@ components:
         channel:
           $ref: "#/components/schemas/Channel"
         provider:
-          $ref: "#/components/schemas/Provider"
+          type: string
           description: The provider that reported this engagement event
         is_synthetic:
           type: boolean
@@ -2740,64 +2674,6 @@ components:
               type: string
               description: >
                 Shown only once. Store securely.
-
-    # Webhook Delivery Event
-
-    WebhookDeliveryEvent:
-      type: object
-      required:
-        [
-          id,
-          endpoint_id,
-          notification_id,
-          event_type,
-          status,
-          attempt_number,
-          created_at,
-        ]
-      properties:
-        id:
-          $ref: "#/components/schemas/UUID"
-        endpoint_id:
-          $ref: "#/components/schemas/UUID"
-          nullable: true
-        endpoint_url:
-          type: string
-          format: uri
-          description: Snapshot of the endpoint URL used when this webhook was dispatched.
-        notification_id:
-          $ref: "#/components/schemas/UUID"
-        event_type:
-          $ref: "#/components/schemas/WebhookEventType"
-        status:
-          $ref: "#/components/schemas/WebhookEventStatus"
-        response_status_code:
-          type: [integer, "null"]
-          description: |
-            HTTP status code returned by the webhook endpoint.
-            Null if no HTTP response was received (for example, connection failure or timeout)
-          example: 200
-        error:
-          type: [string, "null"]
-          description: |
-            Human-readable error describing why delivery failed.
-            Null when the webhook delivery succeeded
-        attempt_number:
-          type: integer
-          minimum: 1
-        created_at:
-          $ref: "#/components/schemas/Timestamp"
-
-    WebhookEventList:
-      type: object
-      required: [data, meta]
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/WebhookDeliveryEvent"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
 
     # Delivery Policy
 

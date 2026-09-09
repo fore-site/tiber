@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import Recipient
-from ...domain.repositories.recipient_repository import RecipientRepository
+from ...domain.repositories import RecipientRepository
 from ...infrastructure.models.recipient import RecipientModel
 
 
@@ -22,9 +22,11 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         await self._session.flush()
         return recipient
 
-    async def get_by_id(self, id: UUID) -> Recipient | None:
+    async def get_by_id(self, id: UUID, project_id: UUID) -> Recipient | None:
         """Get a recipient by its ID."""
         model = await self._session.get(RecipientModel, id)
+        if model is not None and model.project_id != project_id:
+            return None
         return self._to_entity(model) if model else None
 
     async def get_by_external_id(

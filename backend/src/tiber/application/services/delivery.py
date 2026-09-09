@@ -9,12 +9,15 @@ from uuid import UUID, uuid4
 from tiber.application.ports.channel_provider import ChannelProvider, ProviderResult
 from tiber.domain.entities import DeliveryAttempt, Notification
 from tiber.domain.enums import DeliveryAttemptStatus, NotificationStatus
-from tiber.domain.exceptions import NotificationNotFoundError
-from tiber.domain.repositories.delivery_attempt_repository import (
-    DeliveryAttemptRepository,
+from tiber.domain.exceptions import (
+    NotificationNotFoundError,
+    RecipientNotFoundError,
 )
-from tiber.domain.repositories.notification_repository import NotificationRepository
-from tiber.domain.repositories.recipient_repository import RecipientRepository
+from tiber.domain.repositories import (
+    DeliveryAttemptRepository,
+    NotificationRepository,
+    RecipientRepository,
+)
 
 if TYPE_CHECKING:
     from .policy import DispatchPolicyGuard
@@ -77,16 +80,18 @@ class NotificationDeliveryProcessor:
 
         # Scheduling guard - never deliver before scheduled_at.
         now = datetime.now(UTC)
-        if notification.scheduled_at is not None and notification.scheduled_at > now:
+        if notification.send_at is not None and notification.send_at > now:
             return notification
 
-        recipient = await self._recipients.get_by_id(notification.recipient_id)
-
-        if recipient is not None and recipient.project_id != notification.project_id:
-            return await self._fail(
-                notification,
-                error="recipient does not belong to notification project",
-            )
+        recipient = await self._recipients.get_by_id(
+            notification.recipient_id, notification.project_id
+        )
+        if recipient is None:
+            # Project-scoped lookup: a miss covers both a dangling reference
+            # and a cross-project mismatch. Lookup failures raise so the
+            # task-level permanent-error path classifies them; they never
+            # reached a provider, so no delivery attempt is recorded.
+            raise RecipientNotFoundError(str(notification.recipient_id))
 
         # Worker-time policy re-check while still PENDING. A violation is a
         # terminal policy rejection (with a reason and no delivery attempt
@@ -117,9 +122,7 @@ class NotificationDeliveryProcessor:
         processing = notification.mark_processing()
         await self._notifications.save(processing)
 
-        address = (recipient.addresses if recipient else {}).get(
-            notification.channel.value
-        )
+        address = recipient.addresses.get(notification.channel.value)
 
         if not address:
             return await self._fail(
@@ -203,6 +206,6 @@ class NotificationDeliveryProcessor:
             provider_message_id=None,
             error=error,
         )
-        updated = notification.mark_failed()
+        updated = notification.mark_failed(error)
         await self._notifications.save(updated)
         return updated

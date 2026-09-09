@@ -109,13 +109,13 @@ class WebhookEndpointNotFoundError(NotFoundError):
         super().__init__("Webhook Endpoint", webhook_endpoint_id)
 
 
-class DeliveryPolicyNotFoundError(NotFoundError):
+class DeliveryConstraintNotFoundError(NotFoundError):
     """Raised when a delivery policy is not found."""
 
     error_code = "delivery_policy_not_found"
 
     def __init__(self, delivery_policy_id: str) -> None:
-        """Initialize a DeliveryPolicyNotFoundError with the delivery policy ID."""
+        """Initialize a DeliveryConstraintNotFoundError with the delivery constraint ID."""
         super().__init__("Delivery Policy", delivery_policy_id)
 
 

@@ -224,7 +224,16 @@ def _retry_or_dead_letter(
 
 
 async def _mark_permanent_failure(notification_id: UUID, reason: str) -> None:
-    """Persist a terminal failure for a non-retryable worker error."""
+    """Persist a terminal failure for a non-retryable worker error.
+
+    The reason is both logged and persisted on the notification row so the
+    failure is queryable without access to worker logs.
+    """
+    logger.error(
+        "Permanent delivery failure notification_id=%s reason=%s",
+        notification_id,
+        reason,
+    )
     async with AsyncSessionFactory() as session:
         repository = SQLAlchemyNotificationRepository(session)
         notification = await repository.get_by_id(notification_id)
@@ -232,5 +241,5 @@ async def _mark_permanent_failure(notification_id: UUID, reason: str) -> None:
             NotificationStatus.PENDING,
             NotificationStatus.PROCESSING,
         ):
-            await repository.save(notification.mark_failed())
+            await repository.save(notification.mark_failed(reason))
             await session.commit()

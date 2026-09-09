@@ -44,6 +44,6 @@ class PolicyContext:
     """Everything a policy rule may inspect to reach a decision."""
 
     notification: Notification
-    recipient: Recipient | None
-    delivery_constraint: DeliveryConstraint | None = None
+    recipient: Recipient
+    delivery_constraint: DeliveryConstraint | None
     now: datetime = field(default_factory=lambda: datetime.now(UTC))

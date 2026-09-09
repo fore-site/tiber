@@ -28,6 +28,7 @@ class Notification:
     send_at: datetime | None = None
     send_time_basis: SendTimeBasis = SendTimeBasis.IMMEDIATE
     policy_violation_reason: str | None = None
+    failure_reason: str | None = None
     delivered_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -52,6 +53,18 @@ class Notification:
             if self.policy_violation_reason is not None:
                 raise InvalidNotificationStateError(
                     "`policy_violation_reason` must only be set when status is POLICY_REJECTED"
+                )
+
+        # 2b. failed to reason consistency
+        if self.status == NotificationStatus.FAILED:
+            if self.failure_reason is None:
+                raise InvalidNotificationStateError(
+                    "`failure_reason` is required when status is FAILED"
+                )
+        else:
+            if self.failure_reason is not None:
+                raise InvalidNotificationStateError(
+                    "`failure_reason` must only be set when status is FAILED"
                 )
 
         # 3. email channel requires subject; other channels must not have one
@@ -148,16 +161,25 @@ class Notification:
             delivered_at=datetime.now(UTC),
         )
 
-    def mark_failed(self) -> Notification:
+    def mark_failed(self, reason: str) -> Notification:
         """Transition the notification to the failed state.
 
-        Allowed from both PENDING (immediate dispatch) and PROCESSING
-        (after the processing guard has run).
+        A failure must carry its reason: the row is the permanent, queryable
+        record of why delivery ended in failure, so an unexplained failure is
+        not representable. Allowed from both PENDING (immediate dispatch) and
+        PROCESSING (after the processing guard has run).
         """
         if self.status not in (
             NotificationStatus.PENDING,
             NotificationStatus.PROCESSING,
         ):
             raise InvalidStateTransitionError(self.status, NotificationStatus.FAILED)
+        if not reason:
+            raise InvalidNotificationStateError(
+                "failure_reason is required when failing"
+            )
 
-        return self._transition(status=NotificationStatus.FAILED)
+        return self._transition(
+            status=NotificationStatus.FAILED,
+            failure_reason=reason,
+        )

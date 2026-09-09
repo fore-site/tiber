@@ -17,7 +17,7 @@ from uuid import UUID
 from .entities import (
     APIKey,
     DeliveryAttempt,
-    DeliveryPolicy,
+    DeliveryConstraint,
     EngagementEvent,
     Notification,
     Project,
@@ -210,14 +210,14 @@ class WebhookEndpointRepository(Protocol):
 # Delivery Policy
 
 
-class DeliveryPolicyRepository(Protocol):
-    """Contract for delivery policy data access."""
+class DeliveryConstraintRepository(Protocol):
+    """Contract for delivery constraint data access."""
 
-    async def save(self, policy: DeliveryPolicy) -> DeliveryPolicy:
-        """Save a delivery policy to the repository."""
+    async def save(self, constraint: DeliveryConstraint) -> DeliveryConstraint:
+        """Save a delivery constraint to the repository."""
         ...
 
-    async def get_by_project(self, project_id: UUID) -> DeliveryPolicy | None:
+    async def get_by_project(self, project_id: UUID) -> DeliveryConstraint | None:
         """Get a delivery policy by its project ID."""
         ...
 

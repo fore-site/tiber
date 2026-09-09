@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from tiber.application.services import (
     DispatchPolicyGuard,
-    InMemoryPreferenceReadModel,
     PolicyResolver,
 )
 from tiber.domain.entities import Notification, Recipient
@@ -33,36 +32,21 @@ def make_notification(channel: DeliveryChannel = DeliveryChannel.EMAIL) -> Notif
     )
 
 
-def make_recipient(notification: Notification, addresses: dict) -> Recipient:
+def make_recipient(
+    notification: Notification,
+    addresses: dict,
+    opted_out: list[DeliveryChannel] | None = None,
+) -> Recipient:
     """Build a recipient belonging to the notification."""
     return Recipient(
         id=notification.recipient_id,
         project_id=notification.project_id,
         addresses=addresses,
+        opted_out_channels=opted_out or [],
     )
 
 
-# --- InMemoryPreferenceReadModel ---
-
-
-async def test_preference_read_model_defaults_to_allow():
-    """A recipient with no stored preferences is opted-in (safe default)."""
-    model = InMemoryPreferenceReadModel()
-    assert await model.blocked_channels(uuid4()) == frozenset()
-
-
-async def test_preference_read_model_returns_blocked_channels():
-    """A recipient with stored preferences reports blocked channels."""
-    recipient_id = uuid4()
-    model = InMemoryPreferenceReadModel(
-        {recipient_id: frozenset({DeliveryChannel.PUSH})}
-    )
-    assert await model.blocked_channels(recipient_id) == frozenset(
-        {DeliveryChannel.PUSH}
-    )
-
-
-# --- PolicyResolver (default rule chain: preference then address) ---
+# --- PolicyResolver (default rule chain: opt-out then address) ---
 
 
 async def test_resolver_allows_when_address_present_and_channel_enabled():
@@ -75,17 +59,14 @@ async def test_resolver_allows_when_address_present_and_channel_enabled():
     assert decision.allowed
 
 
-async def test_resolver_rejects_when_channel_blocked_by_preference():
+async def test_resolver_rejects_when_channel_opted_out():
     """An explicit opt-out rejects with a preference reason."""
     notification = make_notification(DeliveryChannel.PUSH)
-    recipient = make_recipient(notification, {"push": "token"})
-    resolver = PolicyResolver(
-        preferences=InMemoryPreferenceReadModel(
-            {recipient.id: frozenset({DeliveryChannel.PUSH})}
-        )
+    recipient = make_recipient(
+        notification, {"push": "token"}, opted_out=[DeliveryChannel.PUSH]
     )
 
-    decision = await resolver.evaluate(notification, recipient)
+    decision = await PolicyResolver().evaluate(notification, recipient)
 
     assert not decision.allowed
     assert decision.reason is not None and "opted out" in decision.reason
@@ -104,30 +85,24 @@ async def test_resolver_rejects_when_recipient_missing_channel_address():
 
 async def test_resolver_short_circuits_on_first_rejection():
     """Rules run in order; the first rejection wins."""
+    from tiber.domain.policies.rules import PolicyRule
+
+    class AlwaysBlock(PolicyRule):
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def evaluate(self, ctx) -> PolicyDecision:
+            return PolicyDecision.reject("nope", rule=self.name)
+
     notification = make_notification(DeliveryChannel.EMAIL)
-    recipient = make_recipient(notification, {"push": "token"})  # no email address
-    # Force preference (first rule) to reject too, and assert the preference
-    # reason wins because it runs first.
-    resolver = PolicyResolver(
-        preferences=InMemoryPreferenceReadModel(
-            {recipient.id: frozenset({DeliveryChannel.EMAIL})}
-        )
-    )
+    recipient = make_recipient(notification, {"email": "a@b.io"})
+
+    resolver = PolicyResolver(rules=[AlwaysBlock("first"), AlwaysBlock("second")])
 
     decision = await resolver.evaluate(notification, recipient)
 
     assert not decision.allowed
-    assert decision.reason is not None and "opted out" in decision.reason
-
-
-async def test_resolver_handles_missing_recipient():
-    """A missing recipient is rejected, not allowed through."""
-    notification = make_notification(DeliveryChannel.EMAIL)
-
-    decision = await PolicyResolver().evaluate(notification, None)
-
-    assert not decision.allowed
-    assert decision.reason is not None and "recipient not found" in decision.reason
+    assert decision.rule == "first"
 
 
 # --- DispatchPolicyGuard (worker-time re-check) ---

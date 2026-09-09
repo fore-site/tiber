@@ -199,6 +199,7 @@ CREATE TABLE recipients (
     project_id   UUID         NOT NULL REFERENCES projects (id) ON DELETE CASCADE,
     external_id  VARCHAR(255) NULL,
     addresses JSONB NOT NULL,
+    opted_out_channels delivery_channel[] NOT NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     archived_at  TIMESTAMPTZ  NULL,
@@ -235,6 +236,7 @@ CREATE TABLE notifications (
     send_at      TIMESTAMPTZ         NULL,
     send_time_basis   send_time_basis     NOT NULL DEFAULT 'immediate',
     policy_violation_reason TEXT          NULL,
+    failure_reason         TEXT           NULL,
     delivered_at      TIMESTAMPTZ         NULL,
     created_at        TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
@@ -258,6 +260,18 @@ CREATE TABLE notifications (
                 AND policy_violation_reason IS NULL
             )
         ),
+
+    CONSTRAINT notifications_failure_reason_check CHECK (
+            (
+                status = 'failed'
+                AND failure_reason IS NOT NULL
+            )
+            OR
+            (
+                status <> 'failed'
+                AND failure_reason IS NULL
+            )
+        ),
     
     CONSTRAINT notifications_subject_check CHECK (
         (channel = 'email' AND subject IS NOT NULL)
@@ -273,6 +287,7 @@ COMMENT ON COLUMN notifications.body              IS 'Rendered body after templa
 COMMENT ON COLUMN notifications.template_variables IS 'Variables supplied by the caller for template interpolation. Stored for auditability.';
 COMMENT ON COLUMN notifications.send_time_basis   IS 'How scheduled_at was determined: explicit (caller-provided), ml_predicted, or immediate.';
 COMMENT ON COLUMN notifications.policy_violation_reason IS 'Populated when status is policy_rejected. Records which policy was violated and why.';
+COMMENT ON COLUMN notifications.failure_reason IS 'Populated when status is failed. Records why delivery failed: provider error, or a permanent lookup/classification error (missing recipient or template) raised by the worker. Failure reasons are never recorded on delivery attempts for errors that never reached a provider.';
 COMMENT ON COLUMN notifications.send_at IS 'Earliest dispatch time. Delivery must not begin before this timestamp.';
 
 -- Notification Intelligence

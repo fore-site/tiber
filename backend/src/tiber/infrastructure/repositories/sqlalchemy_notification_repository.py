@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities.notification import Notification
 from ...domain.enums import DeliveryChannel, NotificationStatus, SendTimeBasis
-from ...domain.repositories.notification_repository import NotificationRepository
+from ...domain.repositories import NotificationRepository
 from ...domain.value_objects import NotificationContent
 from ...infrastructure.models.notification import NotificationModel
 
@@ -79,6 +79,7 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             "scheduled_at": entity.scheduled_at,
             "send_time_basis": entity.send_time_basis,
             "policy_violation_reason": entity.policy_violation_reason,
+            "failure_reason": entity.failure_reason,
             "delivered_at": entity.delivered_at,
             "created_at": entity.created_at,
             "updated_at": entity.updated_at,
@@ -108,5 +109,6 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             scheduled_at=model.scheduled_at,
             delivered_at=model.delivered_at,
             policy_violation_reason=model.policy_violation_reason,
+            failure_reason=model.failure_reason,
             idempotency_key=model.idempotency_key,
         )

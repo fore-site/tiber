@@ -29,8 +29,6 @@ class RecipientAddressRule:
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject when the recipient has no address for the notification channel."""
         recipient = ctx.recipient
-        if recipient is None:
-            return PolicyDecision.reject("recipient not found", rule=self.name)
         address = recipient.addresses.get(ctx.notification.channel.value)
         if not address:
             return PolicyDecision.reject(
@@ -53,8 +51,6 @@ class ChannelPreferenceRule:
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject when the recipient has opted out of the notification channel."""
         recipient = ctx.recipient
-        if recipient is None:
-            return PolicyDecision.reject("recipient not found", rule=self.name)
         channel = ctx.notification.channel
         if channel in recipient.opted_out_channels:
             return PolicyDecision.reject(

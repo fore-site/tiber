@@ -15,7 +15,7 @@ from tiber.domain.exceptions import (
     TemplateChannelMismatchError,
     TemplateNotFoundError,
 )
-from tiber.domain.repositories.template_repository import TemplateRepository
+from tiber.domain.repositories import TemplateRepository
 from tiber.domain.services import TemplateRenderer
 from tiber.domain.value_objects import NotificationContent
 

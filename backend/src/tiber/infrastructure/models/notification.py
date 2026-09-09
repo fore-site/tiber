@@ -72,6 +72,20 @@ class NotificationModel(Base):
             """,
             name="notifications_subject_check",
         ),
+        CheckConstraint(
+            """
+            (
+                status = 'failed'
+                AND failure_reason IS NOT NULL
+            )
+            OR
+            (
+                status <> 'failed'
+                AND failure_reason IS NULL
+            )
+            """,
+            name="notifications_failure_reason_check",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -145,6 +159,11 @@ class NotificationModel(Base):
     )
 
     policy_violation_reason: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    failure_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

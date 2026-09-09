@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import Template
 from ...domain.enums import DeliveryChannel
-from ...domain.repositories.template_repository import TemplateRepository
+from ...domain.repositories import TemplateRepository
 from ...infrastructure.models.template import TemplateModel
 
 

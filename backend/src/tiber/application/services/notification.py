@@ -12,8 +12,10 @@ from tiber.domain.exceptions import (
     ProjectScopeViolationError,
     RecipientNotFoundError,
 )
-from tiber.domain.repositories.notification_repository import NotificationRepository
-from tiber.domain.repositories.recipient_repository import RecipientRepository
+from tiber.domain.repositories import (
+    NotificationRepository,
+    RecipientRepository,
+)
 from tiber.domain.value_objects import NotificationContent
 
 
@@ -70,7 +72,7 @@ class NotificationService:
             template_id=template_id,
             template_variables=template_variables,
             idempotency_key=idempotency_key,
-            scheduled_at=scheduled_at,
+            send_at=scheduled_at,
             send_time_basis=(
                 SendTimeBasis.EXPLICIT
                 if scheduled_at is not None

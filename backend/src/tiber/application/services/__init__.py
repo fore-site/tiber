@@ -4,16 +4,12 @@ from .policy import (
     DispatchPolicyGuard as DispatchPolicyGuard,
 )
 from .policy import (
-    InMemoryPreferenceReadModel as InMemoryPreferenceReadModel,
-)
-from .policy import (
     PolicyResolver as PolicyResolver,
 )
 from .template import NotificationTemplateResolver as NotificationTemplateResolver
 
 __all__ = [
     "DispatchPolicyGuard",
-    "InMemoryPreferenceReadModel",
     "NotificationDeliveryProcessor",
     "NotificationService",
     "NotificationTemplateResolver",

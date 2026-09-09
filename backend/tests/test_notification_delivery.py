@@ -49,9 +49,13 @@ class FakeRecipientRepository:
         """Initialize with a single recipient."""
         self._recipient = recipient
 
-    async def get_by_id(self, id):
-        """Return the recipient if the id matches."""
-        return self._recipient if self._recipient.id == id else None
+    async def get_by_id(self, id, project_id=None):
+        """Return the recipient if id and project scope match."""
+        if self._recipient.id != id:
+            return None
+        if project_id is not None and self._recipient.project_id != project_id:
+            return None
+        return self._recipient
 
 
 class FakeDeliveryAttemptRepository:
@@ -215,7 +219,7 @@ def make_scheduled_notification(scheduled_at: datetime) -> Notification:
         correlation_id=base.correlation_id,
         channel=base.channel,
         content=base.content,
-        scheduled_at=scheduled_at,
+        send_at=scheduled_at,
         send_time_basis=SendTimeBasis.EXPLICIT,
     )
 
@@ -236,7 +240,7 @@ async def test_future_scheduled_notification_is_not_delivered_early():
     updated = await processor.process(notification.id)
 
     assert updated.status == NotificationStatus.PENDING
-    assert updated.scheduled_at == notification.scheduled_at
+    assert updated.send_at == notification.send_at
     assert provider.send_count == 0
     assert attempts.attempts == []
 
@@ -284,7 +288,7 @@ async def test_processing_state_machine_transitions():
     delivered = processing.mark_delivered()
     assert delivered.status == NotificationStatus.DELIVERED
 
-    failed = notification.mark_processing().mark_failed()
+    failed = notification.mark_processing().mark_failed("test failure")
     assert failed.status == NotificationStatus.FAILED
 
 
