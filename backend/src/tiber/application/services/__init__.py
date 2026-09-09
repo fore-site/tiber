@@ -1,7 +1,7 @@
 from .delivery import NotificationDeliveryProcessor as NotificationDeliveryProcessor
 from .notification import NotificationService as NotificationService
 from .policy import (
-    DispatchPolicyGuard as DispatchPolicyGuard,
+    DeliveryPolicyGuard as DeliveryPolicyGuard,
 )
 from .policy import (
     PolicyResolver as PolicyResolver,
@@ -9,7 +9,7 @@ from .policy import (
 from .template import NotificationTemplateResolver as NotificationTemplateResolver
 
 __all__ = [
-    "DispatchPolicyGuard",
+    "DeliveryPolicyGuard",
     "NotificationDeliveryProcessor",
     "NotificationService",
     "NotificationTemplateResolver",

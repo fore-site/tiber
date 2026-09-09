@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from tiber.application.ports.channel_provider import ProviderResult
 from tiber.application.services import (
-    DispatchPolicyGuard,
+    DeliveryPolicyGuard,
     NotificationDeliveryProcessor,
     NotificationTemplateResolver,
     PolicyResolver,
@@ -128,7 +128,7 @@ def build(
     notification: Notification,
     recipient: Recipient,
     template: Template | None = None,
-    guard: DispatchPolicyGuard,
+    guard: DeliveryPolicyGuard,
 ) -> tuple[
     NotificationDeliveryProcessor, FakeNotificationRepository, RecordingProvider
 ]:
@@ -159,7 +159,7 @@ async def test_policy_violation_marks_policy_rejected_without_attempt():
         addresses={"email": "a@b.io"},
         opted_out_channels=[DeliveryChannel.EMAIL],
     )
-    guard = DispatchPolicyGuard(PolicyResolver())
+    guard = DeliveryPolicyGuard(PolicyResolver())
     processor, notif_repo, provider = build(
         notification=notification, recipient=recipient, guard=guard
     )
@@ -197,7 +197,7 @@ async def test_template_content_renders_into_provider_payload():
         project_id=project_id,
         addresses={"email": "a@b.io"},
     )
-    guard = DispatchPolicyGuard()  # allows: address present, no blocked channels
+    guard = DeliveryPolicyGuard()  # allows: address present, no blocked channels
     processor, notif_repo, provider = build(
         notification=notification,
         recipient=recipient,
@@ -220,7 +220,7 @@ async def test_guard_address_rule_rejects_and_skips_delivery():
         project_id=notification.project_id,
         addresses={"push": "token"},  # no email address
     )
-    guard = DispatchPolicyGuard(PolicyResolver())
+    guard = DeliveryPolicyGuard(PolicyResolver())
     processor, notif_repo, provider = build(
         notification=notification, recipient=recipient, guard=guard
     )

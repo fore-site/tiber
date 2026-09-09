@@ -54,7 +54,6 @@ The Project aggregate is the root of tenant isolation and owns:
 - API Keys
 - Templates
 - Recipients
-- User Preferences (now carried on Recipient as opted-out channels)
 - Webhook Endpoints
 - Delivery Constraints
 

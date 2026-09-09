@@ -20,7 +20,7 @@ from tiber.domain.repositories import (
 )
 
 if TYPE_CHECKING:
-    from .policy import DispatchPolicyGuard
+    from .policy import DeliveryPolicyGuard
     from .template import NotificationTemplateResolver
 
 
@@ -40,7 +40,7 @@ class NotificationDeliveryProcessor:
         recipient_repository: RecipientRepository,
         delivery_attempt_repository: DeliveryAttemptRepository,
         provider: ChannelProvider,
-        policy_guard: DispatchPolicyGuard | None = None,
+        policy_guard: DeliveryPolicyGuard | None = None,
         template_resolver: NotificationTemplateResolver | None = None,
     ) -> None:
         """Initialize the processor with its ports and the chosen provider.
@@ -62,7 +62,7 @@ class NotificationDeliveryProcessor:
     async def process(self, notification_id: UUID) -> Notification:
         """Deliver a notification and return its updated state.
 
-        Scheduling guard: a PENDING notification whose ``scheduled_at`` is in
+        Scheduling guard: a PENDING notification whose ``send_at`` is in
         the future is *not* delivered early. It is returned unchanged (still
         PENDING, no attempt recorded) so the caller can defer the job - e.g.
         requeue with a countdown - and still preserve idempotency. Once due,
@@ -78,7 +78,7 @@ class NotificationDeliveryProcessor:
         if notification.status != NotificationStatus.PENDING:
             return notification
 
-        # Scheduling guard - never deliver before scheduled_at.
+        # Scheduling guard - never deliver before send_at.
         now = datetime.now(UTC)
         if notification.send_at is not None and notification.send_at > now:
             return notification

@@ -2,7 +2,7 @@
 
 A ``PolicyResolver`` aggregates ``PolicyRule`` objects (channel opt-outs
 first, then address availability) into a single decision. The
-``DispatchPolicyGuard`` is the worker-time re-check invoked just before a
+``DeliveryPolicyGuard`` is the worker-time re-check invoked just before a
 notification is handed to a provider: if a drift-sensitive constraint now
 fails, the notification is marked ``policy_rejected`` with a reason instead
 of being delivered.
@@ -71,7 +71,7 @@ class PolicyResolver:
         return PolicyDecision.allow()
 
 
-class DispatchPolicyGuard:
+class DeliveryPolicyGuard:
     """Worker-time re-check of delivery policies before dispatch."""
 
     def __init__(self, resolver: PolicyResolver | None = None) -> None:

@@ -147,7 +147,7 @@ class NotificationModel(Base):
         nullable=True,
     )
 
-    scheduled_at: Mapped[datetime | None] = mapped_column(
+    send_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

@@ -10,7 +10,7 @@ from uuid import UUID
 from celery.utils.log import get_task_logger
 
 from ...application.services import (
-    DispatchPolicyGuard,
+    DeliveryPolicyGuard,
     NotificationDeliveryProcessor,
     NotificationTemplateResolver,
     PolicyResolver,
@@ -78,7 +78,7 @@ async def _process(notification_id: UUID) -> Notification | None:
             provider=provider,
             # Worker-time policy re-check (permissive default preferences) and
             # template rendering with direct-content fallback.
-            policy_guard=DispatchPolicyGuard(PolicyResolver()),
+            policy_guard=DeliveryPolicyGuard(PolicyResolver()),
             template_resolver=NotificationTemplateResolver(
                 template_repository=templates
             ),
@@ -95,18 +95,18 @@ async def _process(notification_id: UUID) -> Notification | None:
         return updated
 
 
-def _seconds_until(scheduled_at: datetime) -> int:
-    """Seconds between now and ``scheduled_at`` (floored at 0)."""
-    return max(0, int((scheduled_at - datetime.now(UTC)).total_seconds()))
+def _seconds_until(send_at: datetime) -> int:
+    """Seconds between now and ``send_at`` (floored at 0)."""
+    return max(0, int((send_at - datetime.now(UTC)).total_seconds()))
 
 
 def _should_defer(notification: Notification) -> bool:
     """Return True when the notification is not yet due and must be rescheduled."""
     if notification.status != NotificationStatus.PENDING:
         return False
-    if notification.scheduled_at is None:
+    if notification.send_at is None:
         return False
-    return notification.scheduled_at > datetime.now(UTC)
+    return notification.send_at > datetime.now(UTC)
 
 
 @celery_app.task(
@@ -124,7 +124,7 @@ def process_notification(self, job) -> None:
     to the configured max attempts; once the budget is exhausted the job is not
     acked (``task_acks_late``) so RabbitMQ dead-letters it to the channel DLQ.
 
-    The worker never delivers before ``scheduled_at``: if the notification is
+    The worker never delivers before ``send_at``: if the notification is
     still PENDING and its scheduled time lies in the future, the job is
     re-dispatched with a countdown of the remaining delay instead of being
     delivered early. Re-dispatches are idempotent - the processor only ever
@@ -138,8 +138,8 @@ def process_notification(self, job) -> None:
         payload.channel.value,
     )
 
-    if payload.scheduled_at is not None and payload.scheduled_at > datetime.now(UTC):
-        countdown = _seconds_until(payload.scheduled_at)
+    if payload.send_at is not None and payload.send_at > datetime.now(UTC):
+        countdown = _seconds_until(payload.send_at)
         celery_app.tasks["notification.process"].apply_async(
             args=[payload.to_json_dict()],
             countdown=countdown,
@@ -155,16 +155,12 @@ def process_notification(self, job) -> None:
     except Exception as exc:  # transient infra/provider error -> bounded retry
         _retry_or_dead_letter(self, payload, exc)
 
-    if (
-        updated is not None
-        and updated.scheduled_at is not None
-        and _should_defer(updated)
-    ):
-        countdown = _seconds_until(updated.scheduled_at)
+    if updated is not None and updated.send_at is not None and _should_defer(updated):
+        countdown = _seconds_until(updated.send_at)
         logger.info(
             "Notification %s scheduled for %s; deferring for %ss",
             payload.notification_id,
-            updated.scheduled_at,
+            updated.send_at,
             countdown,
         )
         # Re-dispatches are idempotent and use a Celery countdown rather than

@@ -8,7 +8,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from tiber.application.services import (
-    DispatchPolicyGuard,
+    DeliveryPolicyGuard,
     PolicyResolver,
 )
 from tiber.domain.entities import Notification, Recipient
@@ -105,7 +105,7 @@ async def test_resolver_short_circuits_on_first_rejection():
     assert decision.rule == "first"
 
 
-# --- DispatchPolicyGuard (worker-time re-check) ---
+# --- DeliveryPolicyGuard (worker-time re-check) ---
 
 
 async def test_guard_reports_allowed_for_valid_recipient():
@@ -113,7 +113,7 @@ async def test_guard_reports_allowed_for_valid_recipient():
     notification = make_notification(DeliveryChannel.EMAIL)
     recipient = make_recipient(notification, {"email": "a@b.io"})
 
-    decision = await DispatchPolicyGuard().check(notification, recipient)
+    decision = await DeliveryPolicyGuard().check(notification, recipient)
 
     assert decision.allowed
 
@@ -124,7 +124,7 @@ async def test_guard_reports_rejection_with_reason():
     # No email address -> the address rule rejects with a usable reason.
     recipient = make_recipient(notification, {"push": "token"})
 
-    decision = await DispatchPolicyGuard().check(notification, recipient)
+    decision = await DeliveryPolicyGuard().check(notification, recipient)
 
     assert not decision.allowed
     assert decision.reason
@@ -143,7 +143,7 @@ async def test_guard_with_custom_resolver_rules():
     notification = make_notification(DeliveryChannel.EMAIL)
     recipient = make_recipient(notification, {"email": "a@b.io"})
 
-    guard = DispatchPolicyGuard(
+    guard = DeliveryPolicyGuard(
         PolicyResolver(rules=[ChannelPreferenceRule(), AlwaysBlock()])
     )
     decision = await guard.check(notification, recipient)

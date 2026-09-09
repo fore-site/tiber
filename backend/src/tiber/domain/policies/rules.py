@@ -60,6 +60,24 @@ class ChannelPreferenceRule:
         return PolicyDecision.allow()
 
 
+class BlackoutPeriodRule:
+    """Reject a notification when it is sent during a blackout period.
+
+    A blackout period is a time range during which notifications are not
+    allowed to be sent. The rule checks if the current time falls within any
+    of the defined blackout periods for the recipient.
+    """
+
+    name = "blackout_period"
+
+    async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
+        """Reject when the notification is sent during a blackout period."""
+        # Placeholder for actual blackout period logic
+        # This would typically involve checking the current time against
+        # predefined blackout periods for the recipient or project.
+        return PolicyDecision.allow()
+
+
 class DeliveryWindowsRule:
     """Reject a notification when it is sent outside of delivery windows.
 

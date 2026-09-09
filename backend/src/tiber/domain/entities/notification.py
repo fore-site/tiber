@@ -33,14 +33,14 @@ class Notification:
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""
-        # 1. send_time_basis vs scheduled_at
+        # 1. send_time_basis vs send_at
         if self.send_time_basis == SendTimeBasis.EXPLICIT and self.send_at is None:
             raise InvalidNotificationStateError(
                 "`send_at` is required when `send_time_basis` is EXPLICIT"
             )
         if self.send_time_basis == SendTimeBasis.IMMEDIATE and self.send_at is not None:
             raise InvalidNotificationStateError(
-                "`scheduled_at` must not be set when `send_time_basis` is IMMEDIATE"
+                "`send_at` must not be set when `send_time_basis` is IMMEDIATE"
             )
 
         # 2. policy_rejected to reason consistency

@@ -56,8 +56,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] Scheduling support (send-at-time, not just immediate) and worker execution at the scheduled time
 - [ ] Job payload follows the Worker architecture: thin payload with stable fields, `correlation_id`, `schema_version`, `scheduled_at`, `send_time_basis`, ML prediction metadata, and retry attempt state
 - [ ] RabbitMQ publisher uses `notifications.exchange`, channel routing keys, durable messages, and publisher confirms
-- [ ] Celery worker pipeline: Notification Processor (orchestrator), Scheduler Executor, Dispatch Policy Guard, Provider Manager (single stub transport), Retry Manager, Delivery Tracker
-- [ ] Dispatch Policy Guard re-runs the drift-sensitive subset of the chain before delivery (opt-outs, blackout periods, delivery windows — no address re-check): blackout violations re-queue after the blackout ends, hard violations (delivery windows, opt-outs) record policy-rejected
+- [ ] Celery worker pipeline: Notification Processor (orchestrator), Scheduler Executor, Delivery Policy Guard, Provider Manager (single stub transport), Retry Manager, Delivery Tracker
+- [ ] Delivery Policy Guard re-runs the drift-sensitive subset of the chain before delivery (opt-outs, blackout periods, delivery windows — no address re-check): blackout violations re-queue after the blackout ends, hard violations (delivery windows, opt-outs) record policy-rejected
 - [ ] Retry with exponential backoff via RabbitMQ retry queues; route exhausted jobs to channel-specific DLQs
 - [ ] Rate limiting on ingestion using Redis counters
 - [ ] Delivery status tracking through immutable delivery attempts and logs
