@@ -30,3 +30,47 @@ class User:
         """Validate the user's state after initialization."""
         if not self.email or not self.email.strip():
             raise ValueError("User email must not be empty")
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        email: str,
+        role: UserRole = UserRole.USER,
+        password_hash: str | None = None,
+        github_id: str | None = None,
+    ) -> User:
+        """Create a new user with a system-generated id and timestamps."""
+        return cls(
+            email=email,
+            role=role,
+            password_hash=password_hash,
+            github_id=github_id,
+        )
+
+    @classmethod
+    def reconstitute(
+        cls,
+        *,
+        id: UUID,
+        email: str,
+        role: UserRole,
+        password_hash: str | None,
+        is_verified: bool,
+        pending_email: str | None,
+        github_id: str | None,
+        created_at: datetime,
+        updated_at: datetime,
+    ) -> User:
+        """Rebuild an existing user from persisted state."""
+        return cls(
+            id=id,
+            email=email,
+            role=role,
+            password_hash=password_hash,
+            is_verified=is_verified,
+            pending_email=pending_email,
+            github_id=github_id,
+            created_at=created_at,
+            updated_at=updated_at,
+        )

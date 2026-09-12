@@ -50,3 +50,49 @@ class Recipient:
 
         object.__setattr__(self, "addresses", normalized_addresses)
         object.__setattr__(self, "opted_out_channels", normalized_opted_out_channels)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        project_id: UUID,
+        addresses: dict[str, str],
+        opted_out_channels: list[DeliveryChannel] | None = None,
+        external_id: str | None = None,
+    ) -> Recipient:
+        """Create a new recipient with a system-generated id and timestamps."""
+        return cls(
+            project_id=project_id,
+            addresses=addresses,
+            opted_out_channels=opted_out_channels or [],
+            external_id=external_id,
+        )
+
+    @classmethod
+    def reconstitute(
+        cls,
+        *,
+        id: UUID,
+        project_id: UUID,
+        addresses: dict[str, str],
+        opted_out_channels: list[DeliveryChannel],
+        external_id: str | None,
+        created_at: datetime,
+        updated_at: datetime,
+        archived_at: datetime | None,
+    ) -> Recipient:
+        """Rebuild an existing recipient from persisted state.
+
+        Every field is required with no default: the stored row must supply
+        identity and timestamps; nothing is silently regenerated.
+        """
+        return cls(
+            id=id,
+            project_id=project_id,
+            addresses=addresses,
+            opted_out_channels=opted_out_channels,
+            external_id=external_id,
+            created_at=created_at,
+            updated_at=updated_at,
+            archived_at=archived_at,
+        )

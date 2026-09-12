@@ -100,6 +100,94 @@ class Notification:
                     "`delivered_at` must only be set when status is DELIVERED"
                 )
 
+    @classmethod
+    def create(
+        cls,
+        *,
+        project_id: UUID,
+        recipient_id: UUID,
+        correlation_id: UUID,
+        channel: DeliveryChannel,
+        category: NotificationCategory,
+        content: NotificationContent,
+        template_id: UUID | None = None,
+        template_variables: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+        send_at: datetime | None = None,
+        send_time_basis: SendTimeBasis = SendTimeBasis.IMMEDIATE,
+    ) -> Notification:
+        """Create a new pending notification with system-generated identity.
+
+        This is the primary creation path: the id and timestamps are generated
+        here, and the notification always starts PENDING. Terminal states and
+        their coupled fields (policy_violation_reason, failure_reason,
+        delivered_at) are unreachable from here on purpose - they arise only
+        through state transitions.
+        """
+        return cls(
+            project_id=project_id,
+            recipient_id=recipient_id,
+            correlation_id=correlation_id,
+            channel=channel,
+            category=category,
+            content=content,
+            template_id=template_id,
+            template_variables=template_variables,
+            idempotency_key=idempotency_key,
+            send_at=send_at,
+            send_time_basis=send_time_basis,
+        )
+
+    @classmethod
+    def reconstitute(
+        cls,
+        *,
+        id: UUID,
+        project_id: UUID,
+        recipient_id: UUID,
+        correlation_id: UUID,
+        channel: DeliveryChannel,
+        category: NotificationCategory,
+        content: NotificationContent,
+        status: NotificationStatus,
+        created_at: datetime,
+        updated_at: datetime,
+        template_id: UUID | None,
+        template_variables: dict[str, str] | None,
+        idempotency_key: str | None,
+        send_at: datetime | None,
+        send_time_basis: SendTimeBasis,
+        policy_violation_reason: str | None,
+        failure_reason: str | None,
+        delivered_at: datetime | None,
+    ) -> Notification:
+        """Rebuild an existing notification from persisted state.
+
+        Every field is required with no default: a reconstituted entity must
+        receive the full stored row, including its identity and timestamps.
+        Forgetting one is a TypeError, never silently regenerated state.
+        """
+        return cls(
+            id=id,
+            project_id=project_id,
+            recipient_id=recipient_id,
+            correlation_id=correlation_id,
+            channel=channel,
+            category=category,
+            content=content,
+            status=status,
+            created_at=created_at,
+            updated_at=updated_at,
+            template_id=template_id,
+            template_variables=template_variables,
+            idempotency_key=idempotency_key,
+            send_at=send_at,
+            send_time_basis=send_time_basis,
+            policy_violation_reason=policy_violation_reason,
+            failure_reason=failure_reason,
+            delivered_at=delivered_at,
+        )
+
     def _transition(
         self,
         status: NotificationStatus,
@@ -108,12 +196,13 @@ class Notification:
         return replace(
             self,
             status=status,
+            updated_at=datetime.now(UTC),
             **changes,
         )
 
     def with_content(self, content: NotificationContent) -> Notification:
         """Return this notification with a replaced content snapshot."""
-        return replace(self, content=content)
+        return replace(self, content=content, updated_at=datetime.now(UTC))
 
     def mark_processing(self) -> Notification:
         """Transition the notification from pending to the in-flight processing state.

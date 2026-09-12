@@ -43,3 +43,51 @@ class Template:
                 raise ValueError(
                     f"Subject must not be set for {self.channel.value} templates"
                 )
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        project_id: UUID,
+        name: str,
+        slug: str,
+        channel: DeliveryChannel,
+        body: str,
+        subject: str | None = None,
+    ) -> Template:
+        """Create a new template with a system-generated id and timestamps."""
+        return cls(
+            project_id=project_id,
+            name=name,
+            slug=slug,
+            channel=channel,
+            body=body,
+            subject=subject,
+        )
+
+    @classmethod
+    def reconstitute(
+        cls,
+        *,
+        id: UUID,
+        project_id: UUID,
+        name: str,
+        slug: str,
+        channel: DeliveryChannel,
+        body: str,
+        subject: str | None,
+        created_at: datetime,
+        updated_at: datetime,
+    ) -> Template:
+        """Rebuild an existing template from persisted state."""
+        return cls(
+            id=id,
+            project_id=project_id,
+            name=name,
+            slug=slug,
+            channel=channel,
+            body=body,
+            subject=subject,
+            created_at=created_at,
+            updated_at=updated_at,
+        )

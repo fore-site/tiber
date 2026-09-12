@@ -31,3 +31,53 @@ class DeliveryAttempt:
             raise ValueError("DeliveryAttempt attempt_number must be positive")
         if not self.provider or not self.provider.strip():
             raise ValueError("DeliveryAttempt provider must not be empty")
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        notification_id: UUID,
+        attempt_number: int,
+        status: DeliveryAttemptStatus,
+        channel: DeliveryChannel,
+        provider: str,
+        provider_message_id: str | None = None,
+        error: str | None = None,
+    ) -> DeliveryAttempt:
+        """Record a new delivery attempt with a system-generated id and timestamp."""
+        return cls(
+            notification_id=notification_id,
+            attempt_number=attempt_number,
+            status=status,
+            channel=channel,
+            provider=provider,
+            provider_message_id=provider_message_id,
+            error=error,
+        )
+
+    @classmethod
+    def reconstitute(
+        cls,
+        *,
+        id: UUID,
+        notification_id: UUID,
+        attempt_number: int,
+        status: DeliveryAttemptStatus,
+        channel: DeliveryChannel,
+        provider: str,
+        provider_message_id: str | None,
+        error: str | None,
+        created_at: datetime,
+    ) -> DeliveryAttempt:
+        """Rebuild an existing delivery attempt from persisted state."""
+        return cls(
+            id=id,
+            notification_id=notification_id,
+            attempt_number=attempt_number,
+            status=status,
+            channel=channel,
+            provider=provider,
+            provider_message_id=provider_message_id,
+            error=error,
+            created_at=created_at,
+        )
