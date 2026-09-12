@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..enums import UserRole
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class User:
     """User entity - a platform account that owns projects.
 
@@ -14,7 +14,9 @@ class User:
     have a ``password_hash``.
     """
 
-    id: UUID
+    # Ids are system-generated: callers never supply one. kw_only makes the
+    # defaulted id legal ahead of required fields.
+    id: UUID = field(default_factory=uuid4)
     email: str
     role: UserRole = UserRole.USER
     password_hash: str | None = None

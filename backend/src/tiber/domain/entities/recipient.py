@@ -1,15 +1,17 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Recipient:
     """Recipient entity - the intended destination of a notification."""
 
-    id: UUID
+    # Ids are system-generated: callers never supply one. kw_only makes the
+    # defaulted id legal ahead of required fields.
+    id: UUID = field(default_factory=uuid4)
     project_id: UUID
     addresses: dict[str, str]
     opted_out_channels: list[DeliveryChannel] = field(default_factory=list)

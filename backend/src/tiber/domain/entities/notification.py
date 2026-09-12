@@ -1,27 +1,36 @@
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from ..enums import DeliveryChannel, NotificationStatus, SendTimeBasis
+from ..enums import (
+    DeliveryChannel,
+    NotificationCategory,
+    NotificationStatus,
+    SendTimeBasis,
+)
 from ..exceptions import InvalidNotificationStateError, InvalidStateTransitionError
 from ..value_objects import NotificationContent
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Notification:
     """Notification entity."""
 
-    id: UUID
+    # Ids are system-generated: callers never supply one. kw_only makes the
+    # defaulted id legal ahead of required fields.
+    id: UUID = field(default_factory=uuid4)
     project_id: UUID
     recipient_id: UUID
     correlation_id: UUID
     channel: DeliveryChannel
+    category: NotificationCategory
     content: NotificationContent
+
+    # Optional / nullable fields
+
     status: NotificationStatus = NotificationStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-    # Optional / nullable fields
     template_id: UUID | None = None
     template_variables: dict[str, str] | None = None
     idempotency_key: str | None = None

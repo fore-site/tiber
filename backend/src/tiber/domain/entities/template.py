@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Template:
     """Template entity - reusable notification content.
 
@@ -14,7 +14,9 @@ class Template:
     Supports ``{{variable}}`` interpolation.
     """
 
-    id: UUID
+    # Ids are system-generated: callers never supply one. kw_only makes the
+    # defaulted id legal ahead of required fields.
+    id: UUID = field(default_factory=uuid4)
     project_id: UUID
     name: str
     slug: str

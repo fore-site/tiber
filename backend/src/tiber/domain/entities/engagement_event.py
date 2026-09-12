@@ -1,15 +1,17 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel, EngagementEventType
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class EngagementEvent:
     """Domain entity representing recipient interaction reported by delivery providers."""
 
-    id: UUID
+    # Ids are system-generated: callers never supply one. kw_only makes the
+    # defaulted id legal ahead of required fields.
+    id: UUID = field(default_factory=uuid4)
     notification_id: UUID
     project_id: UUID
     recipient_id: UUID
