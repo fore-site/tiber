@@ -3,18 +3,17 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel
+from ..value_objects import RecipientPreferences
 
 
 @dataclass(frozen=True, kw_only=True)
 class Recipient:
     """Recipient entity - the intended destination of a notification."""
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     addresses: dict[str, str]
-    opted_out_channels: list[DeliveryChannel] = field(default_factory=list)
+    preferences: RecipientPreferences
     external_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -31,17 +30,8 @@ class Recipient:
             for key, value in self.addresses.items()
         }
 
-        # validate opted_out channels
-        normalized_opted_out_channels = list(
-            dict.fromkeys(
-                DeliveryChannel(channel.lower()).value
-                for channel in self.opted_out_channels
-            )
-        )
-
-        unavailable_channels = set(normalized_opted_out_channels) - set(
-            normalized_addresses
-        )
+        opted_out_channels = self.preferences.opted_out_channels
+        unavailable_channels = set(opted_out_channels) - set(normalized_addresses)
         if unavailable_channels:
             raise ValueError(
                 "Recipient opted-out channels must have configured destination addresses: "
@@ -49,7 +39,6 @@ class Recipient:
             )
 
         object.__setattr__(self, "addresses", normalized_addresses)
-        object.__setattr__(self, "opted_out_channels", normalized_opted_out_channels)
 
     @classmethod
     def create(
@@ -57,14 +46,14 @@ class Recipient:
         *,
         project_id: UUID,
         addresses: dict[str, str],
-        opted_out_channels: list[DeliveryChannel] | None = None,
+        preferences: RecipientPreferences,
         external_id: str | None = None,
     ) -> Recipient:
         """Create a new recipient with a system-generated id and timestamps."""
         return cls(
             project_id=project_id,
             addresses=addresses,
-            opted_out_channels=opted_out_channels or [],
+            preferences=preferences,
             external_id=external_id,
         )
 
@@ -75,7 +64,7 @@ class Recipient:
         id: UUID,
         project_id: UUID,
         addresses: dict[str, str],
-        opted_out_channels: list[DeliveryChannel],
+        preferences: RecipientPreferences,
         external_id: str | None,
         created_at: datetime,
         updated_at: datetime,
@@ -90,7 +79,7 @@ class Recipient:
             id=id,
             project_id=project_id,
             addresses=addresses,
-            opted_out_channels=opted_out_channels,
+            preferences=preferences,
             external_id=external_id,
             created_at=created_at,
             updated_at=updated_at,

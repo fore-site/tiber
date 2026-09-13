@@ -29,8 +29,7 @@ class Notification:
     # Optional / nullable fields
 
     status: NotificationStatus = NotificationStatus.PENDING
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    topic_id: UUID | None = None
     template_id: UUID | None = None
     template_variables: dict[str, str] | None = None
     idempotency_key: str | None = None
@@ -39,6 +38,8 @@ class Notification:
     policy_violation_reason: str | None = None
     failure_reason: str | None = None
     delivered_at: datetime | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""

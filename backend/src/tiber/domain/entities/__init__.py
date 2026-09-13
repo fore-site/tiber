@@ -6,6 +6,7 @@ from .notification import Notification
 from .project import Project
 from .recipient import Recipient
 from .template import Template
+from .topic import NotificationTopic
 from .user import User
 from .webhook_endpoint import WebhookEndpoint
 
@@ -15,6 +16,7 @@ __all__ = [
     "DeliveryConstraint",
     "EngagementEvent",
     "Notification",
+    "NotificationTopic",
     "Project",
     "Recipient",
     "Template",
