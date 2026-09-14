@@ -12,7 +12,7 @@ class Recipient:
 
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
-    addresses: dict[str, str]
+    addresses: dict[DeliveryChannel, str]
     preferences: RecipientPreferences
     external_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -26,8 +26,7 @@ class Recipient:
 
         # Validate address keys
         normalized_addresses = {
-            DeliveryChannel(key.lower()).value: value
-            for key, value in self.addresses.items()
+            DeliveryChannel(key.lower()): value for key, value in self.addresses.items()
         }
 
         opted_out_channels = self.preferences.opted_out_channels
@@ -45,7 +44,7 @@ class Recipient:
         cls,
         *,
         project_id: UUID,
-        addresses: dict[str, str],
+        addresses: dict[DeliveryChannel, str],
         preferences: RecipientPreferences,
         external_id: str | None = None,
     ) -> Recipient:
@@ -63,7 +62,7 @@ class Recipient:
         *,
         id: UUID,
         project_id: UUID,
-        addresses: dict[str, str],
+        addresses: dict[DeliveryChannel, str],
         preferences: RecipientPreferences,
         external_id: str | None,
         created_at: datetime,

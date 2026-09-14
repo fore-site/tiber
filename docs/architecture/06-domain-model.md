@@ -24,6 +24,8 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Recipient:** Represents the intended destination of a notification. A recipient encapsulates channel-specific addressing information such as email addresses or push notification tokens.
 
+- **Preferences:** A value object that represents user-configured consent preferences controlling what messages a recipient receives and through which channels. Frequency-based controls are out of scope until a scheduling layer exists.
+
 - **Notification:** Represents a request accepted by Tiber to deliver a message to a recipient. A notification is immutable once accepted and progresses through scheduling, delivery, retries, and completion.
 
 - **Delivery Attempt:** Represents a single attempt to deliver a notification through an external delivery service identified by name. A notification may produce multiple delivery attempts as a result of retries or service failures.
@@ -34,7 +36,7 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Webhook Endpoint:** Represents an outbound callback destination registered by a project to receive notification lifecycle events.
 
-- **Delivery Constraint:** Represents project-level rules governing when notifications may be delivered, including blackout periods and delivery windows. Recipient-level channel opt-outs live on the Recipient itself.
+- **Delivery Constraint:** Represents project-level rules governing when notifications may be delivered, including blackout periods, delivery windows, and the project's timezone (an IANA name) in which both are interpreted. Blackout dates and window times are wall-clock rules of the project's regulatory market, so constraint evaluation projects the delivery instant into the configured zone before comparing. Recipient-level channel opt-outs live on the Recipient itself.
 
 ## Aggregate Boundaries
 
@@ -65,6 +67,12 @@ The Notification aggregate owns:
 - Delivery Attempts
 
 Each delivery attempt represents an immutable record of a single delivery execution.
+
+### Recipient Aggregate
+
+The Recipient aggregate owns:
+
+- Preferences
 
 ## Key Decisions
 

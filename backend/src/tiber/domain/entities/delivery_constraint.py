@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..value_objects import BlackoutPeriod, DeliveryWindow
 
@@ -15,8 +16,17 @@ class DeliveryConstraint:
     project_id: UUID
     blackout_periods: list[BlackoutPeriod] = field(default_factory=list)
     delivery_windows: list[DeliveryWindow] = field(default_factory=list)
+    timezone: str = "UTC"
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self):
+        """Validate the entity's invariants after initialization."""
+        # Validate timezone
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as e:
+            raise ValueError(f"Invalid timezone: {self.timezone}") from e
 
     @classmethod
     def create(
@@ -25,12 +35,14 @@ class DeliveryConstraint:
         project_id: UUID,
         blackout_periods: list[BlackoutPeriod] | None = None,
         delivery_windows: list[DeliveryWindow] | None = None,
+        timezone: str = "UTC",
     ) -> DeliveryConstraint:
         """Create a new delivery constraint with a system-generated id and timestamps."""
         return cls(
             project_id=project_id,
             blackout_periods=blackout_periods or [],
             delivery_windows=delivery_windows or [],
+            timezone=timezone,
         )
 
     @classmethod
@@ -41,6 +53,7 @@ class DeliveryConstraint:
         project_id: UUID,
         blackout_periods: list[BlackoutPeriod],
         delivery_windows: list[DeliveryWindow],
+        timezone: str,
         created_at: datetime,
         updated_at: datetime,
     ) -> DeliveryConstraint:
@@ -50,6 +63,7 @@ class DeliveryConstraint:
             project_id=project_id,
             blackout_periods=blackout_periods,
             delivery_windows=delivery_windows,
+            timezone=timezone,
             created_at=created_at,
             updated_at=updated_at,
         )
