@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import time
 from typing import Protocol
+from zoneinfo import ZoneInfo
 
+from ..enums import NotificationCategory
+from ..value_objects import RestrictedWindow
 from . import PolicyContext, PolicyDecision
 
 
@@ -29,32 +33,48 @@ class RecipientAddressRule:
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject when the recipient has no address for the notification channel."""
         recipient = ctx.recipient
-        address = recipient.addresses.get(ctx.notification.channel.value)
+        address = recipient.addresses.get(ctx.notification.channel)
         if not address:
             return PolicyDecision.reject(
-                f"recipient has no {ctx.notification.channel.value} address",
+                f"recipient has no {ctx.notification.channel} address",
                 rule=self.name,
             )
         return PolicyDecision.allow()
 
 
-class ChannelPreferenceRule:
-    """Reject a notification when the recipient opted out of its channel.
+class RecipientPreferenceRule:
+    """Reject a notification when the notification delivery violates user preference configuration."""
 
-    Opt-outs are read directly from the ``Recipient`` aggregate
-    (``opted_out_channels``). Safe default: a recipient with no opt-outs is
-    treated as opted-in — silence is never a preference.
-    """
-
-    name = "channel_preference"
+    name = "recipient_preference"
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
-        """Reject when the recipient has opted out of the notification channel."""
-        recipient = ctx.recipient
+        """Reject when the recipient has unsubscribed from a category of notifications, a topic or a delivery channel.
+
+        CRITICAL notifications bypass this rule entirely: security-relevant
+        messages must reach the recipient even on an opted-out channel, so
+        the category is consulted before any stored consent state.
+        """
+        category = ctx.notification.category
+        if category is NotificationCategory.CRITICAL:
+            return PolicyDecision.allow()
+
+        preferences = ctx.recipient.preferences
         channel = ctx.notification.channel
-        if channel in recipient.opted_out_channels:
+        topic = ctx.notification.topic_id
+
+        if category in preferences.unsubscribed_categories:
             return PolicyDecision.reject(
-                f"recipient opted out of {channel.value}",
+                f"recipient unsubscribed from {category.value} notifications",
+                rule=self.name,
+            )
+        if channel in preferences.opted_out_channels:
+            return PolicyDecision.reject(
+                f"recipient opted out of {channel.value} delivery channel",
+                rule=self.name,
+            )
+        if topic and topic in preferences.unsubscribed_topics:
+            return PolicyDecision.reject(
+                f"recipient unsubscribed from topic {topic}",
                 rule=self.name,
             )
         return PolicyDecision.allow()
@@ -63,34 +83,77 @@ class ChannelPreferenceRule:
 class BlackoutPeriodRule:
     """Reject a notification when it is sent during a blackout period.
 
-    A blackout period is a time range during which notifications are not
-    allowed to be sent. The rule checks if the current time falls within any
-    of the defined blackout periods for the recipient.
+    A blackout period is a date range during which notifications are not
+    allowed to be sent. The rule checks if the current date falls within any
+    of the defined blackout periods for the project.
     """
 
     name = "blackout_period"
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject when the notification is sent during a blackout period."""
-        # Placeholder for actual blackout period logic
-        # This would typically involve checking the current time against
-        # predefined blackout periods for the recipient or project.
+        delivery_constraint = ctx.delivery_constraint
+        if not delivery_constraint:
+            return PolicyDecision.allow()
+
+        blackout_periods = delivery_constraint.blackout_periods
+        project_timezone = ZoneInfo(delivery_constraint.timezone)
+        notification = ctx.notification
+        send_date = (
+            (notification.send_at or ctx.now).astimezone(project_timezone).date()
+        )
+
+        for blackout_period in blackout_periods:
+            if (
+                send_date >= blackout_period.start_date
+                and send_date <= blackout_period.end_date
+            ):
+                return PolicyDecision.reject(
+                    reason=f"notification cannot be sent within {blackout_period.name} blackout period",
+                    rule=self.name,
+                )
         return PolicyDecision.allow()
 
 
-class DeliveryWindowsRule:
-    """Reject a notification when it is sent outside of delivery windows.
+class RestrictedWindowsRule:
+    """Reject a notification when it is sent within the range of restricted windows.
 
-    A delivery window is a time range during which notifications are allowed
+    A restricted window is a time range during which notifications are not allowed
     to be sent. The rule checks if the current time falls within any of the
-    defined delivery windows for the recipient.
+    defined restricted windows for the project.
     """
 
-    name = "delivery_windows"
+    name = "restricted_windows"
+
+    def _covers(self, window: RestrictedWindow, t: time) -> bool:
+        """Check if the given time falls within the restricted window."""
+        if window.window_start <= window.window_end:
+            return t >= window.window_start and t <= window.window_end
+        return t >= window.window_start or t <= window.window_end
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
-        """Reject when the notification is sent outside of delivery windows."""
-        # Placeholder for actual delivery window logic
-        # This would typically involve checking the current time against
-        # predefined delivery windows for the recipient or project.
+        """Reject when the notification is sent inside the restricted windows."""
+        notification = ctx.notification
+        delivery_constraint = ctx.delivery_constraint
+        if not delivery_constraint:
+            return PolicyDecision.allow()
+
+        restricted_windows = delivery_constraint.restricted_windows
+        project_timezone = ZoneInfo(delivery_constraint.timezone)
+
+        send_time = (
+            (notification.send_at or ctx.now).astimezone(project_timezone).time()
+        )
+
+        for window in restricted_windows:
+            if window.channel == notification.channel and self._covers(
+                window, send_time
+            ):
+                return PolicyDecision.reject(
+                    reason=(
+                        f"notification cannot be sent within configured restricted window"
+                        f" ({window.window_start} - {window.window_end}) for channel {window.channel.value}"
+                    ),
+                    rule=self.name,
+                )
         return PolicyDecision.allow()
