@@ -11,6 +11,15 @@ class DeliveryChannel(StrEnum):
     IN_APP = "in_app"
 
 
+class NotificationCategory(StrEnum):
+    """Enum values for notification categories."""
+
+    CRITICAL = "critical"
+    INFORMATIONAL = "informational"
+    SOCIAL = "social"
+    PROMOTIONAL = "promotional"
+
+
 class NotificationStatus(StrEnum):
     """Enum values for notification statuses."""
 
