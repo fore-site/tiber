@@ -34,7 +34,7 @@ class Notification:
     template_variables: dict[str, str] | None = None
     idempotency_key: str | None = None
     send_at: datetime | None = None
-    send_time_basis: SendTimeBasis = SendTimeBasis.IMMEDIATE
+    send_time_basis: SendTimeBasis = field(init=False)
     policy_violation_reason: str | None = None
     failure_reason: str | None = None
     delivered_at: datetime | None = None
@@ -48,10 +48,24 @@ class Notification:
             raise InvalidNotificationStateError(
                 "`send_at` is required when `send_time_basis` is EXPLICIT"
             )
-        if self.send_time_basis == SendTimeBasis.IMMEDIATE and self.send_at is not None:
+        if (
+            self.send_time_basis == SendTimeBasis.ML_PREDICTED
+            and self.send_at is not None
+        ):
             raise InvalidNotificationStateError(
-                "`send_at` must not be set when `send_time_basis` is IMMEDIATE"
+                "`send_at` must only be set when `send_time_basis` is EXPLICIT"
             )
+
+        if self.send_at is not None and self.send_at.tzinfo is None:
+            raise InvalidNotificationStateError(
+                "`send_at` must be timezone-aware (UTC or other)"
+            )
+
+        # Derive send_time_basis from send_at.
+        if self.send_at is not None:
+            object.__setattr__(self, "send_time_basis", SendTimeBasis.EXPLICIT)
+        else:
+            object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
 
         # 2. policy_rejected to reason consistency
         if self.status == NotificationStatus.POLICY_REJECTED:
@@ -115,7 +129,6 @@ class Notification:
         template_variables: dict[str, str] | None = None,
         idempotency_key: str | None = None,
         send_at: datetime | None = None,
-        send_time_basis: SendTimeBasis = SendTimeBasis.IMMEDIATE,
     ) -> Notification:
         """Create a new pending notification with system-generated identity.
 
@@ -136,7 +149,6 @@ class Notification:
             template_variables=template_variables,
             idempotency_key=idempotency_key,
             send_at=send_at,
-            send_time_basis=send_time_basis,
         )
 
     @classmethod
@@ -157,7 +169,6 @@ class Notification:
         template_variables: dict[str, str] | None,
         idempotency_key: str | None,
         send_at: datetime | None,
-        send_time_basis: SendTimeBasis,
         policy_violation_reason: str | None,
         failure_reason: str | None,
         delivered_at: datetime | None,
@@ -183,7 +194,6 @@ class Notification:
             template_variables=template_variables,
             idempotency_key=idempotency_key,
             send_at=send_at,
-            send_time_basis=send_time_basis,
             policy_violation_reason=policy_violation_reason,
             failure_reason=failure_reason,
             delivered_at=delivered_at,
