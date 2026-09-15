@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from ..value_objects import BlackoutPeriod, DeliveryWindow
+from ..value_objects import BlackoutPeriod, RestrictedWindow
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -15,7 +15,7 @@ class DeliveryConstraint:
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     blackout_periods: list[BlackoutPeriod] = field(default_factory=list)
-    delivery_windows: list[DeliveryWindow] = field(default_factory=list)
+    restricted_windows: list[RestrictedWindow] = field(default_factory=list)
     timezone: str = "UTC"
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -34,14 +34,14 @@ class DeliveryConstraint:
         *,
         project_id: UUID,
         blackout_periods: list[BlackoutPeriod] | None = None,
-        delivery_windows: list[DeliveryWindow] | None = None,
+        restricted_windows: list[RestrictedWindow] | None = None,
         timezone: str = "UTC",
     ) -> DeliveryConstraint:
         """Create a new delivery constraint with a system-generated id and timestamps."""
         return cls(
             project_id=project_id,
             blackout_periods=blackout_periods or [],
-            delivery_windows=delivery_windows or [],
+            restricted_windows=restricted_windows or [],
             timezone=timezone,
         )
 
@@ -52,7 +52,7 @@ class DeliveryConstraint:
         id: UUID,
         project_id: UUID,
         blackout_periods: list[BlackoutPeriod],
-        delivery_windows: list[DeliveryWindow],
+        restricted_windows: list[RestrictedWindow],
         timezone: str,
         created_at: datetime,
         updated_at: datetime,
@@ -62,7 +62,7 @@ class DeliveryConstraint:
             id=id,
             project_id=project_id,
             blackout_periods=blackout_periods,
-            delivery_windows=delivery_windows,
+            restricted_windows=restricted_windows,
             timezone=timezone,
             created_at=created_at,
             updated_at=updated_at,
