@@ -34,7 +34,6 @@ class NotificationStatus(StrEnum):
 class SendTimeBasis(StrEnum):
     """Enum values for send time basis."""
 
-    IMMEDIATE = "immediate"
     EXPLICIT = "explicit"
     ML_PREDICTED = "ml_predicted"
 
