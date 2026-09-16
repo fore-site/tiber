@@ -13,7 +13,6 @@ from ...application.services import (
     DeliveryPolicyGuard,
     NotificationDeliveryProcessor,
     NotificationTemplateResolver,
-    PolicyResolver,
 )
 from ...core.config import get_settings
 from ...core.database import AsyncSessionFactory
@@ -26,6 +25,7 @@ from ...domain.exceptions import (
     TemplateChannelMismatchError,
     TemplateNotFoundError,
 )
+from ...domain.policies import PolicyResolver
 from ...events.job_payload import NotificationJobPayload
 from ...infrastructure.providers.manager import ProviderManager
 from ...infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (

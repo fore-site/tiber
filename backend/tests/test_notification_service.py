@@ -15,7 +15,6 @@ import pytest
 from tiber.application.services import (
     NotificationService,
     NotificationTemplateResolver,
-    PolicyResolver,
 )
 from tiber.domain.entities import Recipient, Template
 from tiber.domain.enums import DeliveryChannel, NotificationStatus
@@ -24,6 +23,7 @@ from tiber.domain.exceptions import (
     RecipientNotFoundError,
     TemplateChannelMismatchError,
 )
+from tiber.domain.policies import PolicyResolver
 from tiber.domain.value_objects import RecipientPreferences
 
 

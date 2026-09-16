@@ -8,13 +8,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from tiber.application.services import (
-    DeliveryPolicyGuard,
-    PolicyResolver,
-)
+from tiber.application.services import DeliveryPolicyGuard
 from tiber.domain.entities import Notification, Recipient
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
-from tiber.domain.policies import PolicyDecision
+from tiber.domain.policies import PolicyDecision, PolicyResolver
 from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 
 
@@ -127,16 +124,35 @@ async def test_guard_reports_allowed_for_valid_recipient():
     assert decision.allowed
 
 
-async def test_guard_reports_rejection_with_reason():
-    """The guard surfaces a rejection with a usable policy_violation_reason."""
+async def test_guard_does_not_recheck_address():
+    """The dispatch guard omits the address rule (doc 04's contract).
+
+    An address cannot usefully drift between intake and dispatch, and
+    re-classifying a missing address as policy_rejected would mislabel a
+    lookup/attempt failure. The processor's own missing-address check
+    guards that path with a failed attempt instead.
+    """
     notification = make_notification(DeliveryChannel.EMAIL)
-    # No email address -> the address rule rejects with a usable reason.
-    recipient = make_recipient(notification, {"push": "token"})
+    recipient = make_recipient(notification, {"push": "token"})  # no email
+
+    decision = await DeliveryPolicyGuard().check(notification, recipient)
+
+    assert decision.allowed
+
+
+async def test_guard_reports_drift_sensitive_rejection_with_reason():
+    """The guard rejects on the drift-sensitive rules with a usable reason."""
+    notification = make_notification(DeliveryChannel.EMAIL)
+    recipient = make_recipient(
+        notification,
+        {"email": "a@b.io"},
+        opted_out=[DeliveryChannel.EMAIL],  # consent changed since intake
+    )
 
     decision = await DeliveryPolicyGuard().check(notification, recipient)
 
     assert not decision.allowed
-    assert decision.reason
+    assert decision.reason is not None and "opted out" in decision.reason
 
 
 async def test_guard_with_custom_resolver_rules():

@@ -13,11 +13,11 @@ from ..application.ports.message_publisher import MessagePublisher
 from ..application.services import (
     NotificationService,
     NotificationTemplateResolver,
-    PolicyResolver,
 )
 from ..core.config import get_settings
 from ..core.database import AsyncSessionFactory
 from ..core.redis import get_redis_client
+from ..domain.policies import PolicyResolver
 from ..infrastructure.cache.idempotency import IdempotencyStore
 from ..infrastructure.messaging.celery_publisher import CeleryPublisher
 from ..infrastructure.models import ProjectModel

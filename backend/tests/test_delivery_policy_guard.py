@@ -13,10 +13,10 @@ from tiber.application.services import (
     DeliveryPolicyGuard,
     NotificationDeliveryProcessor,
     NotificationTemplateResolver,
-    PolicyResolver,
 )
 from tiber.domain.entities import Notification, Recipient, Template
 from tiber.domain.enums import DeliveryChannel, NotificationCategory, NotificationStatus
+from tiber.domain.policies import PolicyResolver
 from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 
 

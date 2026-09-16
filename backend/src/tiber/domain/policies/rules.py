@@ -1,14 +1,54 @@
-"""Concrete, side-effect-free delivery policy rules."""
+"""The delivery-policy engine: vocabulary, rules, and their composition.
+
+Self-contained by design — nothing here imports from the parent package,
+so ``__init__`` can re-export the surface freely without import-order
+hazards.
+"""
 
 from __future__ import annotations
 
-from datetime import time
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, time
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
+from ..entities import DeliveryConstraint, Notification, Recipient
 from ..enums import NotificationCategory
 from ..value_objects import RestrictedWindow
-from . import PolicyContext, PolicyDecision
+
+
+@dataclass(frozen=True)
+class PolicyDecision:
+    """The outcome of evaluating a delivery policy.
+
+    A rejected decision always carries a human-readable ``reason`` so callers
+    can surface it as ``policy_violation_reason`` on the notification.
+    """
+
+    allowed: bool
+    reason: str | None = None
+    rule: str | None = None
+
+    @classmethod
+    def allow(cls) -> PolicyDecision:
+        """Return an allow decision."""
+        return cls(allowed=True)
+
+    @classmethod
+    def reject(cls, reason: str, rule: str | None = None) -> PolicyDecision:
+        """Return a reject decision with a reason."""
+        return cls(allowed=False, reason=reason, rule=rule)
+
+
+@dataclass(frozen=True)
+class PolicyContext:
+    """Everything a policy rule may inspect to reach a decision."""
+
+    notification: Notification
+    recipient: Recipient
+    delivery_constraint: DeliveryConstraint | None
+    now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class PolicyRule(Protocol):
@@ -157,3 +197,61 @@ class RestrictedWindowsRule:
                     rule=self.name,
                 )
         return PolicyDecision.allow()
+
+
+class PolicyResolver:
+    """Evaluate a chain of rules against a notification and recipient."""
+
+    def __init__(
+        self,
+        rules: Sequence[PolicyRule] | None = None,
+    ) -> None:
+        """Initialize the resolver with a rule chain.
+
+        Rules run in order; the first rejection short-circuits the chain and
+        becomes the overall decision. The default chain is the documented
+        intake order (doc 03): address availability, then recipient
+        preferences, then blackout periods, then restricted windows.
+        """
+        self._rules = list(rules) if rules is not None else list(INTAKE_RULES)
+
+    def build_context(
+        self,
+        notification: Notification,
+        recipient: Recipient,
+        delivery_constraint: DeliveryConstraint | None,
+    ) -> PolicyContext:
+        """Build the evaluation context for a notification and recipient."""
+        return PolicyContext(
+            notification=notification,
+            recipient=recipient,
+            delivery_constraint=delivery_constraint,
+        )
+
+    async def evaluate(
+        self,
+        notification: Notification,
+        recipient: Recipient,
+        delivery_constraint: DeliveryConstraint | None = None,
+    ) -> PolicyDecision:
+        """Evaluate all rules and return the aggregate decision."""
+        ctx = self.build_context(notification, recipient, delivery_constraint)
+        for rule in self._rules:
+            decision = await rule.evaluate(ctx)
+            if not decision.allowed:
+                return decision
+        return PolicyDecision.allow()
+
+
+# Canonical rule chains. The evaluation order is documented business policy
+INTAKE_RULES: tuple[PolicyRule, ...] = (
+    RecipientAddressRule(),
+    RecipientPreferenceRule(),
+    BlackoutPeriodRule(),
+    RestrictedWindowsRule(),
+)
+DISPATCH_GUARD_RULES: tuple[PolicyRule, ...] = (
+    RecipientPreferenceRule(),
+    BlackoutPeriodRule(),
+    RestrictedWindowsRule(),
+)

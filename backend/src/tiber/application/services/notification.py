@@ -3,7 +3,6 @@ from uuid import UUID
 
 from tiber.application.ports.idempotency import IdempotencyGuard
 from tiber.application.ports.message_publisher import MessagePublisher
-from tiber.application.services.policy import PolicyResolver
 from tiber.application.services.template import NotificationTemplateResolver
 from tiber.domain.entities import Notification
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
@@ -12,6 +11,7 @@ from tiber.domain.exceptions import (
     ProjectScopeViolationError,
     RecipientNotFoundError,
 )
+from tiber.domain.policies import PolicyResolver
 from tiber.domain.repositories import (
     NotificationRepository,
     RecipientRepository,

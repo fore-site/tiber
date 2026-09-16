@@ -1,82 +1,32 @@
-"""Delivery policy resolution and the worker-time dispatch guard.
+"""Worker-time dispatch guard over the domain policy resolver.
 
-A ``PolicyResolver`` aggregates ``PolicyRule`` objects (address
-availability first, then channel opt-outs) into a single decision. The
-``DeliveryPolicyGuard`` is the worker-time re-check invoked just before a
-notification is handed to a provider: if a drift-sensitive constraint now
-fails, the notification is marked ``policy_rejected`` with a reason instead
-of being delivered.
+Policy evaluation itself is domain logic: ``PolicyResolver`` and the rule
+chains live in ``tiber.domain.policies``. This module holds only the
+application-side seam — the ``DeliveryPolicyGuard`` the delivery processor
+calls just before handing a notification to a provider. The guard uses the
+drift-sensitive ``DISPATCH_GUARD_RULES`` subset (preferences, blackout
+periods, restricted windows; deliberately no address re-check — see doc
+04): if a constraint now fails, the notification is marked
+``policy_rejected`` with a reason instead of being delivered.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from tiber.domain.entities import DeliveryConstraint, Notification, Recipient
-from tiber.domain.policies import (
-    PolicyContext,
-    PolicyDecision,
-)
-from tiber.domain.policies.rules import (
-    PolicyRule,
-    RecipientAddressRule,
-    RecipientPreferenceRule,
-)
-
-
-class PolicyResolver:
-    """Evaluate a chain of rules against a notification and recipient."""
-
-    def __init__(
-        self,
-        rules: Sequence[PolicyRule] | None = None,
-    ) -> None:
-        """Initialize the resolver with a rule chain.
-
-        Rules run in order; the first rejection short-circuits the chain and
-        becomes the overall decision. The default chain checks channel-address
-        availability first, then recipient channel opt-outs.
-        """
-        self._rules = (
-            list(rules)
-            if rules is not None
-            else [RecipientAddressRule(), RecipientPreferenceRule()]
-        )
-
-    def build_context(
-        self,
-        notification: Notification,
-        recipient: Recipient,
-        delivery_constraint: DeliveryConstraint | None,
-    ) -> PolicyContext:
-        """Build the evaluation context for a notification and recipient."""
-        return PolicyContext(
-            notification=notification,
-            recipient=recipient,
-            delivery_constraint=delivery_constraint,
-        )
-
-    async def evaluate(
-        self,
-        notification: Notification,
-        recipient: Recipient,
-        delivery_constraint: DeliveryConstraint | None = None,
-    ) -> PolicyDecision:
-        """Evaluate all rules and return the aggregate decision."""
-        ctx = self.build_context(notification, recipient, delivery_constraint)
-        for rule in self._rules:
-            decision = await rule.evaluate(ctx)
-            if not decision.allowed:
-                return decision
-        return PolicyDecision.allow()
+from tiber.domain.policies import PolicyDecision
+from tiber.domain.policies.rules import DISPATCH_GUARD_RULES, PolicyResolver
 
 
 class DeliveryPolicyGuard:
-    """Worker-time re-check of delivery policies before dispatch."""
+    """Worker-time re-check of delivery policies before dispatch.
+
+    Defaults to the drift-sensitive dispatch chain (no address rule), not
+    the full intake chain.
+    """
 
     def __init__(self, resolver: PolicyResolver | None = None) -> None:
-        """Initialize the guard with a resolver (defaults to a fresh one)."""
-        self._resolver = resolver or PolicyResolver()
+        """Initialize the guard with a resolver (defaults to the dispatch chain)."""
+        self._resolver = resolver or PolicyResolver(rules=DISPATCH_GUARD_RULES)
 
     async def check(
         self,
