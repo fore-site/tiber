@@ -115,6 +115,21 @@ def test_single_instant_window_is_rejected_at_construction():
         )
 
 
+# --- BlackoutPeriod VO: inverted ranges are unrepresentable ---
+
+
+def test_inverted_blackout_period_is_rejected_at_construction():
+    """Pin that start_date > end_date is invalid config, rejected early.
+
+    An inverted range can never match a send_date, so without this guard the
+    blackout silently blackouts nothing forever.
+    """
+    with pytest.raises(ValueError):
+        BlackoutPeriod(
+            name="x", start_date=date(2026, 9, 17), end_date=date(2026, 9, 15)
+        )
+
+
 # --- RestrictedWindowsRule: membership ---
 
 LUNCH = sms_window(time(9, 0), time(12, 0))
