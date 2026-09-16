@@ -36,7 +36,7 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Webhook Endpoint:** Represents an outbound callback destination registered by a project to receive notification lifecycle events.
 
-- **Delivery Constraint:** Represents project-level rules governing when notifications may be delivered, including blackout periods, delivery windows, and the project's timezone (an IANA name) in which both are interpreted. Blackout dates and window times are wall-clock rules of the project's regulatory market, so constraint evaluation projects the delivery instant into the configured zone before comparing. Recipient-level channel opt-outs live on the Recipient itself.
+- **Delivery Constraint:** Represents project-level rules governing when notifications may be delivered, including blackout periods (date-range prohibitions), restricted windows (time-of-day prohibitions), and the project's timezone (an IANA name) in which both are interpreted. Blackout dates and restriction times are wall-clock rules of the project's regulatory market, so constraint evaluation projects the delivery instant into the configured zone before comparing. Recipient-level channel opt-outs live on the Recipient itself.
 
 ## Aggregate Boundaries
 

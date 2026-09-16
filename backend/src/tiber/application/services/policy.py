@@ -1,7 +1,7 @@
 """Delivery policy resolution and the worker-time dispatch guard.
 
-A ``PolicyResolver`` aggregates ``PolicyRule`` objects (channel opt-outs
-first, then address availability) into a single decision. The
+A ``PolicyResolver`` aggregates ``PolicyRule`` objects (address
+availability first, then channel opt-outs) into a single decision. The
 ``DeliveryPolicyGuard`` is the worker-time re-check invoked just before a
 notification is handed to a provider: if a drift-sensitive constraint now
 fails, the notification is marked ``policy_rejected`` with a reason instead
@@ -18,9 +18,9 @@ from tiber.domain.policies import (
     PolicyDecision,
 )
 from tiber.domain.policies.rules import (
-    ChannelPreferenceRule,
     PolicyRule,
     RecipientAddressRule,
+    RecipientPreferenceRule,
 )
 
 
@@ -34,13 +34,13 @@ class PolicyResolver:
         """Initialize the resolver with a rule chain.
 
         Rules run in order; the first rejection short-circuits the chain and
-        becomes the overall decision. The default chain checks recipient
-        channel opt-outs first, then channel-address availability.
+        becomes the overall decision. The default chain checks channel-address
+        availability first, then recipient channel opt-outs.
         """
         self._rules = (
             list(rules)
             if rules is not None
-            else [RecipientAddressRule(), ChannelPreferenceRule()]
+            else [RecipientAddressRule(), RecipientPreferenceRule()]
         )
 
     def build_context(

@@ -43,17 +43,9 @@ class Notification:
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""
-        # 1. send_time_basis vs send_at
-        if self.send_time_basis == SendTimeBasis.EXPLICIT and self.send_at is None:
+        if self.category == NotificationCategory.CRITICAL and self.send_at is not None:
             raise InvalidNotificationStateError(
-                "`send_at` is required when `send_time_basis` is EXPLICIT"
-            )
-        if (
-            self.send_time_basis == SendTimeBasis.ML_PREDICTED
-            and self.send_at is not None
-        ):
-            raise InvalidNotificationStateError(
-                "`send_at` must only be set when `send_time_basis` is EXPLICIT"
+                "`send_at` must not be set for CRITICAL notifications"
             )
 
         if self.send_at is not None and self.send_at.tzinfo is None:
@@ -65,7 +57,10 @@ class Notification:
         if self.send_at is not None:
             object.__setattr__(self, "send_time_basis", SendTimeBasis.EXPLICIT)
         else:
-            object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
+            if self.category == NotificationCategory.CRITICAL:
+                object.__setattr__(self, "send_time_basis", SendTimeBasis.IMMEDIATE)
+            else:
+                object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
 
         # 2. policy_rejected to reason consistency
         if self.status == NotificationStatus.POLICY_REJECTED:

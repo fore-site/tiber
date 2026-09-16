@@ -51,7 +51,7 @@ class SQLAlchemyDeliveryAttemptRepository(DeliveryAttemptRepository):
 
     @staticmethod
     def _to_entity(model: DeliveryAttemptModel) -> DeliveryAttempt:
-        return DeliveryAttempt(
+        return DeliveryAttempt.reconstitute(
             id=model.id,
             notification_id=model.notification_id,
             attempt_number=model.attempt_number,

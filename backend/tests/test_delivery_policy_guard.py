@@ -5,6 +5,7 @@ Verify policy rejection and rendered provider content.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from tiber.application.ports.channel_provider import ProviderResult
@@ -15,8 +16,8 @@ from tiber.application.services import (
     PolicyResolver,
 )
 from tiber.domain.entities import Notification, Recipient, Template
-from tiber.domain.enums import DeliveryChannel, NotificationStatus
-from tiber.domain.value_objects import NotificationContent
+from tiber.domain.enums import DeliveryChannel, NotificationCategory, NotificationStatus
+from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 
 
 class FakeNotificationRepository:
@@ -111,12 +112,12 @@ def make_notification(
     recipient_id=None,
 ) -> Notification:
     """Build a pending email notification with sensible defaults."""
-    return Notification(
-        id=uuid4(),
+    return Notification.create(
         project_id=project_id or uuid4(),
         recipient_id=recipient_id or uuid4(),
         correlation_id=uuid4(),
         channel=DeliveryChannel.EMAIL,
+        category=NotificationCategory.PROMOTIONAL,
         content=NotificationContent(subject="Direct", body="Direct body"),
         template_id=template_id,
         template_variables=template_variables,
@@ -153,11 +154,15 @@ async def test_policy_violation_marks_policy_rejected_without_attempt():
     """A worker-time policy rejection marks policy_rejected, records no attempt."""
     notification = make_notification()
     # Opt the recipient out of email so the preference rule rejects.
-    recipient = Recipient(
+    recipient = Recipient.reconstitute(
         id=notification.recipient_id,
         project_id=notification.project_id,
-        addresses={"email": "a@b.io"},
-        opted_out_channels=[DeliveryChannel.EMAIL],
+        addresses={DeliveryChannel.EMAIL: "a@b.io"},
+        preferences=RecipientPreferences(opted_out_channels={DeliveryChannel.EMAIL}),
+        external_id=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        archived_at=None,
     )
     guard = DeliveryPolicyGuard(PolicyResolver())
     processor, notif_repo, provider = build(
@@ -177,8 +182,7 @@ async def test_policy_violation_marks_policy_rejected_without_attempt():
 async def test_template_content_renders_into_provider_payload():
     """A template renders into the subject/body actually sent to the provider."""
     project_id = uuid4()
-    template = Template(
-        id=uuid4(),
+    template = Template.create(
         project_id=project_id,
         name="welcome",
         slug="welcome",
@@ -192,10 +196,15 @@ async def test_template_content_renders_into_provider_payload():
         template_id=template.id,
         template_variables={"name": "Ada"},
     )
-    recipient = Recipient(
+    recipient = Recipient.reconstitute(
         id=notification.recipient_id,
         project_id=project_id,
-        addresses={"email": "a@b.io"},
+        addresses={DeliveryChannel.EMAIL: "a@b.io"},
+        preferences=RecipientPreferences(),
+        external_id=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        archived_at=None,
     )
     guard = DeliveryPolicyGuard()  # allows: address present, no blocked channels
     processor, notif_repo, provider = build(
@@ -215,10 +224,15 @@ async def test_template_content_renders_into_provider_payload():
 async def test_guard_address_rule_rejects_and_skips_delivery():
     """A missing channel address is caught by the guard, not the provider."""
     notification = make_notification()
-    recipient = Recipient(
+    recipient = Recipient.reconstitute(
         id=notification.recipient_id,
         project_id=notification.project_id,
-        addresses={"push": "token"},  # no email address
+        addresses={DeliveryChannel.PUSH: "token"},  # no email address
+        preferences=RecipientPreferences(),
+        external_id=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        archived_at=None,
     )
     guard = DeliveryPolicyGuard(PolicyResolver())
     processor, notif_repo, provider = build(

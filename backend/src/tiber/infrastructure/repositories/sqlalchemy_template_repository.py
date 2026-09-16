@@ -67,7 +67,7 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
 
     @staticmethod
     def _to_entity(model: TemplateModel) -> Template:
-        return Template(
+        return Template.reconstitute(
             id=model.id,
             project_id=model.project_id,
             name=model.name,

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
   <title id="title">Tiber domain model</title>
-  <desc id="desc">Core Tiber entities and their relationships. External delivery services are represented by a string on DeliveryAttempt, not by a persisted entity.</desc>
+  <desc id="desc">Core Tiber entities and their relationships. Recipient carries a Preferences value object; external delivery services are represented by a string on DeliveryAttempt, not by a persisted entity.</desc>
   <style>
     text { font-family: sans-serif; fill: #28253d; }
     .entity { fill: #fff; stroke: #28253d; stroke-width: 2; }
@@ -38,6 +38,8 @@
     <text class="label" x="425" y="635">produces</text>
     <path class="line" d="M 525 580 L 620 680" />
     <text class="label" x="585" y="635">generates</text>
+    <path class="line" d="M 310 470 V 500" />
+    <text class="label" x="327" y="490">owns</text>
     <path class="line" d="M 400 760 L 250 830" />
     <path class="line" d="M 450 760 V 830" />
     <text class="label" x="320" y="805">sent via</text>
@@ -50,8 +52,9 @@
     <g transform="translate(350 220)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">Project</text></g>
     <g transform="translate(80 390)"><rect class="entity" width="150" height="80" rx="4"/><text class="name" x="75" y="48">APIKey</text></g>
     <g transform="translate(260 390)"><rect class="entity" width="170" height="80" rx="4"/><text class="name" x="85" y="48">Recipient</text></g>
+    <g transform="translate(210 500)"><rect class="entity" width="170" height="50" rx="4"/><text class="name" x="85" y="25">Preferences</text><text class="field" x="85" y="42">&lt;&lt;value_object&gt;&gt;</text></g>
     <g transform="translate(700 390)"><rect class="entity" width="170" height="80" rx="4"/><text class="name" x="85" y="48">Template</text></g>
-    <g transform="translate(490 390)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">DeliveryConstraint</text></g>
+    <g transform="translate(490 390)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="35">DeliveryConstraint</text><text class="field" x="80" y="59">timezone: IANA name</text></g>
     <g transform="translate(680 540)"><rect class="entity" width="180" height="80" rx="4"/><text class="name" x="90" y="48">WebhookEndpoint</text></g>
     <g transform="translate(400 500)"><rect class="entity" width="160" height="80" rx="4"/><text class="name" x="80" y="48">Notification</text></g>
     <g transform="translate(330 680)"><rect class="entity" width="200" height="80" rx="4"/><text class="name" x="100" y="35">DeliveryAttempt</text><text class="field" x="100" y="59">service_name: string</text></g>

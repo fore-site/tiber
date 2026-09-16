@@ -52,7 +52,7 @@ class SQLAlchemyUserRepository(UserRepository):
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:
-        return User(
+        return User.reconstitute(
             id=model.id,
             email=model.email,
             role=UserRole(model.role),

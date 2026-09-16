@@ -4,7 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import Recipient
+from ...domain.enums import DeliveryChannel
 from ...domain.repositories import RecipientRepository
+from ...domain.value_objects import RecipientPreferences
 from ...infrastructure.models.recipient import RecipientModel
 
 
@@ -68,11 +70,20 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
 
     @staticmethod
     def _to_entity(model: RecipientModel) -> Recipient:
-        return Recipient(
+        # JSONB round-trips enum keys as plain strings; re-key to the enum the
+        # domain entity expects, mirroring Recipient.__post_init__.
+        addresses = {
+            DeliveryChannel(key.lower()): value
+            for key, value in model.addresses.items()
+        }
+        # Preferences are not persisted yet - rehydrate with the empty default
+        # (fully subscribed) until the persistence pass adds the columns.
+        return Recipient.reconstitute(
             id=model.id,
             project_id=model.project_id,
             external_id=model.external_id,
-            addresses=model.addresses,
+            addresses=addresses,
+            preferences=RecipientPreferences(),
             created_at=model.created_at,
             updated_at=model.updated_at,
             archived_at=model.archived_at,

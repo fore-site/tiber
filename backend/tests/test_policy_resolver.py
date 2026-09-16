@@ -5,6 +5,7 @@ Pure-Python tests - no database or broker required.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from tiber.application.services import (
@@ -12,19 +13,19 @@ from tiber.application.services import (
     PolicyResolver,
 )
 from tiber.domain.entities import Notification, Recipient
-from tiber.domain.enums import DeliveryChannel
+from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.policies import PolicyDecision
-from tiber.domain.value_objects import NotificationContent
+from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 
 
 def make_notification(channel: DeliveryChannel = DeliveryChannel.EMAIL) -> Notification:
     """Build a pending notification for the given channel."""
-    return Notification(
-        id=uuid4(),
+    return Notification.create(
         project_id=uuid4(),
         recipient_id=uuid4(),
         correlation_id=uuid4(),
         channel=channel,
+        category=NotificationCategory.PROMOTIONAL,
         content=NotificationContent(
             subject="Hi" if channel == DeliveryChannel.EMAIL else None,
             body="Hello",
@@ -34,15 +35,23 @@ def make_notification(channel: DeliveryChannel = DeliveryChannel.EMAIL) -> Notif
 
 def make_recipient(
     notification: Notification,
-    addresses: dict,
+    addresses: dict[str, str],
     opted_out: list[DeliveryChannel] | None = None,
 ) -> Recipient:
     """Build a recipient belonging to the notification."""
-    return Recipient(
-        id=notification.recipient_id,
+    # String keys are the wire format; the helper is the boundary that
+    # converts to domain vocabulary (same as repo rehydration does).
+    return Recipient.reconstitute(
+        id=uuid4(),
         project_id=notification.project_id,
-        addresses=addresses,
-        opted_out_channels=opted_out or [],
+        addresses={
+            DeliveryChannel(channel): value for channel, value in addresses.items()
+        },
+        preferences=RecipientPreferences(opted_out_channels=opted_out or frozenset()),
+        external_id=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        archived_at=None,
     )
 
 
@@ -132,7 +141,7 @@ async def test_guard_reports_rejection_with_reason():
 
 async def test_guard_with_custom_resolver_rules():
     """A guard wired to a custom rule set uses only those rules."""
-    from tiber.domain.policies.rules import ChannelPreferenceRule, PolicyRule
+    from tiber.domain.policies.rules import PolicyRule, RecipientPreferenceRule
 
     class AlwaysBlock(PolicyRule):
         name = "always_block"
@@ -144,7 +153,7 @@ async def test_guard_with_custom_resolver_rules():
     recipient = make_recipient(notification, {"email": "a@b.io"})
 
     guard = DeliveryPolicyGuard(
-        PolicyResolver(rules=[ChannelPreferenceRule(), AlwaysBlock()])
+        PolicyResolver(rules=[RecipientPreferenceRule(), AlwaysBlock()])
     )
     decision = await guard.check(notification, recipient)
 

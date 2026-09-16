@@ -1,12 +1,12 @@
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from tiber.application.ports.idempotency import IdempotencyGuard
 from tiber.application.ports.message_publisher import MessagePublisher
 from tiber.application.services.policy import PolicyResolver
 from tiber.application.services.template import NotificationTemplateResolver
 from tiber.domain.entities import Notification
-from tiber.domain.enums import DeliveryChannel, SendTimeBasis
+from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import (
     NotificationNotFoundError,
     ProjectScopeViolationError,
@@ -55,29 +55,25 @@ class NotificationService:
         recipient_id: UUID,
         correlation_id: UUID,
         channel: DeliveryChannel,
+        category: NotificationCategory,
         content: NotificationContent,
         template_id: UUID | None,
         template_variables: dict | None,
         idempotency_key: str,
         scheduled_at: datetime | None,
     ) -> Notification:
-        """Build a notification entity with a consistent send-time basis."""
-        return Notification(
-            id=uuid4(),
+        """Build a notification entity; the entity derives its send-time basis."""
+        return Notification.create(
             project_id=project_id,
             recipient_id=recipient_id,
             correlation_id=correlation_id,
             channel=channel,
+            category=category,
             content=content,
             template_id=template_id,
             template_variables=template_variables,
             idempotency_key=idempotency_key,
             send_at=scheduled_at,
-            send_time_basis=(
-                SendTimeBasis.EXPLICIT
-                if scheduled_at is not None
-                else SendTimeBasis.IMMEDIATE
-            ),
         )
 
     async def create_notification(
@@ -86,6 +82,7 @@ class NotificationService:
         project_id: UUID,
         recipient_id: UUID,
         channel: str,
+        category: str,
         idempotency_key: str,
         correlation_id: UUID,
         subject: str | None = None,
@@ -123,6 +120,7 @@ class NotificationService:
                 return existing
 
         channel_enum = DeliveryChannel(channel)
+        category_enum = NotificationCategory(category)
 
         # 2. Recipient must exist and belong to the project.
         recipient = await self._recipients.get_by_id(recipient_id)
@@ -151,6 +149,7 @@ class NotificationService:
                 recipient_id=recipient_id,
                 correlation_id=correlation_id,
                 channel=channel_enum,
+                category=category_enum,
                 content=placeholder,
                 template_id=template_id,
                 template_variables=template_variables,
@@ -169,6 +168,7 @@ class NotificationService:
             recipient_id=recipient_id,
             correlation_id=correlation_id,
             channel=channel_enum,
+            category=category_enum,
             content=content,
             template_id=template_id,
             template_variables=template_variables,

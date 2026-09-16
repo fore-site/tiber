@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from tiber.domain.entities import Notification
-from tiber.domain.enums import DeliveryChannel, SendTimeBasis
+from tiber.domain.enums import DeliveryChannel, NotificationCategory, SendTimeBasis
 from tiber.domain.value_objects import NotificationContent
 from tiber.events.job_payload import (
     SCHEMA_VERSION,
@@ -18,23 +18,21 @@ from tiber.events.job_payload import (
 def make_notification(
     *,
     channel: DeliveryChannel = DeliveryChannel.EMAIL,
+    category: NotificationCategory = NotificationCategory.PROMOTIONAL,
     send_at: datetime | None = None,
 ) -> Notification:
     """Build a persisted-style notification for payload building."""
-    return Notification(
-        id=uuid4(),
+    return Notification.create(
         project_id=uuid4(),
         recipient_id=uuid4(),
         correlation_id=uuid4(),
         channel=channel,
+        category=category,
         content=NotificationContent(
             subject="Hi" if channel is DeliveryChannel.EMAIL else None,
             body="Hello",
         ),
         send_at=send_at,
-        send_time_basis=(
-            SendTimeBasis.EXPLICIT if send_at else SendTimeBasis.IMMEDIATE
-        ),
     )
 
 
@@ -80,11 +78,20 @@ def test_routing_key_is_channel_scoped():
     )
 
 
-def test_send_time_basis_immediate_by_default():
-    """Without a schedule the payload is an immediate job."""
-    payload = NotificationJobPayload.from_entity(make_notification())
-    assert payload.send_time_basis == SendTimeBasis.IMMEDIATE
-    assert payload.send_at is None
+def test_send_time_basis_follows_entity_derivation():
+    """The payload's basis is the entity's derived one, not an input.
+
+    CRITICAL without a schedule is immediate; every other category without a
+    schedule awaits ML prediction. The payload layer adds no logic of its own.
+    """
+    immediate = NotificationJobPayload.from_entity(
+        make_notification(category=NotificationCategory.CRITICAL)
+    )
+    assert immediate.send_time_basis == SendTimeBasis.IMMEDIATE
+    assert immediate.send_at is None
+
+    ml_predicted = NotificationJobPayload.from_entity(make_notification())
+    assert ml_predicted.send_time_basis == SendTimeBasis.ML_PREDICTED
 
 
 def test_retry_state_is_bounded():

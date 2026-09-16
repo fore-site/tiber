@@ -4,7 +4,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities.notification import Notification
-from ...domain.enums import DeliveryChannel, NotificationStatus, SendTimeBasis
+from ...domain.enums import (
+    DeliveryChannel,
+    NotificationCategory,
+    NotificationStatus,
+)
 from ...domain.repositories import NotificationRepository
 from ...domain.value_objects import NotificationContent
 from ...infrastructure.models.notification import NotificationModel
@@ -90,7 +94,7 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
 
     @staticmethod
     def _to_entity(model: NotificationModel) -> Notification:
-        return Notification(
+        return Notification.reconstitute(
             id=model.id,
             project_id=model.project_id,
             recipient_id=model.recipient_id,
@@ -99,8 +103,8 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             template_variables=model.template_variables,
             created_at=model.created_at,
             updated_at=model.updated_at,
-            send_time_basis=SendTimeBasis(model.send_time_basis),
             channel=DeliveryChannel(model.channel),
+            category=NotificationCategory(model.category),
             content=NotificationContent(
                 subject=model.subject,
                 body=model.body,

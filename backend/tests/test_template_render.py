@@ -12,7 +12,7 @@ import pytest
 
 from tiber.application.services import NotificationTemplateResolver
 from tiber.domain.entities import Notification, Template
-from tiber.domain.enums import DeliveryChannel
+from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import (
     ProjectScopeViolationError,
     TemplateChannelMismatchError,
@@ -59,8 +59,7 @@ def make_template(
     subject="Hello {{name}}",
 ) -> Template:
     """Build a template; subject is only valid for the email channel."""
-    return Template(
-        id=uuid4(),
+    return Template.create(
         project_id=project_id or uuid4(),
         name="welcome",
         slug="welcome",
@@ -78,12 +77,12 @@ def make_notification(
     channel=DeliveryChannel.EMAIL,
 ) -> Notification:
     """Build a pending notification referencing an optional template."""
-    return Notification(
-        id=uuid4(),
+    return Notification.create(
         project_id=project_id,
         recipient_id=uuid4(),
         correlation_id=uuid4(),
         channel=channel,
+        category=NotificationCategory.PROMOTIONAL,
         content=NotificationContent(subject="Direct", body="Direct body"),
         template_id=template_id,
         template_variables=variables,

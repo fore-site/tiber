@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from tiber.application.ports.channel_provider import ChannelProvider, ProviderResult
 from tiber.domain.entities import DeliveryAttempt, Notification
@@ -122,7 +122,7 @@ class NotificationDeliveryProcessor:
         processing = notification.mark_processing()
         await self._notifications.save(processing)
 
-        address = recipient.addresses.get(notification.channel.value)
+        address = recipient.addresses.get(notification.channel)
 
         if not address:
             return await self._fail(
@@ -161,8 +161,7 @@ class NotificationDeliveryProcessor:
         provider_message_id: str | None,
         error: str | None,
     ) -> None:
-        attempt = DeliveryAttempt(
-            id=uuid4(),
+        attempt = DeliveryAttempt.create(
             notification_id=notification.id,
             attempt_number=await self._attempt_number(notification.id),
             status=(

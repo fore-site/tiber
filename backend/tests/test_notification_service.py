@@ -24,6 +24,7 @@ from tiber.domain.exceptions import (
     RecipientNotFoundError,
     TemplateChannelMismatchError,
 )
+from tiber.domain.value_objects import RecipientPreferences
 
 
 class FakeIdempotency:
@@ -115,19 +116,22 @@ class FakePublisher:
         self.published.append(notification.id)
 
 
-def make_recipient(*, project_id: UUID, addresses: dict) -> Recipient:
+def make_recipient(*, project_id: UUID, addresses: dict[str, str]) -> Recipient:
     """Build a recipient for a project with the given channel addresses."""
-    return Recipient(
-        id=uuid4(),
+    # String keys are the wire format; the helper is the boundary that
+    # converts to domain vocabulary (same as repo rehydration does).
+    return Recipient.create(
         project_id=project_id,
-        addresses=addresses,
+        addresses={
+            DeliveryChannel(channel): value for channel, value in addresses.items()
+        },
+        preferences=RecipientPreferences(),
     )
 
 
 def make_template(*, project_id: UUID, channel=DeliveryChannel.EMAIL, body, subject):
     """Build a template for a project and channel."""
-    return Template(
-        id=uuid4(),
+    return Template.create(
         project_id=project_id,
         name="welcome",
         slug="welcome",
@@ -177,6 +181,7 @@ def build_kwargs(
         project_id=recipient.project_id,
         recipient_id=recipient.id,
         channel="email",
+        category="promotional",
         subject=subject,
         body=body,
         idempotency_key=key,

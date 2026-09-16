@@ -17,11 +17,11 @@ from tiber.domain.entities import Notification, Recipient
 from tiber.domain.enums import (
     DeliveryAttemptStatus,
     DeliveryChannel,
+    NotificationCategory,
     NotificationStatus,
-    SendTimeBasis,
 )
 from tiber.domain.exceptions import InvalidStateTransitionError
-from tiber.domain.value_objects import NotificationContent
+from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 from tiber.infrastructure.providers.mock import MockProvider
 
 
@@ -101,22 +101,34 @@ class FailingProvider:
 
 def make_notification() -> Notification:
     """Build a pending email notification."""
-    return Notification(
-        id=uuid4(),
+    return Notification.create(
         project_id=uuid4(),
         recipient_id=uuid4(),
         correlation_id=uuid4(),
         channel=DeliveryChannel.EMAIL,
+        category=NotificationCategory.PROMOTIONAL,
         content=NotificationContent(subject="Hi", body="Hello"),
     )
 
 
-def make_recipient(notification: Notification, addresses: dict) -> Recipient:
+def make_recipient(notification: Notification, addresses: dict[str, str]) -> Recipient:
     """Build a recipient that belongs to the notification."""
-    return Recipient(
+    # The id binds the recipient to the notification: the processor looks the
+    # recipient up by notification.recipient_id via the fake repository. This
+    # is a persisted-aggregate binding, so reconstitute() is the honest factory.
+    return Recipient.reconstitute(
         id=notification.recipient_id,
         project_id=notification.project_id,
-        addresses=addresses,
+        # String keys are the wire format; the helper is the boundary that
+        # converts to domain vocabulary (same as repo rehydration does).
+        addresses={
+            DeliveryChannel(channel): value for channel, value in addresses.items()
+        },
+        preferences=RecipientPreferences(),
+        external_id=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        archived_at=None,
     )
 
 
@@ -212,15 +224,14 @@ class SpyingProvider(MockProvider):
 def make_scheduled_notification(scheduled_at: datetime) -> Notification:
     """Build a pending, explicitly-scheduled email notification."""
     base = make_notification()
-    return Notification(
-        id=base.id,
+    return Notification.create(
         project_id=base.project_id,
         recipient_id=base.recipient_id,
         correlation_id=base.correlation_id,
         channel=base.channel,
+        category=base.category,
         content=base.content,
         send_at=scheduled_at,
-        send_time_basis=SendTimeBasis.EXPLICIT,
     )
 
 
