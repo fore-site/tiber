@@ -28,6 +28,9 @@ class Template:
 
     def __post_init__(self) -> None:
         """Validate the template's state after initialization."""
+        # Boundary coercion before the channel/subject check reads the field.
+        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
+
         if not self.name or not self.name.strip():
             raise ValueError("Template name must not be empty")
         if not self.slug or not self.slug.strip():
@@ -35,7 +38,7 @@ class Template:
         if not self.body or not self.body.strip():
             raise ValueError("Template body must not be empty")
 
-        if self.channel == DeliveryChannel.EMAIL:
+        if self.channel is DeliveryChannel.EMAIL:
             if self.subject is None:
                 raise ValueError("Email templates must have a subject")
         else:

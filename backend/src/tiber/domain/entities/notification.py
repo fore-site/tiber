@@ -43,7 +43,14 @@ class Notification:
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""
-        if self.category == NotificationCategory.CRITICAL and self.send_at is not None:
+        # Coerce enum-typed fields before any check reads them
+        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
+        object.__setattr__(
+            self, "category", NotificationCategory(self.category.lower())
+        )
+        object.__setattr__(self, "status", NotificationStatus(self.status.lower()))
+
+        if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise InvalidNotificationStateError(
                 "`send_at` must not be set for CRITICAL notifications"
             )
@@ -57,13 +64,13 @@ class Notification:
         if self.send_at is not None:
             object.__setattr__(self, "send_time_basis", SendTimeBasis.EXPLICIT)
         else:
-            if self.category == NotificationCategory.CRITICAL:
+            if self.category is NotificationCategory.CRITICAL:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.IMMEDIATE)
             else:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
 
         # 2. policy_rejected to reason consistency
-        if self.status == NotificationStatus.POLICY_REJECTED:
+        if self.status is NotificationStatus.POLICY_REJECTED:
             if self.policy_violation_reason is None:
                 raise InvalidNotificationStateError(
                     "`policy_violation_reason` is required when status is POLICY_REJECTED"
@@ -75,7 +82,7 @@ class Notification:
                 )
 
         # 2b. failed to reason consistency
-        if self.status == NotificationStatus.FAILED:
+        if self.status is NotificationStatus.FAILED:
             if self.failure_reason is None:
                 raise InvalidNotificationStateError(
                     "`failure_reason` is required when status is FAILED"
@@ -87,7 +94,7 @@ class Notification:
                 )
 
         # 3. email channel requires subject; other channels must not have one
-        if self.channel == DeliveryChannel.EMAIL:
+        if self.channel is DeliveryChannel.EMAIL:
             if self.content.subject is None:
                 raise InvalidNotificationStateError(
                     "Email notifications must have a subject"
@@ -99,7 +106,7 @@ class Notification:
                 )
 
         # 4. delivered status ↔ delivered_at consistency
-        if self.status == NotificationStatus.DELIVERED:
+        if self.status is NotificationStatus.DELIVERED:
             if self.delivered_at is None:
                 raise InvalidNotificationStateError(
                     "`delivered_at` is required when status is DELIVERED"

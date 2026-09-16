@@ -17,6 +17,14 @@ class NotificationTopic:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
+    def __post_init__(self) -> None:
+        """Validate the topic's state after initialization."""
+        # Boundary coercion: raw strings become members, invalid values raise
+        # the enum's ValueError, members pass through unchanged.
+        object.__setattr__(
+            self, "category", NotificationCategory(self.category.lower())
+        )
+
     @classmethod
     def create(
         cls, *, project_id: UUID, category: NotificationCategory, title: TopicTitle

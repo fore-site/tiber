@@ -20,6 +20,10 @@ class RestrictedWindow:
 
     def __post_init__(self):
         """Validate the value object's invariants after initialization."""
+        # Boundary coercion: raw strings become members, invalid values raise
+        # the enum's ValueError, members pass through unchanged.
+        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
+
         if self.window_start == self.window_end:
             raise ValueError(
                 f"Single-instant restriction is not allowed. window_start ({self.window_start}) cannot be equal to window_end ({self.window_end})"

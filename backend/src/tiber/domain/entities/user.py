@@ -28,6 +28,10 @@ class User:
 
     def __post_init__(self) -> None:
         """Validate the user's state after initialization."""
+        # Boundary coercion: raw strings become members, invalid values raise
+        # the enum's ValueError, members pass through unchanged.
+        object.__setattr__(self, "role", UserRole(self.role.lower()))
+
         if not self.email or not self.email.strip():
             raise ValueError("User email must not be empty")
 

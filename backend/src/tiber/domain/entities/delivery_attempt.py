@@ -27,6 +27,10 @@ class DeliveryAttempt:
 
     def __post_init__(self) -> None:
         """Validate the delivery attempt's state after initialization."""
+        # Boundary coercion before any validation reads the fields.
+        object.__setattr__(self, "status", DeliveryAttemptStatus(self.status.lower()))
+        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
+
         if self.attempt_number <= 0:
             raise ValueError("DeliveryAttempt attempt_number must be positive")
         if not self.provider or not self.provider.strip():

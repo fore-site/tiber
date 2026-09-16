@@ -23,6 +23,15 @@ class EngagementEvent:
     is_synthetic: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
+    def __post_init__(self) -> None:
+        """Validate the engagement event's state after initialization."""
+        # Boundary coercion: webhook payloads arrive untyped, so raw strings
+        # become members and invalid values raise the enum's ValueError.
+        object.__setattr__(
+            self, "event_type", EngagementEventType(self.event_type.lower())
+        )
+        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
+
     @classmethod
     def create(
         cls,
