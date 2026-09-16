@@ -136,3 +136,72 @@ def test_raw_critical_string_with_send_at_is_rejected():
             category="critical",
             send_at=datetime(2026, 9, 16, 12, 0, tzinfo=UTC),
         )
+
+
+# --- client context: ML feature payload ---
+
+
+def test_context_is_none_by_default_and_accepted_when_valid():
+    """Context is optional, and a flat str->str dict is accepted as given."""
+    default = make_notification()
+    assert default.context is None
+
+    ctx_payload = {"segment": "power_user", "campaign_id": "spring-26"}
+    notification = make_notification(context=ctx_payload)
+    assert notification.context == ctx_payload
+
+
+def test_context_rejects_non_string_values():
+    """Nested structures are not representable: values must be strings.
+
+    A flat payload keeps the ML feature schema legible — a client wanting
+    structure encodes it into the string (e.g. JSON) themselves.
+    """
+    with pytest.raises(Exception, match="context"):
+        make_notification(context={"experiment": {"arm": "B"}})
+
+
+def test_context_rejects_non_string_keys():
+    """Keys must be strings too, so the payload serializes predictably."""
+    with pytest.raises(Exception, match="context"):
+        make_notification(context={7: "lucky"})
+
+
+def test_context_rejects_non_dict_input():
+    """A list or scalar passed as context is rejected, not coerced."""
+    with pytest.raises(Exception, match="context"):
+        make_notification(context=["not", "a", "dict"])
+
+
+def test_reconstitute_drops_context():
+    """Context is intake-time state, not persisted state.
+
+    reconstitute() does not accept it: the ML feature payload has no
+    storage home yet (deferred to the ML phase, separate table, never
+    EngagementEvent), so a rehydrated notification legitimately reads as
+    context-less. The entity's in-memory contract still accepts context
+    at create()-time for the future write path.
+    """
+    created = make_notification(context={"segment": "power_user"})
+
+    restored = Notification.reconstitute(
+        id=created.id,
+        project_id=created.project_id,
+        recipient_id=created.recipient_id,
+        correlation_id=created.correlation_id,
+        channel=created.channel,
+        category=created.category,
+        content=created.content,
+        status=created.status,
+        created_at=created.created_at,
+        updated_at=created.updated_at,
+        template_id=created.template_id,
+        template_variables=created.template_variables,
+        idempotency_key=created.idempotency_key,
+        send_at=created.send_at,
+        policy_violation_reason=created.policy_violation_reason,
+        failure_reason=created.failure_reason,
+        delivered_at=created.delivered_at,
+    )
+
+    assert restored.context is None

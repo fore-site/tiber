@@ -32,6 +32,7 @@ class Notification:
     topic_id: UUID | None = None
     template_id: UUID | None = None
     template_variables: dict[str, str] | None = None
+    context: dict[str, str] | None = None
     idempotency_key: str | None = None
     send_at: datetime | None = None
     send_time_basis: SendTimeBasis = field(init=False)
@@ -68,6 +69,23 @@ class Notification:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.IMMEDIATE)
             else:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
+
+        # 1b. client context: ML feature payload, never delivery data.
+        if self.context is not None:
+            if not isinstance(self.context, dict):
+                raise InvalidNotificationStateError(
+                    "`context` must be a dict of string to string"
+                )
+            bad = [
+                k
+                for k, v in self.context.items()
+                if not isinstance(k, str) or not isinstance(v, str)
+            ]
+            if bad:
+                raise InvalidNotificationStateError(
+                    "`context` keys and values must all be strings; "
+                    f"invalid entries: {bad[:5]}"
+                )
 
         # 2. policy_rejected to reason consistency
         if self.status is NotificationStatus.POLICY_REJECTED:
@@ -129,6 +147,7 @@ class Notification:
         content: NotificationContent,
         template_id: UUID | None = None,
         template_variables: dict[str, str] | None = None,
+        context: dict[str, str] | None = None,
         idempotency_key: str | None = None,
         send_at: datetime | None = None,
     ) -> Notification:
@@ -149,6 +168,7 @@ class Notification:
             content=content,
             template_id=template_id,
             template_variables=template_variables,
+            context=context,
             idempotency_key=idempotency_key,
             send_at=send_at,
         )
@@ -180,6 +200,11 @@ class Notification:
         Every field is required with no default: a reconstituted entity must
         receive the full stored row, including its identity and timestamps.
         Forgetting one is a TypeError, never silently regenerated state.
+
+        ``context`` is deliberately absent: it is an intake-time ML feature
+        payload, not persisted notification state (its storage home is
+        deferred to the ML phase). Rehydration therefore yields
+        ``context=None`` even when the original carried one.
         """
         return cls(
             id=id,

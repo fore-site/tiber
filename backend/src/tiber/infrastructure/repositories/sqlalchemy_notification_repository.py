@@ -90,6 +90,11 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         }
         if entity.template_variables is not None:
             fields["template_variables"] = entity.template_variables
+        # NOTE: entity.context is deliberately NOT persisted. It is an
+        # intake-time ML feature payload whose storage home (a separate
+        # per-notification store, not a column here and never
+        # EngagementEvent) is deferred to the ML phase. Do not "fix" this
+        # omission by adding a column - see doc 06 for the decision.
         return NotificationModel(**fields)
 
     @staticmethod
