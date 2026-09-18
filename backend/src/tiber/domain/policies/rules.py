@@ -1,10 +1,3 @@
-"""The delivery-policy engine: vocabulary, rules, and their composition.
-
-Self-contained by design — nothing here imports from the parent package,
-so ``__init__`` can re-export the surface freely without import-order
-hazards.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -210,7 +203,7 @@ class PolicyResolver:
 
         Rules run in order; the first rejection short-circuits the chain and
         becomes the overall decision. The default chain is the documented
-        intake order (doc 03): address availability, then recipient
+        intake order: address availability, then recipient
         preferences, then blackout periods, then restricted windows.
         """
         self._rules = list(rules) if rules is not None else list(INTAKE_RULES)

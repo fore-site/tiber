@@ -1,11 +1,3 @@
-"""Recipient consent preferences as an immutable value object.
-
-Storage semantics are opt-out (an absent preference set means fully
-subscribed); consent itself is collected opt-in by the client application,
-which is responsible for seeding these sets from the consent it gathered
-at its own sign-up surfaces.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,8 +22,7 @@ class RecipientPreferences:
     - ``unsubscribed_categories``: notification categories the recipient
       has unsubscribed from, across all topics and channels.
     - ``unsubscribed_topics``: ids of registered NotificationTopics the
-      recipient has unsubscribed from. Ids, never slugs: slugs are
-      client-facing and renameable; identity is stable.
+      recipient has unsubscribed from.
 
     INVARIANT: ``NotificationCategory.CRITICAL`` is unstorable. The
     essential category is always deliverable, so unsubscribing from it is
@@ -94,9 +85,7 @@ class RecipientPreferences:
 
         The CRITICAL check must precede every stored-state consultation -
         including the topic-id set - so a CRITICAL-mapped topic stays
-        deliverable no matter what a client seeded. This is why the bypass
-        is written out here instead of delegated to ``is_subscribed``:
-        delegation would let a seeded topic id silence a CRITICAL topic.
+        deliverable no matter what a client seeded.
         """
         if topic.category is NotificationCategory.CRITICAL:
             return True
