@@ -19,9 +19,9 @@ from tiber.application.services import (
 from tiber.domain.entities import Recipient, Template
 from tiber.domain.enums import DeliveryChannel, NotificationStatus
 from tiber.domain.exceptions import (
-    ProjectScopeViolationError,
     RecipientNotFoundError,
     TemplateChannelMismatchError,
+    TemplateNotFoundError,
 )
 from tiber.domain.policies import PolicyResolver
 from tiber.domain.value_objects import RecipientPreferences
@@ -63,9 +63,12 @@ class FakeRepository:
         self._store[notification.id] = notification
         return notification
 
-    async def get_by_id(self, id: UUID):
-        """Get a notification by ID."""
-        return self._store.get(id)
+    async def get_by_id(self, id: UUID, project_id: UUID):
+        """Get a notification by ID within a project's scope."""
+        notification = self._store.get(id)
+        if notification is not None and notification.project_id != project_id:
+            return None
+        return notification
 
     async def get_by_idempotency_key(self, project_id: UUID, key: str):
         """Get a notification by project and idempotency key."""
@@ -87,9 +90,12 @@ class FakeRecipientRepository:
         """Initialize the store."""
         self._store = recipients or {}
 
-    async def get_by_id(self, id: UUID):
-        """Get a recipient by ID."""
-        return self._store.get(id)
+    async def get_by_id(self, id: UUID, project_id: UUID):
+        """Get a recipient by ID within a project's scope."""
+        recipient = self._store.get(id)
+        if recipient is not None and recipient.project_id != project_id:
+            return None
+        return recipient
 
 
 class FakeTemplateRepository:
@@ -99,9 +105,12 @@ class FakeTemplateRepository:
         """Initialize the store."""
         self._store = templates or {}
 
-    async def get_by_id(self, id: UUID):
-        """Get a template by ID."""
-        return self._store.get(id)
+    async def get_by_id(self, id: UUID, project_id: UUID):
+        """Get a template by ID within a project's scope."""
+        template = self._store.get(id)
+        if template is not None and template.project_id != project_id:
+            return None
+        return template
 
 
 class FakePublisher:
@@ -260,8 +269,12 @@ async def test_missing_recipient_raises_not_found(recipient):
         await svc.create_notification(**build_kwargs(recipient))
 
 
-async def test_recipient_from_other_project_rejected(recipient):
-    """A recipient belonging to another project is a scope violation."""
+async def test_recipient_from_other_project_reads_as_missing(recipient):
+    """A cross-project recipient id is invisible, not a foreign row.
+
+    The scoped lookup returns None for a project mismatch, so the service
+    raises RecipientNotFoundError - fail-safe, no cross-tenant signal.
+    """
     svc = NotificationService(
         idempotency_guard=FakeIdempotency(),
         repository=FakeRepository(),
@@ -271,7 +284,7 @@ async def test_recipient_from_other_project_rejected(recipient):
         policy_resolver=PolicyResolver(),
     )
 
-    with pytest.raises(ProjectScopeViolationError):
+    with pytest.raises(RecipientNotFoundError):
         await svc.create_notification(
             **build_kwargs(recipient, key="recip", project_id=uuid4())
         )
@@ -338,7 +351,7 @@ async def test_cross_project_template_rejected():
         policy_resolver=PolicyResolver(),
     )
 
-    with pytest.raises(ProjectScopeViolationError):
+    with pytest.raises(TemplateNotFoundError):
         await svc.create_notification(
             **build_kwargs(recipient, key="tpl-xp", template_id=template.id)
         )

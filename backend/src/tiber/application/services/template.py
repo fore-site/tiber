@@ -1,17 +1,17 @@
 """Template resolution for notification content.
 
 Resolves the final content of a notification at worker time: when the
-notification references a template, the template is loaded, ownership and
-channel are validated, and it is rendered with the notification's variables.
-Notifications carrying direct content (``template_id`` is None) pass through
-unchanged — the "direct content fallback" path.
+notification references a template, the template is loaded through the
+project-scoped lookup (ownership enforced by the repository contract) and
+its channel is validated, then it is rendered with the notification's
+variables. Notifications carrying direct content (``template_id`` is None)
+pass through unchanged — the "direct content fallback" path.
 """
 
 from __future__ import annotations
 
 from tiber.domain.entities import Notification
 from tiber.domain.exceptions import (
-    ProjectScopeViolationError,
     TemplateChannelMismatchError,
     TemplateNotFoundError,
 )
@@ -40,15 +40,11 @@ class NotificationTemplateResolver:
         if notification.template_id is None:
             return notification.content
 
-        template = await self._templates.get_by_id(notification.template_id)
+        template = await self._templates.get_by_id(
+            notification.template_id, notification.project_id
+        )
         if template is None:
             raise TemplateNotFoundError(str(notification.template_id))
-
-        if template.project_id != notification.project_id:
-            raise ProjectScopeViolationError(
-                str(notification.project_id),
-                "template does not belong to the notification's project",
-            )
 
         if template.channel != notification.channel:
             raise TemplateChannelMismatchError(

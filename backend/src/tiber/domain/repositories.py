@@ -26,7 +26,7 @@ from .entities import (
     User,
     WebhookEndpoint,
 )
-from .enums import NotificationCategory
+from .enums import DeliveryChannel, NotificationCategory
 from .value_objects import TopicTitle
 
 
@@ -74,8 +74,14 @@ class NotificationRepository(Protocol):
         """Save a notification to the repository."""
         ...
 
-    async def get_by_id(self, id: UUID) -> Notification | None:
-        """Get a notification by its ID."""
+    async def get_by_id(self, id: UUID, project_id: UUID) -> Notification | None:
+        """Get a notification by its ID within a project's scope.
+
+        Scoped like every other tenant-owned fetch: a mismatched project
+        reads as a miss, so a caller bug surfaces as not-found instead of
+        a cross-tenant read. Uniqueness of the UUID is not the point -
+        the tenancy check being un-forgettable is.
+        """
         ...
 
     async def get_by_idempotency_key(
@@ -150,6 +156,19 @@ class RecipientRepository(Protocol):
         """Get a recipient by its external ID."""
         ...
 
+    async def get_by_address(
+        self, project_id: UUID, channel: DeliveryChannel, address: str
+    ) -> Recipient | None:
+        """Get the recipient that owns a channel address within a project.
+
+        The address-match rule: a raw-address send must attribute to the
+        registered owner (opt-outs, history) before Tiber treats the
+        address as unknown. Also the lookup behind registration's 409 on
+        a contested address. The (project, channel, address) storage
+        constraint is what makes this lookup unambiguous.
+        """
+        ...
+
     async def list_by_project(
         self, project_id: UUID, limit: int, offset: int
     ) -> list[Recipient]:
@@ -217,10 +236,10 @@ class WebhookEndpointRepository(Protocol):
         """List all webhook endpoints for a project."""
         ...
 
-    async def list_by_project_and_event(
+    async def list_by_event(
         self, project_id: UUID, event_type: str
     ) -> list[WebhookEndpoint]:
-        """List all webhook endpoints for a project and event type."""
+        """List all webhook endpoints by event type for a project."""
         ...
 
 

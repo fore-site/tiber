@@ -56,15 +56,15 @@ PERMANENT_DELIVERY_ERRORS = (
 )
 
 
-async def _process(notification_id: UUID) -> Notification | None:
-    """Load a notification and run it through the delivery processor."""
+async def _process(notification_id: UUID, project_id: UUID) -> Notification | None:
+    """Load a project-scoped notification and run it through delivery."""
     async with AsyncSessionFactory() as session:
         notifications = SQLAlchemyNotificationRepository(session)
         recipients = SQLAlchemyRecipientRepository(session)
         attempts = SQLAlchemyDeliveryAttemptRepository(session)
         templates = SQLAlchemyTemplateRepository(session)
 
-        notification = await notifications.get_by_id(notification_id)
+        notification = await notifications.get_by_id(notification_id, project_id)
         if notification is None:
             logger.warning("Notification %s not found; skipping", notification_id)
             return None
@@ -84,7 +84,7 @@ async def _process(notification_id: UUID) -> Notification | None:
             ),
         )
 
-        updated = await processor.process(notification_id)
+        updated = await processor.process(notification_id, project_id=project_id)
         await session.commit()
 
         logger.info(
@@ -148,9 +148,13 @@ def process_notification(self, job) -> None:
         return
 
     try:
-        updated = asyncio.run(_process(payload.notification_id))
+        updated = asyncio.run(_process(payload.notification_id, payload.project_id))
     except PERMANENT_DELIVERY_ERRORS as exc:
-        asyncio.run(_mark_permanent_failure(payload.notification_id, str(exc)))
+        asyncio.run(
+            _mark_permanent_failure(
+                payload.notification_id, payload.project_id, str(exc)
+            )
+        )
         return
     except Exception as exc:  # transient infra/provider error -> bounded retry
         _retry_or_dead_letter(self, payload, exc)
@@ -219,7 +223,9 @@ def _retry_or_dead_letter(
     )
 
 
-async def _mark_permanent_failure(notification_id: UUID, reason: str) -> None:
+async def _mark_permanent_failure(
+    notification_id: UUID, project_id: UUID, reason: str
+) -> None:
     """Persist a terminal failure for a non-retryable worker error.
 
     The reason is both logged and persisted on the notification row so the
@@ -232,7 +238,7 @@ async def _mark_permanent_failure(notification_id: UUID, reason: str) -> None:
     )
     async with AsyncSessionFactory() as session:
         repository = SQLAlchemyNotificationRepository(session)
-        notification = await repository.get_by_id(notification_id)
+        notification = await repository.get_by_id(notification_id, project_id)
         if notification is not None and notification.status in (
             NotificationStatus.PENDING,
             NotificationStatus.PROCESSING,

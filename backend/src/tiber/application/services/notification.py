@@ -8,7 +8,6 @@ from tiber.domain.entities import Notification
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import (
     NotificationNotFoundError,
-    ProjectScopeViolationError,
     RecipientNotFoundError,
 )
 from tiber.domain.policies import PolicyResolver
@@ -115,22 +114,18 @@ class NotificationService:
             idempotency_key,
         )
         if existing_id is not None:
-            existing = await self._repository.get_by_id(existing_id)
+            existing = await self._repository.get_by_id(existing_id, project_id)
             if existing is not None:
                 return existing
 
         channel_enum = DeliveryChannel(channel)
         category_enum = NotificationCategory(category)
 
-        # 2. Recipient must exist and belong to the project.
-        recipient = await self._recipients.get_by_id(recipient_id)
+        # 2. Recipient must exist within the project. The lookup is scoped:
+        # a cross-project id reads as a miss, not a foreign row.
+        recipient = await self._recipients.get_by_id(recipient_id, project_id)
         if recipient is None:
             raise RecipientNotFoundError(str(recipient_id))
-        if recipient.project_id != project_id:
-            raise ProjectScopeViolationError(
-                str(project_id),
-                "recipient does not belong to the notification's project",
-            )
 
         # 3. Resolve and render template content at intake. The template
         # resolver validates ownership and channel; rendering produces the
@@ -209,7 +204,7 @@ class NotificationService:
         self, project_id: UUID, notification_id: UUID
     ) -> Notification:
         """Get a notification scoped to a project."""
-        notification = await self._repository.get_by_id(notification_id)
+        notification = await self._repository.get_by_id(notification_id, project_id)
         if notification is None or notification.project_id != project_id:
             raise NotificationNotFoundError(str(notification_id))
         return notification

@@ -32,13 +32,27 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         return self._to_entity(model) if model else None
 
     async def get_by_external_id(
-        self, project_id: UUID, external_id: str
+        self, external_id: str, project_id: UUID
     ) -> Recipient | None:
-        """Get a recipient for a project by its caller-supplied external ID."""
+        """Get a recipient by its external ID."""
         result = await self._session.execute(
             select(RecipientModel)
             .where(RecipientModel.project_id == project_id)
             .where(RecipientModel.external_id == external_id)
+        )
+        model = result.scalar_one_or_none()
+        return self._to_entity(model) if model else None
+
+    async def get_by_address(
+        self, project_id: UUID, channel: DeliveryChannel, address: str
+    ) -> Recipient | None:
+        """Get the recipient that owns a channel address within a project."""
+        # Postgres JSONB: the address dict is keyed by channel value; the
+        # containment operator indexes properly and reads as intent.
+        result = await self._session.execute(
+            select(RecipientModel)
+            .where(RecipientModel.project_id == project_id)
+            .where(RecipientModel.addresses[channel.value].astext == address)
         )
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None

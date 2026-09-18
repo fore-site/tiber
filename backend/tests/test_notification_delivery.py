@@ -32,9 +32,12 @@ class FakeNotificationRepository:
         """Initialize an empty store."""
         self._store: dict = {}
 
-    async def get_by_id(self, id):
-        """Get a notification by ID."""
-        return self._store.get(id)
+    async def get_by_id(self, id, project_id):
+        """Get a notification by ID within a project's scope."""
+        notification = self._store.get(id)
+        if notification is not None and notification.project_id != project_id:
+            return None
+        return notification
 
     async def save(self, notification: Notification) -> Notification:
         """Persist a notification by id."""
@@ -49,11 +52,11 @@ class FakeRecipientRepository:
         """Initialize with a single recipient."""
         self._recipient = recipient
 
-    async def get_by_id(self, id, project_id=None):
+    async def get_by_id(self, id, project_id):
         """Return the recipient if id and project scope match."""
         if self._recipient.id != id:
             return None
-        if project_id is not None and self._recipient.project_id != project_id:
+        if self._recipient.project_id != project_id:
             return None
         return self._recipient
 
@@ -152,7 +155,9 @@ async def test_success_marks_delivered_and_records_attempt():
     processor, notif_repo, attempts = build(recipient)
 
     await notif_repo.save(notification)
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.DELIVERED
     assert updated.delivered_at is not None
@@ -168,7 +173,9 @@ async def test_failure_marks_failed_and_records_failed_attempt():
     processor, notif_repo, attempts = build(recipient, provider=FailingProvider())
 
     await notif_repo.save(notification)
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.FAILED
     assert attempts.attempts[0].status == DeliveryAttemptStatus.FAILED
@@ -182,7 +189,9 @@ async def test_missing_channel_address_marks_failed():
     processor, notif_repo, attempts = build(recipient)
 
     await notif_repo.save(notification)
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.FAILED
     assert attempts.attempts[0].status == DeliveryAttemptStatus.FAILED
@@ -196,7 +205,9 @@ async def test_terminal_notification_is_not_redispatched():
     processor, notif_repo, attempts = build(recipient)
 
     await notif_repo.save(notification)
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.DELIVERED
     assert attempts.attempts == []
@@ -248,7 +259,9 @@ async def test_future_scheduled_notification_is_not_delivered_early():
     processor, notif_repo, attempts = build(recipient, provider=provider)
     await notif_repo.save(notification)
 
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.PENDING
     assert updated.send_at == notification.send_at
@@ -263,7 +276,9 @@ async def test_scheduled_notification_delivers_once_due():
     processor, notif_repo, attempts = build(recipient)
 
     await notif_repo.save(notification)
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.DELIVERED
     assert updated.delivered_at is not None
@@ -280,8 +295,10 @@ async def test_concurrent_redispatch_is_idempotent():
     processor, notif_repo, attempts = build(recipient, provider=provider)
     await notif_repo.save(notification)
 
-    first = await processor.process(notification.id)
-    second = await processor.process(notification.id)
+    first = await processor.process(notification.id, project_id=notification.project_id)
+    second = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert first.status == NotificationStatus.DELIVERED
     assert second.status == NotificationStatus.DELIVERED

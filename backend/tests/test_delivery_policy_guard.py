@@ -27,9 +27,12 @@ class FakeNotificationRepository:
         """Initialize an empty store."""
         self._store: dict = {}
 
-    async def get_by_id(self, id):
-        """Get a notification by ID."""
-        return self._store.get(id)
+    async def get_by_id(self, id, project_id):
+        """Get a notification by ID within a project's scope."""
+        notification = self._store.get(id)
+        if notification is not None and notification.project_id != project_id:
+            return None
+        return notification
 
     async def save(self, notification: Notification) -> Notification:
         """Persist a notification by id."""
@@ -44,11 +47,11 @@ class FakeRecipientRepository:
         """Initialize with a single recipient."""
         self._recipient = recipient
 
-    async def get_by_id(self, id, project_id=None):
+    async def get_by_id(self, id, project_id):
         """Return the recipient if id and project scope match."""
         if self._recipient.id != id:
             return None
-        if project_id is not None and self._recipient.project_id != project_id:
+        if self._recipient.project_id != project_id:
             return None
         return self._recipient
 
@@ -170,7 +173,9 @@ async def test_policy_violation_marks_policy_rejected_without_attempt():
     )
     await notif_repo.save(notification)
 
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.POLICY_REJECTED
     assert updated.policy_violation_reason is not None
@@ -214,7 +219,9 @@ async def test_template_content_renders_into_provider_payload():
     )
     await notif_repo.save(notification)
 
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.DELIVERED
     assert provider.sent == [("a@b.io", "Hello Ada", "Welcome Ada!")]
@@ -239,7 +246,9 @@ async def test_guard_address_rule_rejects_and_skips_delivery():
     )
     await notif_repo.save(notification)
 
-    updated = await processor.process(notification.id)
+    updated = await processor.process(
+        notification.id, project_id=notification.project_id
+    )
 
     assert updated.status == NotificationStatus.POLICY_REJECTED
     assert "no email address" in updated.policy_violation_reason

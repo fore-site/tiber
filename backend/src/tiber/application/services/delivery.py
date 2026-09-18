@@ -59,8 +59,11 @@ class NotificationDeliveryProcessor:
         self._policy_guard = policy_guard
         self._template_resolver = template_resolver
 
-    async def process(self, notification_id: UUID) -> Notification:
+    async def process(self, notification_id: UUID, *, project_id: UUID) -> Notification:
         """Deliver a notification and return its updated state.
+
+        The lookup is project-scoped: a notification outside ``project_id``
+        reads as not-found.
 
         Scheduling guard: a PENDING notification whose ``send_at`` is in
         the future is *not* delivered early. It is returned unchanged (still
@@ -69,7 +72,7 @@ class NotificationDeliveryProcessor:
         the notification is moved to PROCESSING for the duration of the send,
         then to a terminal state.
         """
-        notification = await self._notifications.get_by_id(notification_id)
+        notification = await self._notifications.get_by_id(notification_id, project_id)
         if notification is None:
             raise NotificationNotFoundError(str(notification_id))
 

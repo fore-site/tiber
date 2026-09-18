@@ -14,7 +14,6 @@ from tiber.application.services import NotificationTemplateResolver
 from tiber.domain.entities import Notification, Template
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import (
-    ProjectScopeViolationError,
     TemplateChannelMismatchError,
     TemplateNotFoundError,
 )
@@ -34,9 +33,12 @@ class FakeTemplateRepository:
         self._store[template.id] = template
         return template
 
-    async def get_by_id(self, id):
-        """Get a template by ID."""
-        return self._store.get(id)
+    async def get_by_id(self, id, project_id):
+        """Get a template by ID within a project's scope."""
+        template = self._store.get(id)
+        if template is not None and template.project_id != project_id:
+            return None
+        return template
 
     async def list_by_project(self, project_id, limit, offset):
         """List templates for a project."""
@@ -186,7 +188,7 @@ async def test_resolver_raises_when_template_missing():
 
 
 async def test_resolver_rejects_cross_project_template():
-    """A template owned by another project is rejected as a scope violation."""
+    """A cross-project template is invisible: the scoped lookup misses."""
     template = make_template(project_id=uuid4())
     repo = FakeTemplateRepository({template.id: template})
     resolver = NotificationTemplateResolver(repo)
@@ -196,7 +198,7 @@ async def test_resolver_rejects_cross_project_template():
         template_id=template.id,
     )
 
-    with pytest.raises(ProjectScopeViolationError):
+    with pytest.raises(TemplateNotFoundError):
         await resolver.resolve_content(notification)
 
 

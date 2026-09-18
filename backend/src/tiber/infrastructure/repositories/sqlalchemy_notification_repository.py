@@ -33,9 +33,11 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         await self._session.flush()
         return notification
 
-    async def get_by_id(self, id: UUID) -> Notification | None:
-        """Get a notification by its ID."""
+    async def get_by_id(self, id: UUID, project_id: UUID) -> Notification | None:
+        """Get a notification by its ID within a project's scope."""
         model = await self._session.get(NotificationModel, id)
+        if model is not None and model.project_id != project_id:
+            return None
         return self._to_entity(model) if model else None
 
     async def get_by_idempotency_key(
