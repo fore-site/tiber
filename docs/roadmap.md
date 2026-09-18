@@ -15,10 +15,9 @@ Each release corresponds to a completed roadmap phase. Releases are cumulative, 
 | v0.3.0  | Phase 3: Provider Abstraction           | Planned |
 | v0.4.0  | Phase 4: Data Simulator                 | Planned |
 | v0.5.0  | Phase 5: Machine Learning Services      | Planned |
-| v0.6.0  | Phase 6: AI/LLM Services                | Planned |
-| v0.7.0  | Phase 7: Platform Features and Frontend | Planned |
-| v0.8.0  | Phase 8: Observability                  | Planned |
-| v0.9.0  | Phase 9: Deployment, Docs, Demo         | Planned |
+| v0.6.0  | Phase 6: Platform Features and Frontend | Planned |
+| v0.7.0  | Phase 7: Observability                  | Planned |
+| v0.8.0  | Phase 8: Deployment, Docs, Demo         | Planned |
 | v1.0.0  | Production Release                      | Planned |
 
 ### Release History
@@ -90,32 +89,24 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 
 ### Phase 5: Machine Learning Services
 
-- [ ] **Priority classifier**: feature engineering from content/metadata/historical engagement → urgency (low/med/high). Train and compare 2 models, report honest metrics (precision/recall, not just accuracy)
-- [ ] **Send-time optimizer**: predict best send hour per user from simulated engagement patterns
-- [ ] **Channel preference predictor** (once the above two are solid)
+- [ ] **Send-time predictor** (core): predict best send moment per recipient from engagement history; the ML-scheduled state (predicted time + ML_PREDICTED basis) is already representable in the domain
+- [ ] **Digest ranker**: order batched digest items by predicted per-item engagement, trained on per-item open/click signals collected from digest deliveries (requires per-item links/ids in the digest format)
+- [ ] ~~Priority classifier~~ — dropped: notification `category` is client-declared, so there is no undeclared priority left to predict
+- [ ] ~~Channel preference predictor~~ — deferred, not dropped: needs a per-project consent gate and policy-chain re-entry design (per-channel restricted windows must be re-evaluated for the predicted channel)
 - [ ] Shared Feature Builder used by both training and inference to prevent training-serving skew
 - [ ] Stateless online inference module invoked through the in-process ML Engine boundary at API intake; log model version + prediction + confidence per notification (this becomes explainability data)
 - [ ] Offline training pipeline separated from online inference path: Training Data Source, Dataset Builder, Model Trainer, evaluator, and explicit promotion step
 - [ ] Model Registry loads promoted model versions from S3/MinIO-compatible object storage and supports rollback
 - [ ] Engagement Tracker consumes validated provider engagement events and feeds the training data source without mixing synthetic and real data in one training run
+- [ ] Per-item engagement collection for the digest ranker: digest deliveries must carry per-item links/ids so opens/clicks attribute to items, not just to the digest
+
+### Phase 5 exit criteria
+
 - [ ] Tests asserting model performance stays above a floor threshold
 
-**Exit criteria:** Every notification entering the pipeline gets a priority score and a suggested send time, traceable to a specific model version and feature set; candidate models are evaluated, stored, and promoted deliberately before serving.
+**Exit criteria:** Every notification entering the pipeline gets a suggested send time traceable to a specific model version and feature set; candidate models are evaluated, stored, and promoted deliberately before serving. ML decides when and in what order — never what.
 
-### Phase 6: AI / LLM Services
-
-- [ ] Provider-agnostic prompt interface (supports swapping Groq/Gemini/others without touching call sites)
-- [ ] AI Gateway remains an in-process boundary and degrades to original content if unavailable
-- [ ] Summarization
-- [ ] Tone adaptation
-- [ ] Subject generation (cheap to add once the interface exists)
-- [ ] Translation and digest creation as documented enhancement paths after summarization/tone/subject generation are stable
-- [ ] Clear separation maintained: LLM touches _content_, ML models touch _routing/timing/priority_
-- [ ] Graceful degradation: pipeline still functions if the AI service is unavailable (per the vision's "AI as enhancement" principle)
-
-**Exit criteria:** Full pipeline runs end-to-end: notification in → priority assigned → send-time scheduled → content enhanced → delivered, and still works with the AI layer disabled.
-
-### Phase 7: Platform Features and Frontend
+### Phase 6: Platform Features and Frontend
 
 - [ ] Project management as the active tenancy boundary; Workspace remains explicitly future scope
 - [ ] Recipient channel opt-out management (`opted_out_channels` on RecipientPreferences)
@@ -129,7 +120,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 
 **Exit criteria:** A non-technical person can open the dashboard, trigger a notification, and understand what the system decided and why.
 
-### Phase 8: Observability
+### Phase 7: Observability
 
 - [ ] Structured JSON logging across API and workers
 - [ ] `/metrics` endpoint (Prometheus format): queue depth, DLQ count, delivery success rate, retry count, model latency, AI degradation count
@@ -139,7 +130,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] Load test with Locust to get real numbers for the README
 - [ ] Test coverage review on critical paths
 
-### Phase 9: Deployment, Docs, Demo
+### Phase 8: Deployment, Docs, Demo
 
 - [ ] Deploy backend + worker + Postgres to Render/Fly.io (or similar)
 - [ ] Provision RabbitMQ via CloudAMQP free tier (or paid PaaS tier) and a Redis instance for auth state, auth cache, rate limiting, and idempotency
@@ -148,7 +139,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] Final README: architecture diagram, ADRs, model metrics with honest numbers (including weaknesses), "what's deferred to V2 and why," "what I'd change at 10x scale"
 - [ ] Tag a `v0.9.0` release candidate; tag `v1.0.0` only after the production acceptance checklist is green
 
-### Phase 10+: Toward Full Vision
+### Phase 9+: Toward Full Vision
 
 - [ ] Promote SMS/webhook/in-app adapters from mock to live providers
 - [ ] Full audit logging and analytics

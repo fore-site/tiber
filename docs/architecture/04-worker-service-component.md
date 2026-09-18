@@ -35,7 +35,7 @@ The Worker Service owns one concern end to end: consume a job, process it throug
     }
   },
   "content": {
-    "subject": "Your order has shipped",
+    "title": "Your order has shipped",
     "body": "Hi Pascal, your order #1234 is on its way."
   },
   "scheduling": {
@@ -43,17 +43,11 @@ The Worker Service owns one concern end to end: consume a job, process it throug
     "send_time_basis": "ml_predicted"
   },
   "intelligence": {
-    "priority": "high",
-    "channel_preference": "email",
     "model_versions": {
-      "priority_classifier": "priority-2026-01-01.1",
-      "send_time_optimizer": "send-time-2026-01-01.1",
-      "channel_preference_predictor": "channel-2026-01-01.1"
+      "send_time_predictor": "send-time-2026-01-01.1"
     },
     "confidence": {
-      "priority": 0.91,
-      "send_time": 0.74,
-      "channel_preference": 0.82
+      "send_time": 0.74
     }
   },
   "retry": {
@@ -73,7 +67,7 @@ The Worker Service owns one concern end to end: consume a job, process it throug
 
 - **Delivery Tracker writes before Webhook Dispatcher fires:** The Delivery Tracker writes the outcome to Postgres as the authoritative record before triggering the Webhook Dispatcher. If the Webhook Dispatcher fails, i.e the client endpoint is unreachable, returns a non-2xx response, or exhausts its own retry budget, then the delivery record in Postgres is unaffected. The notification is considered delivered regardless of whether the client received the webhook callback. This ordering matters: a webhook is a notification of an outcome, not the outcome itself. The Webhook Dispatcher maintains its own independent retry logic with a separate backoff policy and a separate dead-letter path for exhausted webhook deliveries.
 
-- **ML and AI coordinators degrade gracefully and never block delivery:** The API Service normally attaches ML prediction metadata before a job is published. At dispatch time, the Worker ML Coordinator consumes that metadata and only calls the ML Engine if prediction data is missing, stale, or explicitly marked for revalidation. If that fallback call fails, it uses defaults (medium priority, existing scheduled time, no channel override) and logs the degradation. If the AI Gateway is unavailable, the AI Coordinator uses the original notification content as-is and logs the degradation. In both cases the pipeline continues without interruption. This implements the principle that AI and ML are enhancements to delivery, not dependencies for it. A platform that cannot send a plain notification because a model or LLM provider is unreachable is not production-grade.
+- **The ML fallback degrades gracefully and never blocks delivery:** The API Service normally attaches ML prediction metadata before a job is published. At dispatch time, the Worker ML Coordinator consumes that metadata and only calls the ML Engine if prediction data is missing, stale, or explicitly marked for revalidation. If that fallback call fails, the notification dispatches on its existing basis — immediately for CRITICAL, on the send time already attached, or on the worker's conservative default for a basis of ML_PREDICTED with no time yet — and the degradation is logged. There is no AI Coordinator and no content path at dispatch: content is never modified in the pipeline (the authorship constitution, see the container diagram), so there is nothing to degrade on that axis. This implements the principle that ML is an enhancement to delivery, not a dependency for it. A platform that cannot send a plain notification because a model is unreachable is not production-grade.
 
 - **Engagement Tracker belongs to the ML Engine, not the Worker Service:** Provider engagement events (opens, clicks, bounces, unsubscribes) arrive at the API Service as inbound provider webhooks, are validated and enqueued, and are consumed by the Engagement Tracker in the ML Engine container. Placing the Engagement Tracker in the Worker Service would conflate two unrelated concerns, i.e delivery pipeline processing and ML training data collection in the same container. The Worker Service's responsibility ends when a notification is delivered and its outcome is recorded. What the ML training pipeline does with that outcome afterwards is the ML Engine's concern.
 
