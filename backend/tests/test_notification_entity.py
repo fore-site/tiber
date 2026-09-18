@@ -24,6 +24,7 @@ from tiber.domain.enums import (
     NotificationStatus,
     SendTimeBasis,
 )
+from tiber.domain.exceptions import InvalidNotificationStateError
 from tiber.domain.value_objects import NotificationContent
 
 
@@ -199,9 +200,160 @@ def test_reconstitute_drops_context():
         template_variables=created.template_variables,
         idempotency_key=created.idempotency_key,
         send_at=created.send_at,
+        send_time_basis=created.send_time_basis,
         policy_violation_reason=created.policy_violation_reason,
         failure_reason=created.failure_reason,
         delivered_at=created.delivered_at,
     )
 
     assert restored.context is None
+
+
+# --- send_time_basis is stored state, not a derived value ---
+
+
+def test_rehydrated_ml_predicted_with_send_at_keeps_its_basis():
+    """The design-proof: (send_at=T, ML_PREDICTED) survives rehydration.
+
+    The old derived implementation re-classified any send_at as EXPLICIT,
+    so Tiber-scheduled notifications lost their provenance on the first
+    DB round-trip. Provenance must be queryable to measure the predictor.
+    """
+    predicted_time = datetime(2026, 9, 19, 10, 0, tzinfo=UTC)
+
+    restored = Notification.reconstitute(
+        id=uuid4(),
+        project_id=uuid4(),
+        recipient_id=uuid4(),
+        correlation_id=uuid4(),
+        channel=DeliveryChannel.EMAIL,
+        category=NotificationCategory.PROMOTIONAL,
+        content=NotificationContent(title="Hi", body="Hello"),
+        status=NotificationStatus.PENDING,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        template_id=None,
+        template_variables=None,
+        idempotency_key=None,
+        send_at=predicted_time,
+        send_time_basis=SendTimeBasis.ML_PREDICTED,
+        policy_violation_reason=None,
+        failure_reason=None,
+        delivered_at=None,
+    )
+
+    assert restored.send_time_basis is SendTimeBasis.ML_PREDICTED
+    assert restored.send_at == predicted_time
+
+
+def test_rehydrate_explicit_without_send_at_is_rejected():
+    """EXPLICIT claims a client schedule: no time means corrupt state."""
+    with pytest.raises(InvalidNotificationStateError, match="send_at"):
+        Notification.reconstitute(
+            id=uuid4(),
+            project_id=uuid4(),
+            recipient_id=uuid4(),
+            correlation_id=uuid4(),
+            channel=DeliveryChannel.EMAIL,
+            category=NotificationCategory.PROMOTIONAL,
+            content=NotificationContent(title="Hi", body="Hello"),
+            status=NotificationStatus.PENDING,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            template_id=None,
+            template_variables=None,
+            idempotency_key=None,
+            send_at=None,
+            send_time_basis=SendTimeBasis.EXPLICIT,
+            policy_violation_reason=None,
+            failure_reason=None,
+            delivered_at=None,
+        )
+
+
+def test_immediate_basis_requires_critical_category():
+    """IMMEDIATE is the CRITICAL-only path: not representable elsewhere."""
+    with pytest.raises(InvalidNotificationStateError, match="IMMEDIATE"):
+        Notification(
+            project_id=uuid4(),
+            recipient_id=uuid4(),
+            correlation_id=uuid4(),
+            channel=DeliveryChannel.EMAIL,
+            category=NotificationCategory.PROMOTIONAL,
+            content=NotificationContent(title="Hi", body="Hello"),
+            send_time_basis=SendTimeBasis.IMMEDIATE,
+        )
+
+
+def test_critical_basis_is_pinned_to_immediate():
+    """CRITICAL must be IMMEDIATE — even if a caller asserts otherwise."""
+    with pytest.raises(InvalidNotificationStateError, match="CRITICAL"):
+        Notification(
+            project_id=uuid4(),
+            recipient_id=uuid4(),
+            correlation_id=uuid4(),
+            channel=DeliveryChannel.EMAIL,
+            category=NotificationCategory.CRITICAL,
+            content=NotificationContent(title="Hi", body="Hello"),
+            send_time_basis=SendTimeBasis.ML_PREDICTED,
+        )
+
+
+def test_intake_classification_still_works():
+    """The intake rule is unchanged in effect: absent basis self-classifies."""
+    explicit = make_notification(send_at=datetime(2026, 9, 19, 9, 0, tzinfo=UTC))
+    immediate = make_notification(category=NotificationCategory.CRITICAL)
+    ml = make_notification()
+
+    assert explicit.send_time_basis is SendTimeBasis.EXPLICIT
+    assert immediate.send_time_basis is SendTimeBasis.IMMEDIATE
+    assert ml.send_time_basis is SendTimeBasis.ML_PREDICTED
+
+
+# --- schedule(): the ML path's transition ---
+
+
+def test_schedule_sets_time_and_preserves_basis():
+    """Prediction attaches a time without changing provenance."""
+    notification = make_notification()
+    predicted = datetime(2026, 9, 19, 14, 30, tzinfo=UTC)
+
+    scheduled = notification.schedule(predicted)
+
+    assert scheduled.send_at == predicted
+    assert scheduled.send_time_basis is SendTimeBasis.ML_PREDICTED
+    assert scheduled.status is NotificationStatus.PENDING
+
+
+def test_schedule_rejects_client_scheduled_notification():
+    """EXPLICIT is client-owned: the ML path cannot override it."""
+    notification = make_notification(send_at=datetime(2026, 9, 19, 9, 0, tzinfo=UTC))
+
+    with pytest.raises(InvalidNotificationStateError, match="ML_PREDICTED"):
+        notification.schedule(datetime(2026, 9, 20, 9, 0, tzinfo=UTC))
+
+
+def test_schedule_rejects_critical():
+    """CRITICAL dispatches immediately; there is nothing to schedule."""
+    notification = make_notification(category=NotificationCategory.CRITICAL)
+
+    with pytest.raises(InvalidNotificationStateError, match="ML_PREDICTED"):
+        notification.schedule(datetime(2026, 9, 20, 9, 0, tzinfo=UTC))
+
+
+def test_schedule_rejects_naive_datetime():
+    """Same tz-awareness rule as client-supplied send_at."""
+    with pytest.raises(InvalidNotificationStateError, match="timezone"):
+        make_notification().schedule(datetime(2026, 9, 20, 9, 0))
+
+
+def test_reprediction_replaces_the_predicted_time():
+    """Re-prediction is allowed until dispatch: each call replaces the time."""
+    notification = make_notification().schedule(
+        datetime(2026, 9, 19, 14, 30, tzinfo=UTC)
+    )
+
+    rescheduled = notification.schedule(datetime(2026, 9, 19, 16, 0, tzinfo=UTC))
+
+    assert rescheduled.send_at == datetime(2026, 9, 19, 16, 0, tzinfo=UTC)
+    assert rescheduled.send_time_basis is SendTimeBasis.ML_PREDICTED

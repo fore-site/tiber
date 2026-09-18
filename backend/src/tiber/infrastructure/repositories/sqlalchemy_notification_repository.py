@@ -116,6 +116,7 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             ),
             status=NotificationStatus(model.status),
             send_at=model.send_at,
+            send_time_basis=model.send_time_basis,
             delivered_at=model.delivered_at,
             policy_violation_reason=model.policy_violation_reason,
             failure_reason=model.failure_reason,

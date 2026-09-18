@@ -36,7 +36,7 @@ class Notification:
     context: dict[str, str] | None = None
     idempotency_key: str | None = None
     send_at: datetime | None = None
-    send_time_basis: SendTimeBasis = field(init=False)
+    send_time_basis: SendTimeBasis | None = None
     policy_violation_reason: str | None = None
     failure_reason: str | None = None
     delivered_at: datetime | None = None
@@ -51,6 +51,10 @@ class Notification:
             self, "category", NotificationCategory(self.category.lower())
         )
         object.__setattr__(self, "status", NotificationStatus(self.status.lower()))
+        if self.send_time_basis is not None:
+            object.__setattr__(
+                self, "send_time_basis", SendTimeBasis(self.send_time_basis)
+            )
 
         # validate notification content for the channel
         validate_content(self.channel, self.content)
@@ -65,14 +69,39 @@ class Notification:
                 "`send_at` must be timezone-aware (UTC or other)"
             )
 
-        # Derive send_time_basis from send_at.
-        if self.send_at is not None:
-            object.__setattr__(self, "send_time_basis", SendTimeBasis.EXPLICIT)
-        else:
-            if self.category is NotificationCategory.CRITICAL:
+        # Intake-time classification: runs only when the caller did not
+        # supply a basis. This is a one-time decision at creation, NOT a
+        # standing invariant — send_at set does not imply EXPLICIT, because
+        # (send_at=T, ML_PREDICTED) is the ML-scheduled state.
+        if self.send_time_basis is None:
+            if self.send_at is not None:
+                object.__setattr__(self, "send_time_basis", SendTimeBasis.EXPLICIT)
+            elif self.category is NotificationCategory.CRITICAL:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.IMMEDIATE)
             else:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
+
+        # Invariants coupling the stored basis to the rest of the state.
+        # Deliberately no "send_at set -> EXPLICIT" rule: the ML path writes
+        # a predicted time via schedule() while the basis stays ML_PREDICTED.
+        if self.send_time_basis is SendTimeBasis.EXPLICIT and self.send_at is None:
+            raise InvalidNotificationStateError(
+                "`send_at` is required when send_time_basis is EXPLICIT"
+            )
+        if (
+            self.send_time_basis is SendTimeBasis.IMMEDIATE
+            and self.category is not NotificationCategory.CRITICAL
+        ):
+            raise InvalidNotificationStateError(
+                "send_time_basis IMMEDIATE is only valid for CRITICAL notifications"
+            )
+        if (
+            self.category is NotificationCategory.CRITICAL
+            and self.send_time_basis is not SendTimeBasis.IMMEDIATE
+        ):
+            raise InvalidNotificationStateError(
+                "CRITICAL notifications must have send_time_basis IMMEDIATE"
+            )
 
         # 1b. client context: ML feature payload, never delivery data.
         if self.context is not None:
@@ -146,10 +175,12 @@ class Notification:
         """Create a new pending notification with system-generated identity.
 
         This is the primary creation path: the id and timestamps are generated
-        here, and the notification always starts PENDING. Terminal states and
-        their coupled fields (policy_violation_reason, failure_reason,
-        delivered_at) are unreachable from here on purpose - they arise only
-        through state transitions.
+        here, and the notification always starts PENDING. The send-time basis
+        is classified here from the intake facts: EXPLICIT when send_at is
+        supplied, IMMEDIATE for CRITICAL, ML_PREDICTED otherwise. Terminal
+        states and their coupled fields (policy_violation_reason,
+        failure_reason, delivered_at) are unreachable from here on purpose -
+        they arise only through state transitions.
         """
         return cls(
             project_id=project_id,
@@ -183,6 +214,7 @@ class Notification:
         template_variables: dict[str, str] | None,
         idempotency_key: str | None,
         send_at: datetime | None,
+        send_time_basis: SendTimeBasis,
         policy_violation_reason: str | None,
         failure_reason: str | None,
         delivered_at: datetime | None,
@@ -213,10 +245,35 @@ class Notification:
             template_variables=template_variables,
             idempotency_key=idempotency_key,
             send_at=send_at,
+            send_time_basis=send_time_basis,
             policy_violation_reason=policy_violation_reason,
             failure_reason=failure_reason,
             delivered_at=delivered_at,
         )
+
+    def schedule(self, send_at: datetime) -> Notification:
+        """Attach a system-predicted send time (the ML path).
+
+        Only legal from ML_PREDICTED and only while PENDING: the
+        client-owned schedule is create(send_at=...) with basis EXPLICIT,
+        and the basis never changes after intake — it is the provenance
+        record of who chose the time. Re-prediction is allowed until
+        dispatch; each call replaces the predicted time.
+        """
+        if self.send_time_basis is not SendTimeBasis.ML_PREDICTED:
+            raise InvalidNotificationStateError(
+                "`schedule` is only valid for ML_PREDICTED notifications"
+            )
+        if self.status is not NotificationStatus.PENDING:
+            raise InvalidNotificationStateError(
+                "`schedule` is only valid while the notification is PENDING"
+            )
+        if send_at.tzinfo is None:
+            raise InvalidNotificationStateError(
+                "`send_at` must be timezone-aware (UTC or other)"
+            )
+
+        return replace(self, send_at=send_at, updated_at=datetime.now(UTC))
 
     def _transition(
         self,
