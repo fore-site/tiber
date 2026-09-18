@@ -1967,7 +1967,9 @@ components:
         slug:
           type: string
           example: my-application
-          description: Immutable after creation.
+          description: >
+            Derived once from the name at creation and immutable
+            thereafter. Clients never supply it.
         description:
           type: [string, "null"]
         archived:
@@ -1987,21 +1989,12 @@ components:
 
     CreateProjectRequest:
       type: object
-      required: [name, slug]
+      required: [name]
       properties:
         name:
           type: string
           minLength: 1
           maxLength: 100
-        slug:
-          type: string
-          minLength: 1
-          maxLength: 100
-          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
-          description: >
-            URL-safe identifier: lowercase letters and digits separated by
-            single hyphens, no leading or trailing hyphen. Immutable after
-            creation.
         description:
           type: string
           maxLength: 500

@@ -22,7 +22,10 @@ class ProjectResponse(BaseModel):
 
     slug: str = Field(
         examples=["my-application"],
-        description="Immutable after creation.",
+        description=(
+            "Derived from the name at creation and immutable thereafter. "
+            "Clients never supply it."
+        ),
     )
 
     description: str | None = None

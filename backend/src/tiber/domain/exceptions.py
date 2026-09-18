@@ -186,8 +186,6 @@ class AuthenticationFailedError(TiberError):
 
 
 # Rate limiting
-
-
 class RateLimitExceededError(TiberError):
     """Raised when a rate limit is exceeded."""
 
@@ -201,8 +199,6 @@ class RateLimitExceededError(TiberError):
 
 
 # Delivery
-
-
 class DeliveryFailedError(TiberError):
     """Raised when a delivery attempt fails."""
 
@@ -280,3 +276,27 @@ class InvalidNotificationStateError(TiberError):
         """Initialize an InvalidNotificationStateError with a message."""
         self.message = message
         super().__init__(message)
+
+
+class InvalidProjectStateError(TiberError):
+    """Raised when a Project invariant is violated."""
+
+    error_code = "invalid_project_state"
+    status_code = 422
+
+    def __init__(self, message: str) -> None:
+        """Initialize an InvalidProjectStateError with a message."""
+        self.message = message
+        super().__init__(message)
+
+
+class ProjectNameConflictError(TiberError):
+    """Raised when a project name is already in use by the same user."""
+
+    error_code = "project_name_conflict"
+    status_code = 409
+
+    def __init__(self, name: str) -> None:
+        """Initialize a ProjectNameConflictError with the user ID and project name."""
+        self.name = name
+        super().__init__(f"Project name '{name}' is already in use.")
