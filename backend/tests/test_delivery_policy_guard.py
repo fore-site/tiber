@@ -185,7 +185,6 @@ async def test_template_content_renders_into_provider_payload():
     template = Template.create(
         project_id=project_id,
         name="welcome",
-        slug="welcome",
         channel=DeliveryChannel.EMAIL,
         body="Welcome {{name}}!",
         subject="Hello {{name}}",

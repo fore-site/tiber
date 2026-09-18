@@ -134,7 +134,6 @@ def make_template(*, project_id: UUID, channel=DeliveryChannel.EMAIL, body, subj
     return Template.create(
         project_id=project_id,
         name="welcome",
-        slug="welcome",
         channel=channel,
         body=body,
         subject=subject,

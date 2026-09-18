@@ -1997,8 +1997,11 @@ components:
           type: string
           minLength: 1
           maxLength: 100
-          pattern: "^[a-z0-9-]+$"
-          description: URL-safe lowercase identifier. Immutable after creation.
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          description: >
+            URL-safe identifier: lowercase letters and digits separated by
+            single hyphens, no leading or trailing hyphen. Immutable after
+            creation.
         description:
           type: string
           maxLength: 500
@@ -2091,8 +2094,7 @@ components:
 
     Template:
       type: object
-      required:
-        [id, project_id, name, slug, channel, body, created_at, updated_at]
+      required: [id, project_id, name, channel, body, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -2100,9 +2102,6 @@ components:
           $ref: "#/components/schemas/UUID"
         name:
           type: string
-        slug:
-          type: string
-          description: Immutable after creation.
         channel:
           $ref: "#/components/schemas/Channel"
         subject:
@@ -2118,17 +2117,12 @@ components:
 
     CreateTemplateRequest:
       type: object
-      required: [name, slug, channel, body]
+      required: [name, channel, body]
       properties:
         name:
           type: string
           minLength: 1
           maxLength: 100
-        slug:
-          type: string
-          minLength: 1
-          maxLength: 100
-          pattern: "^[a-z0-9-]+$"
         channel:
           $ref: "#/components/schemas/Channel"
         subject:

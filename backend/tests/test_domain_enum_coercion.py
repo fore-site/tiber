@@ -27,7 +27,12 @@ from tiber.domain.enums import (
     NotificationCategory,
     UserRole,
 )
-from tiber.domain.value_objects import RestrictedWindow, TopicTitle
+from tiber.domain.exceptions import InvalidNotificationStateError
+from tiber.domain.value_objects import (
+    NotificationContent,
+    RestrictedWindow,
+    TopicTitle,
+)
 
 # --- User.role ---
 
@@ -49,33 +54,29 @@ def test_user_unknown_role_value_raises():
 
 
 def test_template_raw_channel_string_is_coerced():
-    """A raw channel string arrives as the member, before the subject check."""
+    """A raw channel string arrives as the member, before the title check."""
     template = Template.create(
         project_id=uuid4(),
         name="welcome",
-        slug="welcome",
         channel="email",
-        body="Hello",
-        subject="Hi",
+        content=NotificationContent(title="Hi", body="Hello"),
     )
 
     assert template.channel is DeliveryChannel.EMAIL
 
 
-def test_template_coercion_precedes_channel_subject_check():
-    """The email/subject invariant applies to the coerced value.
+def test_template_coercion_precedes_channel_title_check():
+    """The email/title invariant applies to the coerced value.
 
-    A raw 'email' without a subject must be rejected by the same check
+    A raw 'email' without a title must be rejected by the same check
     that rejects the member — proving coercion ran before the check.
     """
-    with pytest.raises(ValueError, match="subject"):
+    with pytest.raises(InvalidNotificationStateError, match="Title"):
         Template.create(
             project_id=uuid4(),
             name="welcome",
-            slug="welcome",
             channel="email",
-            body="Hello",
-            subject=None,
+            content=NotificationContent(body="Hello"),
         )
 
 
@@ -85,9 +86,8 @@ def test_template_cross_enum_impostor_raises():
         Template.create(
             project_id=uuid4(),
             name="welcome",
-            slug="welcome",
             channel=NotificationCategory.PROMOTIONAL,
-            body="Hello",
+            content=NotificationContent(body="Hello"),
         )
 
 

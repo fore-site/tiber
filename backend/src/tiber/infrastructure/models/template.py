@@ -27,11 +27,6 @@ class TemplateModel(Base):
     __table_args__ = (
         UniqueConstraint(
             "project_id",
-            "slug",
-            name="templates_project_slug_unique",
-        ),
-        UniqueConstraint(
-            "project_id",
             "name",
             name="templates_name_unique",
         ),
@@ -55,11 +50,6 @@ class TemplateModel(Base):
     )
 
     name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
-
-    slug: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
     )

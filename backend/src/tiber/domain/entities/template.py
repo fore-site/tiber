@@ -3,49 +3,33 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel
+from ..services.channel_content import validate_content
+from ..value_objects import NotificationContent
 
 
 @dataclass(frozen=True, kw_only=True)
 class Template:
-    """Template entity - reusable notification content.
-
-    ``subject`` is required for email and must be absent for other channels,
-    enforced both here and by the ``templates_subject_check`` DB constraint.
-    Supports ``{{variable}}`` interpolation.
-    """
+    """Template entity - reusable notification content."""
 
     # Ids are system-generated: callers never supply one. kw_only makes the
     # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     name: str
-    slug: str
     channel: DeliveryChannel
-    body: str
-    subject: str | None = None
+    content: NotificationContent
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate the template's state after initialization."""
-        # Boundary coercion before the channel/subject check reads the field.
+        # Boundary coercion before the channel/title check reads the field.
         object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
 
         if not self.name or not self.name.strip():
             raise ValueError("Template name must not be empty")
-        if not self.slug or not self.slug.strip():
-            raise ValueError("Template slug must not be empty")
-        if not self.body or not self.body.strip():
-            raise ValueError("Template body must not be empty")
 
-        if self.channel is DeliveryChannel.EMAIL:
-            if self.subject is None:
-                raise ValueError("Email templates must have a subject")
-        else:
-            if self.subject is not None:
-                raise ValueError(
-                    f"Subject must not be set for {self.channel.value} templates"
-                )
+        validate_content(self.channel, self.content)
 
     @classmethod
     def create(
@@ -53,19 +37,15 @@ class Template:
         *,
         project_id: UUID,
         name: str,
-        slug: str,
         channel: DeliveryChannel,
-        body: str,
-        subject: str | None = None,
+        content: NotificationContent,
     ) -> Template:
         """Create a new template with a system-generated id and timestamps."""
         return cls(
             project_id=project_id,
             name=name,
-            slug=slug,
             channel=channel,
-            body=body,
-            subject=subject,
+            content=content,
         )
 
     @classmethod
@@ -75,10 +55,8 @@ class Template:
         id: UUID,
         project_id: UUID,
         name: str,
-        slug: str,
         channel: DeliveryChannel,
-        body: str,
-        subject: str | None,
+        content: NotificationContent,
         created_at: datetime,
         updated_at: datetime,
     ) -> Template:
@@ -87,10 +65,8 @@ class Template:
             id=id,
             project_id=project_id,
             name=name,
-            slug=slug,
             channel=channel,
-            body=body,
-            subject=subject,
+            content=content,
             created_at=created_at,
             updated_at=updated_at,
         )

@@ -6,7 +6,6 @@ Use cases in application/ depend only on these interfaces,
 never on the SQLAlchemy implementations directly.
 
 One repository per persisted domain entity, mirroring the domain model.
-Delivery Channel is an enum, not an entity, so it has no repository.
 """
 
 from __future__ import annotations
@@ -20,12 +19,15 @@ from .entities import (
     DeliveryConstraint,
     EngagementEvent,
     Notification,
+    NotificationTopic,
     Project,
     Recipient,
     Template,
     User,
     WebhookEndpoint,
 )
+from .enums import NotificationCategory
+from .value_objects import TopicTitle
 
 
 class UserRepository(Protocol):
@@ -55,8 +57,13 @@ class ProjectRepository(Protocol):
         """Get a project by its ID."""
         ...
 
-    async def get_by_slug(self, slug: str) -> Project | None:
-        """Get a project by its slug."""
+    async def get_by_slug(self, slug: str, user_id: UUID) -> Project | None:
+        """Get a project by its slug within a user's scope.
+
+        Scoped to ``user_id`` because the storage constraint is per-user
+        uniqueness: the same slug can exist under different users, so an
+        unscoped lookup would return an arbitrary row among them.
+        """
         ...
 
 
@@ -64,11 +71,7 @@ class NotificationRepository(Protocol):
     """Contract for notification data access."""
 
     async def save(self, notification: Notification) -> Notification:
-        """Persist a notification.
-
-        Implementations are responsible for ensuring persistence semantics
-        appropriate for their storage backend (e.g concurrency control).
-        """
+        """Save a notification to the repository."""
         ...
 
     async def get_by_id(self, id: UUID) -> Notification | None:
@@ -113,8 +116,6 @@ class APIKeyRepository(Protocol):
 
 
 # Template
-
-
 class TemplateRepository(Protocol):
     """Contract for template data access."""
 
@@ -126,18 +127,12 @@ class TemplateRepository(Protocol):
         """Get a template by its ID."""
         ...
 
-    async def get_by_slug(self, slug: str, project_id: UUID) -> Template | None:
-        """Get a template by its slug."""
-        ...
-
     async def list_by_project(self, project_id: UUID) -> list[Template]:
         """List all templates for a project."""
         ...
 
 
 # Recipient
-
-
 class RecipientRepository(Protocol):
     """Contract for recipient data access."""
 
@@ -162,12 +157,7 @@ class RecipientRepository(Protocol):
         ...
 
 
-# Notification
-
-
 # Delivery Attempt
-
-
 class DeliveryAttemptRepository(Protocol):
     """Contract for delivery attempt data access."""
 
@@ -182,9 +172,36 @@ class DeliveryAttemptRepository(Protocol):
         ...
 
 
+# Notification Topic
+class NotificationTopicRepository(Protocol):
+    """Contract for notification topic data access."""
+
+    async def save(self, topic: NotificationTopic) -> NotificationTopic:
+        """Save a notification topic to the repository."""
+        ...
+
+    async def get_by_id(self, id: UUID, project_id: UUID) -> NotificationTopic | None:
+        """Get a notification topic by its ID."""
+        ...
+
+    async def get_by_title(
+        self, title: TopicTitle, project_id: UUID
+    ) -> NotificationTopic | None:
+        """Get a notification topic by its title."""
+        ...
+
+    async def list_by_category(
+        self, project_id: UUID, category: NotificationCategory
+    ) -> list[NotificationTopic]:
+        """List all notification topics under a category."""
+        ...
+
+    async def list_by_project(self, project_id: UUID) -> list[NotificationTopic]:
+        """List all notification topics for a project."""
+        ...
+
+
 # Webhook Endpoint
-
-
 class WebhookEndpointRepository(Protocol):
     """Contract for webhook endpoint data access."""
 
@@ -208,8 +225,6 @@ class WebhookEndpointRepository(Protocol):
 
 
 # Delivery Policy
-
-
 class DeliveryConstraintRepository(Protocol):
     """Contract for delivery constraint data access."""
 
@@ -223,8 +238,6 @@ class DeliveryConstraintRepository(Protocol):
 
 
 # Engagement Event
-
-
 class EngagementEventRepository(Protocol):
     """Contract for engagement event data access."""
 

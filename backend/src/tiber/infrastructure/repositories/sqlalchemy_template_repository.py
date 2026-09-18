@@ -28,16 +28,6 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
         model = await self._session.get(TemplateModel, id)
         return self._to_entity(model) if model else None
 
-    async def get_by_slug(self, project_id: UUID, slug: str) -> Template | None:
-        """Get a template for a project by its slug."""
-        result = await self._session.execute(
-            select(TemplateModel)
-            .where(TemplateModel.project_id == project_id)
-            .where(TemplateModel.slug == slug)
-        )
-        model = result.scalar_one_or_none()
-        return self._to_entity(model) if model else None
-
     async def list_by_project(
         self, project_id: UUID, limit: int, offset: int
     ) -> list[Template]:
@@ -57,7 +47,6 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
             id=entity.id,
             project_id=entity.project_id,
             name=entity.name,
-            slug=entity.slug,
             channel=entity.channel,
             subject=entity.subject,
             body=entity.body,
@@ -71,7 +60,6 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
             id=model.id,
             project_id=model.project_id,
             name=model.name,
-            slug=model.slug,
             channel=DeliveryChannel(model.channel),
             subject=model.subject,
             body=model.body,
