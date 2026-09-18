@@ -29,7 +29,7 @@ def make_notification(
         channel=channel,
         category=category,
         content=NotificationContent(
-            subject="Hi" if channel is DeliveryChannel.EMAIL else None,
+            title="Hi" if channel is DeliveryChannel.EMAIL else None,
             body="Hello",
         ),
         send_at=send_at,

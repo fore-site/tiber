@@ -49,7 +49,7 @@ def make_ctx(
         channel=channel,
         category=NotificationCategory.PROMOTIONAL,
         content=NotificationContent(
-            subject="Hi" if channel == DeliveryChannel.EMAIL else None,
+            title="Hi" if channel == DeliveryChannel.EMAIL else None,
             body="Hello",
         ),
         send_at=send_at,

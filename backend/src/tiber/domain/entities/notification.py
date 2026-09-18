@@ -9,6 +9,7 @@ from ..enums import (
     SendTimeBasis,
 )
 from ..exceptions import InvalidNotificationStateError, InvalidStateTransitionError
+from ..services.channel_content import validate_content
 from ..value_objects import NotificationContent
 
 
@@ -50,6 +51,9 @@ class Notification:
             self, "category", NotificationCategory(self.category.lower())
         )
         object.__setattr__(self, "status", NotificationStatus(self.status.lower()))
+
+        # validate notification content for the channel
+        validate_content(self.channel, self.content)
 
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise InvalidNotificationStateError(
@@ -111,19 +115,7 @@ class Notification:
                     "`failure_reason` must only be set when status is FAILED"
                 )
 
-        # 3. email channel requires subject; other channels must not have one
-        if self.channel is DeliveryChannel.EMAIL:
-            if self.content.subject is None:
-                raise InvalidNotificationStateError(
-                    "Email notifications must have a subject"
-                )
-        else:
-            if self.content.subject is not None:
-                raise InvalidNotificationStateError(
-                    f"Subject must not be set for {self.channel.value} notifications"
-                )
-
-        # 4. delivered status ↔ delivered_at consistency
+        # 3. delivered status ↔ delivered_at consistency
         if self.status is NotificationStatus.DELIVERED:
             if self.delivered_at is None:
                 raise InvalidNotificationStateError(

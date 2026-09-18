@@ -35,7 +35,7 @@ def make_notification(**overrides) -> Notification:
         correlation_id=uuid4(),
         channel=DeliveryChannel.EMAIL,
         category=NotificationCategory.PROMOTIONAL,
-        content=NotificationContent(subject="Hi", body="Hello"),
+        content=NotificationContent(title="Hi", body="Hello"),
     )
     kwargs.update(overrides)
     return Notification.create(**kwargs)
@@ -64,7 +64,7 @@ def test_raw_status_string_is_coerced_on_direct_instantiation():
         correlation_id=uuid4(),
         channel="email",
         category="promotional",
-        content=NotificationContent(subject="Hi", body="Hello"),
+        content=NotificationContent(title="Hi", body="Hello"),
         status="pending",
     )
 

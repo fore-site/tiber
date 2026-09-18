@@ -7,7 +7,6 @@ class DeliveryChannel(StrEnum):
     EMAIL = "email"
     PUSH = "push"
     SMS = "sms"
-    WEBHOOK = "webhook"
     IN_APP = "in_app"
 
 
