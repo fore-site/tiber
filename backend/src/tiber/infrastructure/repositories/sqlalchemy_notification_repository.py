@@ -78,11 +78,13 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             "channel": entity.channel,
             "status": entity.status,
             "idempotency_key": entity.idempotency_key,
+            "group_key": entity.group_key,
             "subject": entity.content.subject,
             "body": entity.content.body,
             "send_at": entity.send_at,
             "send_time_basis": entity.send_time_basis,
             "policy_violation_reason": entity.policy_violation_reason,
+            "cancellation_reason": entity.cancellation_reason,
             "failure_reason": entity.failure_reason,
             "delivered_at": entity.delivered_at,
             "created_at": entity.created_at,
@@ -90,11 +92,6 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         }
         if entity.template_variables is not None:
             fields["template_variables"] = entity.template_variables
-        # NOTE: entity.context is deliberately NOT persisted. It is an
-        # intake-time ML feature payload whose storage home (a separate
-        # per-notification store, not a column here and never
-        # EngagementEvent) is deferred to the ML phase. Do not "fix" this
-        # omission by adding a column - see doc 06 for the decision.
         return NotificationModel(**fields)
 
     @staticmethod
@@ -119,6 +116,8 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             send_time_basis=model.send_time_basis,
             delivered_at=model.delivered_at,
             policy_violation_reason=model.policy_violation_reason,
+            cancellation_reason=model.cancellation_reason,
             failure_reason=model.failure_reason,
             idempotency_key=model.idempotency_key,
+            group_key=model.group_key,
         )

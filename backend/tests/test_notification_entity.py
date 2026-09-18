@@ -139,74 +139,109 @@ def test_raw_critical_string_with_send_at_is_rejected():
         )
 
 
-# --- client context: ML feature payload ---
+# --- group_key: opaque identity of the logical thing this send is about ---
 
 
-def test_context_is_none_by_default_and_accepted_when_valid():
-    """Context is optional, and a flat str->str dict is accepted as given."""
+def test_group_key_is_none_by_default_and_round_trips_through_create():
+    """group_key is optional and accepted as given — it is never parsed."""
     default = make_notification()
-    assert default.context is None
+    assert default.group_key is None
 
-    ctx_payload = {"segment": "power_user", "campaign_id": "spring-26"}
-    notification = make_notification(context=ctx_payload)
-    assert notification.context == ctx_payload
+    notification = make_notification(group_key="order-1234")
+    assert notification.group_key == "order-1234"
 
 
-def test_context_rejects_non_string_values():
-    """Nested structures are not representable: values must be strings.
+def test_group_key_accepts_arbitrary_opaque_strings():
+    """No structure is imposed: any non-empty string is a valid identity."""
+    for key in ("order-1234", "post_42/comments", "user:7:cart"):
+        assert make_notification(group_key=key).group_key == key
 
-    A flat payload keeps the ML feature schema legible — a client wanting
-    structure encodes it into the string (e.g. JSON) themselves.
+
+def test_group_key_rejects_blank_string():
+    """An empty or whitespace key is not an identity — reject, don't coerce."""
+    with pytest.raises(InvalidNotificationStateError, match="group_key"):
+        make_notification(group_key="   ")
+
+
+def test_group_key_rejects_over_length_string():
+    """The 255-char ceiling mirrors the persistence column's bound."""
+    with pytest.raises(InvalidNotificationStateError, match="group_key"):
+        make_notification(group_key="x" * 256)
+
+
+def test_rehydrated_group_key_is_preserved():
+    """group_key is persisted state: a DB round-trip must keep it.
+
+    The collapse/dedup/learning consumers query it from storage, so a
+    rehydrated row that lost the key would silently ungroup its sends.
     """
-    with pytest.raises(Exception, match="context"):
-        make_notification(context={"experiment": {"arm": "B"}})
-
-
-def test_context_rejects_non_string_keys():
-    """Keys must be strings too, so the payload serializes predictably."""
-    with pytest.raises(Exception, match="context"):
-        make_notification(context={7: "lucky"})
-
-
-def test_context_rejects_non_dict_input():
-    """A list or scalar passed as context is rejected, not coerced."""
-    with pytest.raises(Exception, match="context"):
-        make_notification(context=["not", "a", "dict"])
-
-
-def test_reconstitute_drops_context():
-    """Context is intake-time state, not persisted state.
-
-    reconstitute() does not accept it: the ML feature payload has no
-    storage home yet (deferred to the ML phase, separate table, never
-    EngagementEvent), so a rehydrated notification legitimately reads as
-    context-less. The entity's in-memory contract still accepts context
-    at create()-time for the future write path.
-    """
-    created = make_notification(context={"segment": "power_user"})
-
     restored = Notification.reconstitute(
-        id=created.id,
-        project_id=created.project_id,
-        recipient_id=created.recipient_id,
-        correlation_id=created.correlation_id,
-        channel=created.channel,
-        category=created.category,
-        content=created.content,
-        status=created.status,
-        created_at=created.created_at,
-        updated_at=created.updated_at,
-        template_id=created.template_id,
-        template_variables=created.template_variables,
-        idempotency_key=created.idempotency_key,
-        send_at=created.send_at,
-        send_time_basis=created.send_time_basis,
-        policy_violation_reason=created.policy_violation_reason,
-        failure_reason=created.failure_reason,
-        delivered_at=created.delivered_at,
+        id=uuid4(),
+        project_id=uuid4(),
+        recipient_id=uuid4(),
+        correlation_id=uuid4(),
+        channel=DeliveryChannel.EMAIL,
+        category=NotificationCategory.PROMOTIONAL,
+        content=NotificationContent(title="Hi", body="Hello"),
+        status=NotificationStatus.PENDING,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        template_id=None,
+        template_variables=None,
+        group_key="order-1234",
+        idempotency_key=None,
+        send_at=None,
+        send_time_basis=SendTimeBasis.ML_PREDICTED,
+        policy_violation_reason=None,
+        cancellation_reason=None,
+        failure_reason=None,
+        delivered_at=None,
     )
 
-    assert restored.context is None
+    assert restored.group_key == "order-1234"
+
+
+# --- cancellation carries its reason ---
+
+
+def test_mark_cancelled_is_legal_without_a_reason():
+    """Clients cancel freely, without documenting why.
+
+    The optional reason exists for system-initiated cancellations (digest
+    absorption, future latest-wins supersession), where it is a system
+    fact Tiber generated — not client documentation.
+    """
+    cancelled = make_notification().mark_cancelled()
+
+    assert cancelled.status is NotificationStatus.CANCELLED
+    assert cancelled.cancellation_reason is None
+
+
+def test_mark_cancelled_carries_the_reason():
+    """The reason is stored on the row, not just in logs."""
+    cancelled = make_notification().mark_cancelled("superseded by order-1235")
+
+    assert cancelled.status is NotificationStatus.CANCELLED
+    assert cancelled.cancellation_reason == "superseded by order-1235"
+
+
+def test_cancellation_reason_only_set_when_cancelled():
+    """A non-cancelled notification cannot carry a cancellation reason.
+
+    Direct instantiation path: create() never accepts status or the reason,
+    so this invariant guards the rehydration/reconstitution boundary.
+    """
+    with pytest.raises(InvalidNotificationStateError, match="cancellation_reason"):
+        Notification(
+            project_id=uuid4(),
+            recipient_id=uuid4(),
+            correlation_id=uuid4(),
+            channel=DeliveryChannel.EMAIL,
+            category=NotificationCategory.PROMOTIONAL,
+            content=NotificationContent(title="Hi", body="Hello"),
+            status=NotificationStatus.PENDING,
+            cancellation_reason="not cancelled yet",
+        )
 
 
 # --- send_time_basis is stored state, not a derived value ---
@@ -234,10 +269,12 @@ def test_rehydrated_ml_predicted_with_send_at_keeps_its_basis():
         updated_at=datetime.now(UTC),
         template_id=None,
         template_variables=None,
+        group_key=None,
         idempotency_key=None,
         send_at=predicted_time,
         send_time_basis=SendTimeBasis.ML_PREDICTED,
         policy_violation_reason=None,
+        cancellation_reason=None,
         failure_reason=None,
         delivered_at=None,
     )
@@ -262,10 +299,12 @@ def test_rehydrate_explicit_without_send_at_is_rejected():
             updated_at=datetime.now(UTC),
             template_id=None,
             template_variables=None,
+            group_key=None,
             idempotency_key=None,
             send_at=None,
             send_time_basis=SendTimeBasis.EXPLICIT,
             policy_violation_reason=None,
+            cancellation_reason=None,
             failure_reason=None,
             delivered_at=None,
         )

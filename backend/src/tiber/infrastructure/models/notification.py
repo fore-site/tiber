@@ -127,6 +127,15 @@ class NotificationModel(Base):
         nullable=True,
     )
 
+    # Client-supplied identity of the logical thing this send is about,
+    # shared across related sends. Opaque: stored and indexed, never parsed.
+    # Indexed with recipient because the first recorded consumer is the
+    # per-(recipient, group_key) engagement-history query.
+    group_key: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     correlation_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         nullable=False,
@@ -159,6 +168,11 @@ class NotificationModel(Base):
     )
 
     policy_violation_reason: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    cancellation_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

@@ -33,11 +33,17 @@ class Notification:
     topic_id: UUID | None = None
     template_id: UUID | None = None
     template_variables: dict[str, str] | None = None
-    context: dict[str, str] | None = None
+    # Client-supplied identity of the logical thing this send is about
+    # ("order-1234"), shared across the sends that concern it. Opaque by
+    # contract: Tiber stores and indexes it, never parses structure from
+    # it. Inert at intake; consumers are batching collapse, dedup, and
+    # per-entity learning, all later phases.
+    group_key: str | None = None
     idempotency_key: str | None = None
     send_at: datetime | None = None
     send_time_basis: SendTimeBasis | None = None
     policy_violation_reason: str | None = None
+    cancellation_reason: str | None = None
     failure_reason: str | None = None
     delivered_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -103,21 +109,15 @@ class Notification:
                 "CRITICAL notifications must have send_time_basis IMMEDIATE"
             )
 
-        # 1b. client context: ML feature payload, never delivery data.
-        if self.context is not None:
-            if not isinstance(self.context, dict):
+        # 1b. group_key: opaque client-supplied identity, never parsed.
+        if self.group_key is not None:
+            if not isinstance(self.group_key, str) or not self.group_key.strip():
                 raise InvalidNotificationStateError(
-                    "`context` must be a dict of string to string"
+                    "`group_key` must be a non-empty string when provided"
                 )
-            bad = [
-                k
-                for k, v in self.context.items()
-                if not isinstance(k, str) or not isinstance(v, str)
-            ]
-            if bad:
+            if len(self.group_key) > 255:
                 raise InvalidNotificationStateError(
-                    "`context` keys and values must all be strings; "
-                    f"invalid entries: {bad[:5]}"
+                    "`group_key` must be at most 255 characters"
                 )
 
         # 2. policy_rejected to reason consistency
@@ -131,6 +131,16 @@ class Notification:
                 raise InvalidNotificationStateError(
                     "`policy_violation_reason` must only be set when status is POLICY_REJECTED"
                 )
+
+        # 2c. cancellation reason is optional (clients cancel freely),
+        # but it is only representable on a cancelled notification.
+        if (
+            self.status is not NotificationStatus.CANCELLED
+            and self.cancellation_reason is not None
+        ):
+            raise InvalidNotificationStateError(
+                "`cancellation_reason` must only be set when status is CANCELLED"
+            )
 
         # 2b. failed to reason consistency
         if self.status is NotificationStatus.FAILED:
@@ -168,7 +178,7 @@ class Notification:
         content: NotificationContent,
         template_id: UUID | None = None,
         template_variables: dict[str, str] | None = None,
-        context: dict[str, str] | None = None,
+        group_key: str | None = None,
         idempotency_key: str | None = None,
         send_at: datetime | None = None,
     ) -> Notification:
@@ -191,7 +201,7 @@ class Notification:
             content=content,
             template_id=template_id,
             template_variables=template_variables,
-            context=context,
+            group_key=group_key,
             idempotency_key=idempotency_key,
             send_at=send_at,
         )
@@ -212,10 +222,12 @@ class Notification:
         updated_at: datetime,
         template_id: UUID | None,
         template_variables: dict[str, str] | None,
+        group_key: str | None,
         idempotency_key: str | None,
         send_at: datetime | None,
         send_time_basis: SendTimeBasis,
         policy_violation_reason: str | None,
+        cancellation_reason: str | None,
         failure_reason: str | None,
         delivered_at: datetime | None,
     ) -> Notification:
@@ -225,10 +237,10 @@ class Notification:
         receive the full stored row, including its identity and timestamps.
         Forgetting one is a TypeError, never silently regenerated state.
 
-        ``context`` is deliberately absent: it is an intake-time ML feature
-        payload, not persisted notification state (its storage home is
-        deferred to the ML phase). Rehydration therefore yields
-        ``context=None`` even when the original carried one.
+        ``context`` was retired by decision: static recipient facts live on
+        the recipient profile and learned behavior on engagement events, so
+        a per-send feature payload no longer exists. Do not reintroduce it —
+        the reasoning is recorded in the send-contract decision record.
         """
         return cls(
             id=id,
@@ -243,10 +255,12 @@ class Notification:
             updated_at=updated_at,
             template_id=template_id,
             template_variables=template_variables,
+            group_key=group_key,
             idempotency_key=idempotency_key,
             send_at=send_at,
             send_time_basis=send_time_basis,
             policy_violation_reason=policy_violation_reason,
+            cancellation_reason=cancellation_reason,
             failure_reason=failure_reason,
             delivered_at=delivered_at,
         )
@@ -306,12 +320,24 @@ class Notification:
 
         return self._transition(status=NotificationStatus.PROCESSING)
 
-    def mark_cancelled(self) -> Notification:
-        """Transition the notification to the cancelled state."""
+    def mark_cancelled(self, reason: str | None = None) -> Notification:
+        """Transition the notification to the cancelled state.
+
+        The reason is optional because its necessity depends on who is
+        cancelling. A client may cancel freely without documenting why -
+        that is their prerogative and none of Tiber's business. A
+        system-initiated cancellation (digest absorption, future
+        latest-wins supersession) must supply the reason it generated:
+        there the reason is a system fact, not client documentation, and
+        the row remains the permanent record of why nothing was sent.
+        """
         if self.status != NotificationStatus.PENDING:
             raise InvalidStateTransitionError(self.status, NotificationStatus.CANCELLED)
 
-        return self._transition(status=NotificationStatus.CANCELLED)
+        return self._transition(
+            status=NotificationStatus.CANCELLED,
+            cancellation_reason=reason,
+        )
 
     def mark_policy_rejected(self, reason: str) -> Notification:
         """Transition the notification to the policy_rejected state."""

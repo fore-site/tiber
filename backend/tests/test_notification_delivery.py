@@ -312,6 +312,6 @@ async def test_processing_transition_is_invalid_from_terminal_state():
 
 async def test_delivered_transition_rejected_from_processing_duplicate():
     """mark_delivered is only valid from pending/processing, not terminal states."""
-    cancelled = make_notification().mark_cancelled()
+    cancelled = make_notification().mark_cancelled("test cancellation")
     with pytest.raises(InvalidStateTransitionError):
         cancelled.mark_delivered()
