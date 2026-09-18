@@ -38,13 +38,6 @@ class FakeTemplateRepository:
         """Get a template by ID."""
         return self._store.get(id)
 
-    async def get_by_slug(self, project_id, slug):
-        """Get a template for a project by slug."""
-        for t in self._store.values():
-            if t.project_id == project_id and t.slug == slug:
-                return t
-        return None
-
     async def list_by_project(self, project_id, limit, offset):
         """List templates for a project."""
         items = [t for t in self._store.values() if t.project_id == project_id]
@@ -56,16 +49,17 @@ def make_template(
     project_id=None,
     channel=DeliveryChannel.EMAIL,
     body="Hi {{name}}",
-    subject="Hello {{name}}",
+    title="Hello {{name}}",
 ) -> Template:
-    """Build a template; subject is only valid for the email channel."""
+    """Build a template; a title is required for the email channel."""
     return Template.create(
         project_id=project_id or uuid4(),
         name="welcome",
-        slug="welcome",
         channel=channel,
-        body=body,
-        subject=subject if channel == DeliveryChannel.EMAIL else None,
+        content=NotificationContent(
+            body=body,
+            title=title if channel == DeliveryChannel.EMAIL else None,
+        ),
     )
 
 
@@ -83,7 +77,7 @@ def make_notification(
         correlation_id=uuid4(),
         channel=channel,
         category=NotificationCategory.PROMOTIONAL,
-        content=NotificationContent(subject="Direct", body="Direct body"),
+        content=NotificationContent(title="Direct", body="Direct body"),
         template_id=template_id,
         template_variables=variables,
     )
@@ -94,11 +88,11 @@ def make_notification(
 
 def test_render_substitutes_variables():
     """Present variables are substituted into subject and body."""
-    template = make_template(body="Hi {{name}}, code {{code}}", subject="For {{name}}")
+    template = make_template(body="Hi {{name}}, code {{code}}", title="For {{name}}")
     rendered = TemplateRenderer().render(template, {"name": "Ada", "code": 1234})
 
     assert rendered.body == "Hi Ada, code 1234"
-    assert rendered.subject == "For Ada"
+    assert rendered.title == "For Ada"
 
 
 def test_render_missing_variable_becomes_empty_string():
@@ -123,7 +117,30 @@ def test_render_no_variables_passes_body_through():
     rendered = TemplateRenderer().render(template, None)
 
     assert rendered.body == "Static body"
-    assert rendered.subject == "Static subject"
+    assert rendered.title == "Static subject"
+
+
+def test_render_passes_urls_through_unchanged():
+    """action_url / image_url are opaque values: they pass through unrendered.
+
+    Also pins push-without-title at the template level: a title-less push
+    template is valid because providers default the title to the app name.
+    """
+    template = Template.create(
+        project_id=uuid4(),
+        name="promo",
+        channel=DeliveryChannel.PUSH,
+        content=NotificationContent(
+            body="Check it out",
+            action_url="https://example.com/deep-link",
+            image_url="https://cdn.example.com/hero.png",
+        ),
+    )
+
+    rendered = TemplateRenderer().render(template, {"ignored": "variable"})
+
+    assert rendered.action_url == "https://example.com/deep-link"
+    assert rendered.image_url == "https://cdn.example.com/hero.png"
 
 
 # --- NotificationTemplateResolver ---
@@ -155,7 +172,7 @@ async def test_resolver_renders_template_content():
     content = await resolver.resolve_content(notification)
 
     assert content.body == "Welcome Ada!"
-    assert content.subject == "Hello Ada"
+    assert content.title == "Hello Ada"
 
 
 async def test_resolver_raises_when_template_missing():
