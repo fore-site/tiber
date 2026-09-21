@@ -117,14 +117,26 @@ class BlackoutPeriodRule:
     """Reject a notification when it is sent during a blackout period.
 
     A blackout period is a date range during which notifications are not
-    allowed to be sent. The rule checks if the current date falls within any
+    allowed to be sent. The rule checks if the send date falls within any
     of the defined blackout periods for the project.
+
+    A violation is a hard rejection: the notification is never rescheduled
+    to after the blackout. The blackout is the client's own configuration,
+    so a send that lands inside it contradicts the client's declared rule,
+    and Tiber does not silently override client declarations.
+
+    CRITICAL notifications bypass this rule, on the same grounds as the
+    preference rule: the recipient's need to receive the message outranks
+    the project's configured silence.
     """
 
     name = "blackout_period"
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject when the notification is sent during a blackout period."""
+        if ctx.notification.category is NotificationCategory.CRITICAL:
+            return PolicyDecision.allow()
+
         delivery_constraint = ctx.delivery_constraint
         if not delivery_constraint:
             return PolicyDecision.allow()

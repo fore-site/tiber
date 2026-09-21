@@ -40,6 +40,7 @@ def make_ctx(
     send_at: datetime | None = None,
     now: datetime = datetime(2026, 9, 15, 23, 0, tzinfo=UTC),
     constraint: DeliveryConstraint | None = None,
+    category: NotificationCategory = NotificationCategory.PROMOTIONAL,
 ) -> PolicyContext:
     """Build a policy context with a fixed clock and no consent interference."""
     notification = Notification.create(
@@ -47,7 +48,7 @@ def make_ctx(
         recipient_id=uuid4(),
         correlation_id=uuid4(),
         channel=channel,
-        category=NotificationCategory.PROMOTIONAL,
+        category=category,
         content=NotificationContent(
             title="Hi" if channel == DeliveryChannel.EMAIL else None,
             body="Hello",
@@ -398,6 +399,34 @@ async def test_blackout_end_date_is_inclusive():
     decision = await BlackoutPeriodRule().evaluate(ctx)
 
     assert not decision.allowed
+
+
+# --- BlackoutPeriodRule: CRITICAL bypass ---
+
+
+async def test_blackout_bypasses_critical_notifications():
+    """Pin that a CRITICAL send during a blackout is never rejected.
+
+    Same grounds as the preference rule's CRITICAL bypass: the recipient's
+    need to receive the message (fraud alert, MFA token) outranks the
+    project's configured silence. The blackout is the sender's own rule;
+    the criticality is about the recipient's need.
+
+    The scenario is judged against ``now`` because the entity forbids
+    ``send_at`` on CRITICAL notifications (immediate-only basis) — the
+    reachable bypass path is a dispatch moment landing inside a blackout,
+    exactly what the guard re-checks.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(
+            blackouts=(blackout(date(2026, 9, 15), date(2026, 9, 17)),)
+        ),
+        # default now = 2026-09-15 23:00 UTC, inside the blackout range
+        category=NotificationCategory.CRITICAL,
+    )
+    decision = await BlackoutPeriodRule().evaluate(ctx)
+
+    assert decision.allowed
 
 
 # --- BlackoutPeriodRule: send-time branch ---

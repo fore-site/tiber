@@ -2270,8 +2270,8 @@ components:
             - $ref: "#/components/schemas/TimeWindow"
           type: [object, "null"]
           description: |
-            No notifications during this window. Notifications are
-            rescheduled to after the window ends, not dropped.
+            No notifications during this window. A send time inside the
+            window is rejected by the delivery policy, not rescheduled.
         delivery_window:
           allOf:
             - $ref: "#/components/schemas/TimeWindow"
