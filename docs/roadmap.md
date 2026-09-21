@@ -2,7 +2,7 @@
 
 **An AI/ML-augmented production-grade notification platform**
 
-Stack: FastAPI + Celery + RabbitMQ + Redis + Postgres + S3/MinIO + scikit-learn + Next.js
+Stack: FastAPI + Celery + RabbitMQ + Redis + durable database + S3/MinIO + scikit-learn + Next.js
 
 ## Release Plan
 
@@ -28,7 +28,7 @@ Each release corresponds to a completed roadmap phase. Releases are cumulative, 
 
 ## Roadmap
 
-The roadmap is the implementation guide for the architecture in `docs/architecture/`. If a task exposes a design choice, prefer the architecture decisions over framework defaults: project-scoped resources, RabbitMQ for durable work routing, Redis only for ephemeral/auth state, Postgres as the source of truth, in-process ML/AI boundaries, and graceful degradation for intelligence features.
+The roadmap is the implementation guide for the architecture in `docs/architecture/`. If a task exposes a design choice, prefer the architecture decisions over framework defaults: project-scoped resources, RabbitMQ for durable work routing, Redis only for ephemeral/auth state, the durable database as the source of truth, in-process ML/AI boundaries, and graceful degradation for intelligence features.
 
 ### Phase 1: Foundations, Architecture, and Local Infrastructure
 
@@ -37,10 +37,10 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [✅] API contract first (OpenAPI spec, design project-scoped routes before building)
 - [✅] DB schema design from the domain model: `User`, `projects`, `api_keys`, `templates`, `recipients`, `notifications`, `delivery_attempts`, `webhook_endpoints`, `delivery_constraints`, `engagement_events`, `model_versions`, `training_runs` (channel opt-outs live on recipients; `delivery_channels` is an enum, not a table)
 - [✅] Redis keys with TTLs design and implementation for JWT blocklist, API key authentication cache, and idempotency cache
-- [✅] Docker Compose: PostgreSQL + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
+- [✅] Docker Compose: durable database + RabbitMQ + Redis + local object storage (MinIO-compatible), running locally
 - [✅] GitHub Actions skeleton: test (pytest) on push
 
-**Exit criteria:** `docker compose up` provisions the local infrastructure stack, the schema is ready to be migrated with Alembic, RabbitMQ/Redis/Postgres are reachable, and CI is green on an empty test suite.
+**Exit criteria:** `docker compose up` provisions the local infrastructure stack, the schema is ready to be migrated with Alembic, RabbitMQ/Redis/durable database are reachable, and CI is green on an empty test suite.
 
 ### Phase 2: Application Bootstrap and Core Notification Engine
 
@@ -111,8 +111,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] Project management as the active tenancy boundary; Workspace remains explicitly future scope
 - [ ] Recipient channel opt-out management (`opted_out_channels` on RecipientPreferences)
 - [ ] Delivery constraint management: project-level blackout periods, per-channel restricted windows, and the project timezone (IANA name) in which both are evaluated
-- [ ] Auth (API key or JWT): JWT access-token signature validation first, Redis blocklist check second, fail closed with 503 when Redis is unavailable; API key auth uses the Redis authentication cache with PostgreSQL fallback on cache miss or Redis failure
-- [ ] API key lifecycle management with PostgreSQL as the source of truth and Redis auth-cache invalidation/refresh on create, revoke, and expiry events
+- [ ] Auth (API key or JWT): JWT access-token signature validation first, Redis blocklist check second, fail closed with 503 when Redis is unavailable; API key auth uses the Redis authentication cache with durable database fallback on cache miss or Redis failure
+- [ ] API key lifecycle management with the durable database as the source of truth and Redis auth-cache invalidation/refresh on create, revoke, and expiry events
 - [ ] Next.js dashboard: notification feed with status/channel/priority, "trigger test notification" form
 - [ ] Explainability panel: "why was this flagged high priority," showing the feature trace
 - [ ] Simulated data viewer: charts of synthetic engagement (sells the simulator work visually)
@@ -132,7 +132,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 
 ### Phase 8: Deployment, Docs, Demo
 
-- [ ] Deploy backend + worker + Postgres to Render/Fly.io (or similar)
+- [ ] Deploy backend + worker + durable database to Render/Fly.io (or similar)
 - [ ] Provision RabbitMQ via CloudAMQP free tier (or paid PaaS tier) and a Redis instance for auth state, auth cache, rate limiting, and idempotency
 - [ ] Provision S3-compatible object storage for model artefacts and training datasets
 - [ ] Deploy frontend to Vercel, wired to live backend

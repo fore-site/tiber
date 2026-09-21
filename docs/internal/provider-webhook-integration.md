@@ -38,7 +38,7 @@ Provider                    Tiber API Service              RabbitMQ
                                                     │ ◀──────── │
                                                     │
                                                     ▼
-                                               PostgreSQL
+                                               durable database
                                            engagement_events
 ```
 
@@ -243,10 +243,10 @@ Where providers publish their outbound IP ranges, configure firewall rules to al
 | Payload missing required fields | `200` | Log warning with provider message ID. Do not enqueue. |
 | Notification ID not found | `200` | Log with provider message ID. Do not enqueue. |
 | Redis unavailable (idempotency check fails) | `200` | Log warning. Proceed with enqueuing. Accept potential duplicate. |
-| RabbitMQ unavailable | `200` | Log error with full payload. Write to a fallback Postgres table for replay. |
+| RabbitMQ unavailable | `200` | Log error with full payload. Write to a fallback durable database table for replay. |
 | Duplicate event (idempotency key exists) | `200` | Log at debug level. Return immediately. |
 
-The RabbitMQ unavailability case is the most critical. If the engagement queue is down and events are dropped, ML training data is permanently lost. The fallback Postgres table (`engagement_inbound_fallback`) acts as a dead-letter store for manual replay once the broker recovers.
+The RabbitMQ unavailability case is the most critical. If the engagement queue is down and events are dropped, ML training data is permanently lost. The fallback durable database table (`engagement_inbound_fallback`) acts as a dead-letter store for manual replay once the broker recovers.
 
 ---
 

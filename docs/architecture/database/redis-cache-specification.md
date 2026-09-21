@@ -4,7 +4,7 @@
 
 **Scope:** All Redis key patterns, TTL values, value formats, access patterns, cache strategies, and failure behaviour.
 
-Redis is a dependency for Tiber's authentication layer. If Redis is unreachable, the API Service fallls back to Postgres in some instances and fails close in others such as jwt revocation.
+Redis is a dependency for Tiber's authentication layer. If Redis is unreachable, the API Service falls back to the durable database in some instances and fails close in others such as jwt revocation.
 
 ---
 
@@ -92,7 +92,7 @@ auth:refresh:{token}
   }
 ```
 
-`user_id` which is the unique identifier of the user is stored in the cache value so the token refresh endpoint can load the user context without a Postgres lookup on the happy path.
+`user_id` which is the unique identifier of the user is stored in the cache value so the token refresh endpoint can load the user context without a durable database lookup on the happy path.
 
 #### TTL
 
@@ -150,7 +150,7 @@ The state field in the value drives the authentication decision. The TTL is dete
 auth:apikey:{key_hash}
 ```
 
-`key_hash` is the 64-character SHA-256 hex hash of the raw `tb_xxxxx` API key. The middleware computes this from the Authorization header before any Redis or Postgres call — no round trip needed to determine the key to look up.
+`key_hash` is the 64-character SHA-256 hex hash of the raw `tb_xxxxx` API key. The middleware computes this from the Authorization header before any Redis or durable database call — no round trip needed to determine the key to look up.
 
 #### Value — Valid State
 
@@ -184,8 +184,8 @@ auth:apikey:{key_hash}
 
 | State | TTL | Rationale |
 |---|---|---|
-| `valid` | 5 minutes (300 seconds) | Short enough that key updates (expiry, revocation) propagate quickly. Long enough to eliminate Postgres load for active clients making repeated requests. |
-| `revoked` | 30 days (2_592_000 seconds) | API keys have no natural expiry to derive a TTL from. 30 days covers the practical replay threat window. After expiry, the Postgres `revoked_at` column is the permanent authoritative record. |
+| `valid` | 5 minutes (300 seconds) | Short enough that key updates (expiry, revocation) propagate quickly. Long enough to eliminate durable database load for active clients making repeated requests. |
+| `revoked` | 30 days (2_592_000 seconds) | API keys have no natural expiry to derive a TTL from. 30 days covers the practical replay threat window. After expiry, the durable database's `revoked_at` column is the permanent authoritative record. |
 | `not_found` | 60 seconds | Short enough to protect from high frequency spam. |
 
 For keys with `expires_at` set, the `valid` state TTL is `min(300, max(1, expires_at_unix - now_unix))` — the entry expires no later than the key itself.
@@ -194,7 +194,7 @@ For keys with `expires_at` set, the `valid` state TTL is `min(300, max(1, expire
 
 ### 2.2 Cache-Aside Authentication Flow
 
-Cache-aside means the cache is never pre-populated. Entries are written only when a Postgres lookup produces a result. The application checks the cache first and falls back to Postgres on a miss.
+Cache-aside means the cache is never pre-populated. Entries are written only when a durable database lookup produces a result. The application checks the cache first and falls back to the durable database on a miss.
 
 ```
 Step 1 — Compute cache key
@@ -206,7 +206,7 @@ Step 2 — Read single cache entry
 
     ┌─────────────────────────────────────────────────────────┐
     │ MISS (nil)                                              │
-    │   → Step 3: Query Postgres                              │
+    │   → Step 3: Query the durable database                              │
     ├─────────────────────────────────────────────────────────┤
     │ HIT, state == "revoked"                                 │
     │   → 401 Unauthorized                                    │
@@ -216,7 +216,7 @@ Step 2 — Read single cache entry
     │   otherwise → return (key_id, project_id) → allow       │
     └─────────────────────────────────────────────────────────┘
 
-Step 3 — Postgres lookup (cache miss path only)
+Step 3 — durable database lookup (cache miss path only)
     SELECT id, project_id, revoked_at, expires_at
     FROM api_keys WHERE key_hash = $1
 
@@ -240,15 +240,15 @@ Step 3 — Postgres lookup (cache miss path only)
 
 ### 2.3 Revocation Flow
 
-When a client calls `DELETE /v1/projects/{project_id}/api-keys/{key_id}`, Postgres and Redis are written atomically from the caller's perspective. If either write fails, the operation is rejected and no partial state is committed.
+When a client calls `DELETE /v1/projects/{project_id}/api-keys/{key_id}`, the durable database and Redis are written atomically from the caller's perspective. If either write fails, the operation is rejected and no partial state is committed.
 
 ```
-Step 1 — Retrieve key_hash from Postgres
+Step 1 — Retrieve key_hash from the durable database
     SELECT key_hash FROM api_keys
     WHERE id = $1 AND project_id = $2
 
-Step 2 — Write Postgres and Redis together
-    BEGIN Postgres transaction
+Step 2 — Write the durable database and Redis together
+    BEGIN durable database transaction
         UPDATE api_keys SET revoked_at = NOW() WHERE id = $1
     COMMIT
 
@@ -258,13 +258,13 @@ Step 2 — Write Postgres and Redis together
     (overwrites any existing valid context entry)
 
     If Redis write fails:
-        ROLLBACK Postgres transaction
+        ROLLBACK durable database transaction
         return 503
 ```
 
-The overwrite is the key mechanism. Whether the entry previously held a valid context (5-minute TTL, populated from a prior request) or was absent entirely, the `SET` replaces it with the revoked marker at the 30-day TTL. A subsequent request reading this entry hits the `state == "revoked"` branch and receives 401 immediately — no Postgres lookup.
+The overwrite is the key mechanism. Whether the entry previously held a valid context (5-minute TTL, populated from a prior request) or was absent entirely, the `SET` replaces it with the revoked marker at the 30-day TTL. A subsequent request reading this entry hits the `state == "revoked"` branch and receives 401 immediately — no durable database lookup.
 
-**On overwrite failure:** Postgres is rolled back. The key remains valid. The client receives 503 and retries. This is preferable to a state where Postgres marks the key revoked but Redis still serves it as valid.
+**On overwrite failure:** The durable database is rolled back. The key remains valid. The client receives 503 and retries. This is preferable to a state where the durable database marks the key revoked but Redis still serves it as valid.
 
 ---
 
@@ -272,12 +272,12 @@ The overwrite is the key mechanism. Whether the entry previously held a valid co
 
 ```
 Key created           →  no Redis entry (cache is lazy-loaded)
-First request         →  MISS → Postgres lookup → write valid entry (5 min TTL)
-Repeat requests       →  HIT, state valid → allow (no Postgres)
-Entry expires (5 min) →  MISS → Postgres lookup → write valid entry (5 min TTL)
+First request         →  MISS → durable database lookup → write valid entry (5 min TTL)
+Repeat requests       →  HIT, state valid → allow (no durable database)
+Entry expires (5 min) →  MISS → durable database lookup → write valid entry (5 min TTL)
 Key revoked           →  valid entry overwritten with revoked entry (30 day TTL)
-Post-revocation reqs  →  HIT, state revoked → 401 (no Postgres)
-30 days post-rev      →  entry expires → MISS → Postgres lookup → revoked confirmed
+Post-revocation reqs  →  HIT, state revoked → 401 (no durable database)
+30 days post-rev      →  entry expires → MISS → durable database lookup → revoked confirmed
 ```
 
 ---
@@ -286,7 +286,7 @@ Post-revocation reqs  →  HIT, state revoked → 401 (no Postgres)
 
 ### Purpose
 
-Caches the response of the first successful `POST /v1/projects/{project_id}/notifications` request for a given `Idempotency-Key` header. Duplicate submissions within the TTL window return the original cached response without re-processing — no second Postgres write, no second RabbitMQ publish.
+Caches the response of the first successful `POST /v1/projects/{project_id}/notifications` request for a given `Idempotency-Key` header. Duplicate submissions within the TTL window return the original cached response without re-processing — no second durable database write, no second RabbitMQ publish.
 
 ### Key
 
@@ -338,7 +338,7 @@ Read:   GET idempotency:{project_id}:{key}
 ```
 1. GET idempotency:{project_id}:{key}  → nil (cache miss)
 2. Validate and process the notification
-3. Persist to Postgres
+3. Persist to the durable database
 4. Publish to RabbitMQ
 5. SET idempotency:{project_id}:{key} {response} EX 86400 NX
 6. Return 201
@@ -349,7 +349,7 @@ Read:   GET idempotency:{project_id}:{key}
 ```
 1. GET idempotency:{project_id}:{key}  → cached response (cache hit)
 2. Return original status code and body immediately
-   (no Postgres write, no RabbitMQ publish)
+   (no durable database write, no RabbitMQ publish)
 ```
 
 The duplicate returns the original `201`, not a `409`. From the client's perspective the notification was accepted — returning `409` would require clients to handle "already submitted" as a distinct error case, adding unnecessary complexity to retry logic.
@@ -367,7 +367,7 @@ Sanitisation failures return `422 Unprocessable Entity`.
 
 ### Failure Behaviour
 
-**Fail closed.** If Redis is unreachable when checking for a cached idempotency response, return 503. Do not fall through to Postgres to "check if this looks like a duplicate" — that path is unreliable and processing a duplicate notification has real consequences for the end recipient. A temporary 503 is preferable to a duplicate message delivery.
+**Fail closed.** If Redis is unreachable when checking for a cached idempotency response, return 503. Do not fall through to the durable database to "check if this looks like a duplicate" — that path is unreliable and processing a duplicate notification has real consequences for the end recipient. A temporary 503 is preferable to a duplicate message delivery.
 
 ---
 
@@ -377,7 +377,7 @@ Sanitisation failures return `422 Unprocessable Entity`.
 |---|---|---|---|
 | `auth:jwt:blocklist:{jti}` | Remaining token lifetime (max 900s) | Logout / forced revocation | TTL expiry |
 | `auth:refresh:{token_id}` | 7 days | Login / token rotation | Logout / rotation |
-| `auth:apikey:{key_hash}` | 5 minutes for valid state, 30 days for revoked state | First valid Postgres lookup | Revocation for valid or TTL expiry for already revoked|
+| `auth:apikey:{key_hash}` | 5 minutes for valid state, 30 days for revoked state | First valid durable database lookup | Revocation for valid or TTL expiry for already revoked|
 | `idempotency:{project_id}:{key}` | 24 hours | First successful notification POST | TTL expiry |
 
 ---
@@ -392,8 +392,8 @@ Sanitisation failures return `422 Unprocessable Entity`.
 | API key revocation | Fail closed — 503 | Fail closed — 503, revocation rejected |
 | Idempotency cache | Fail closed — 503 | Log warning, continue without caching |
 
-**API key context cache write failure** is the one case where a write failure is non-fatal. A failed context cache write means the next request for the same key hits Postgres again — degraded performance, not degraded correctness. Log it as a warning and continue.
+**API key context cache write failure** is the one case where a write failure is non-fatal. A failed context cache write means the next request for the same key hits the durable database again — degraded performance, not degraded correctness. Log it as a warning and continue.
 
-**Idempotency cache write failure** after a successful Postgres write is also non-fatal. The notification was created and the job was published. Log the failure with the `correlation_id`. The response is returned to the client. If they retry with the same idempotency key, they will get a second notification created — which is the failure mode we accept when caching is unavailable. This is preferable to returning 503 after a notification has already been committed.
+**Idempotency cache write failure** after a successful durable database write is also non-fatal. The notification was created and the job was published. Log the failure with the `correlation_id`. The response is returned to the client. If they retry with the same idempotency key, they will get a second notification created — which is the failure mode we accept when caching is unavailable. This is preferable to returning 503 after a notification has already been committed.
 
 ---

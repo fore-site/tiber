@@ -27,7 +27,7 @@ The local deployment environment must:
 
 Included:
 
-* PostgreSQL
+* durable database
 * Redis
 * RabbitMQ
 * MinIO
@@ -53,7 +53,7 @@ Deferred until implementation exists:
           ┌──────────────┬────────┼───────────┬──────────────┐
           │              │        │           │              │
           ▼              ▼        ▼           ▼              ▼
-     PostgreSQL       Redis   RabbitMQ     MinIO        (future)
+     durable-db       Redis   RabbitMQ     MinIO        (future)
                                                     API / Worker
 ```
 
@@ -65,7 +65,7 @@ No container communicates with another container using `localhost`.
 
 # Infrastructure Services
 
-## PostgreSQL
+## Durable Database
 
 ### Purpose
 
@@ -118,7 +118,7 @@ Used for:
 
 Redis is **not** a source of truth.
 
-Every cached object can be reconstructed from PostgreSQL.
+Every cached object can be reconstructed from the durable database.
 
 ### Persistence
 
@@ -261,7 +261,7 @@ The following Docker volumes are created.
 
 | Volume        | Purpose                              |
 | ------------- | ------------------------------------ |
-| postgres_data | PostgreSQL database files            |
+| postgres_data | Durable database files            |
 | rabbitmq_data | RabbitMQ durable queues and metadata |
 | minio_data    | Object storage                       |
 
@@ -273,7 +273,7 @@ Redis intentionally has no persistent volume.
 
 Every infrastructure service exposes a health check.
 
-## PostgreSQL
+## Durable Database
 
 ```
 pg_isready
@@ -337,7 +337,7 @@ Only `.env.example` is tracked.
 
 Infrastructure starts in the following order.
 
-1. PostgreSQL
+1. durable database
 2. Redis
 3. RabbitMQ
 4. MinIO
@@ -362,7 +362,7 @@ Responsibilities:
 
 The API Service will communicate with:
 
-* PostgreSQL
+* durable database
 * Redis
 * RabbitMQ
 * MinIO
@@ -384,7 +384,7 @@ Responsibilities:
 The Worker Service will communicate with:
 
 * RabbitMQ
-* PostgreSQL
+* durable database
 * Redis
 * MinIO
 
@@ -414,7 +414,7 @@ Redis functions exclusively as a cache.
 
 Loss of cached data should never affect correctness.
 
-Application services rebuild cache entries on demand using PostgreSQL.
+Application services rebuild cache entries on demand using the durable database.
 
 ---
 
@@ -446,7 +446,7 @@ docker compose up
 
 will provision a fully operational local infrastructure consisting of:
 
-* PostgreSQL
+* durable database
 * Redis
 * RabbitMQ
 * MinIO
