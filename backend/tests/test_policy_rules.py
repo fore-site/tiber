@@ -429,6 +429,31 @@ async def test_blackout_bypasses_critical_notifications():
     assert decision.allowed
 
 
+# --- RestrictedWindowsRule: CRITICAL bypass ---
+
+
+async def test_restricted_window_bypasses_critical_notifications():
+    """Pin that a CRITICAL send inside a restricted window is never rejected.
+
+    Same grounds as the blackout and preference bypasses: the recipient's
+    need to receive the message outranks the project's configured silence,
+    and the bypass is uniform across every time-based rule so a CRITICAL
+    dispatch cannot be rejected by one prohibition but not another. The
+    window wraps midnight (22:00-06:00) so the pin also exercises the
+    wraparound membership check; the judged time is ``now`` because the
+    entity forbids ``send_at`` on CRITICAL notifications.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(windows=(sms_window(time(22, 0), time(6, 0)),)),
+        channel=DeliveryChannel.SMS,
+        # default now = 2026-09-15 23:00 UTC, inside the wrapped window
+        category=NotificationCategory.CRITICAL,
+    )
+    decision = await RestrictedWindowsRule().evaluate(ctx)
+
+    assert decision.allowed
+
+
 # --- BlackoutPeriodRule: send-time branch ---
 
 

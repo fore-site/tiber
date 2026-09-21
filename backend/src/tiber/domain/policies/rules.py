@@ -163,9 +163,15 @@ class BlackoutPeriodRule:
 class RestrictedWindowsRule:
     """Reject a notification when it is sent within the range of restricted windows.
 
-    A restricted window is a time range during which notifications are not allowed
-    to be sent. The rule checks if the current time falls within any of the
-    defined restricted windows for the project.
+    A restricted window is a time range during which notifications are not
+    allowed to be sent. The rule checks if the current time falls within any
+    of the defined restricted windows for the project.
+
+    CRITICAL notifications bypass this rule, on the same grounds as the
+    preference and blackout rules: the recipient's need to receive the
+    message outranks the project's configured silence. Keeping the bypass
+    uniform across every time-based rule means a CRITICAL dispatch cannot
+    be rejected by landing inside one prohibition but not another.
     """
 
     name = "restricted_windows"
@@ -178,6 +184,9 @@ class RestrictedWindowsRule:
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject when the notification is sent inside the restricted windows."""
+        if ctx.notification.category is NotificationCategory.CRITICAL:
+            return PolicyDecision.allow()
+
         notification = ctx.notification
         delivery_constraint = ctx.delivery_constraint
         if not delivery_constraint:
