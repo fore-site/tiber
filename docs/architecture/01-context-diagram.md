@@ -16,8 +16,6 @@ This diagram defines Tiber's system boundary and identifies every external actor
 
 - **End User is an external actor, not a Tiber user:** End users receive notifications but never interact with Tiber directly. They are customers of the client application, not of Tiber. This distinction matters for the data model, Tiber holds a recipient identifier (email, device token) but does not own the user relationship.
 
-- **No AI providers, deliberately:** Tiber integrates no LLM or AI service anywhere — notification content is authored entirely by clients and delivered verbatim (the authorship constitution; see the container diagram for the rationale). There is no external AI dependency to swap, degrade, or mock.
-
 - **Client Applications interact with Tiber only via the REST API:** There is no SDK, no direct database access, and no message queue integration for external clients in this version. This is a deliberate boundary, it keeps the API as the single integration surface and makes versioning, auth enforcement, and rate limiting straightforward.
 
 - **Monitoring Systems have a bidirectional relationship:** Tiber exposes metrics and health endpoints; monitoring systems scrape them. Tiber does not push metrics to an external system. This is a pull-based observability model appropriate for the deployment targets.
