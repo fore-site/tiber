@@ -61,6 +61,11 @@ class RecipientModel(Base):
         nullable=False,
     )
 
+    # Static profile facts (doc 08, D1). Nullable: facts are unknown until
+    # the client sets them, and ownerless auto-created profiles ship bare.
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(35), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

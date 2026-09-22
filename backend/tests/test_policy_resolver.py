@@ -46,6 +46,8 @@ def make_recipient(
         },
         preferences=RecipientPreferences(opted_out_channels=opted_out or frozenset()),
         external_id=None,
+        timezone=None,
+        language=None,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         archived_at=None,

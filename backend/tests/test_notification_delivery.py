@@ -129,6 +129,8 @@ def make_recipient(notification: Notification, addresses: dict[str, str]) -> Rec
         },
         preferences=RecipientPreferences(),
         external_id=None,
+        timezone=None,
+        language=None,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         archived_at=None,
