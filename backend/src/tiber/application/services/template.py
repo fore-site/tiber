@@ -54,7 +54,4 @@ class NotificationTemplateResolver:
             )
 
         rendered = self._renderer.render(template, notification.template_variables)
-        return NotificationContent(
-            subject=rendered.subject,
-            body=rendered.body,
-        )
+        return rendered

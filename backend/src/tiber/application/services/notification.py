@@ -15,6 +15,7 @@ from tiber.domain.repositories import (
     NotificationRepository,
     RecipientRepository,
 )
+from tiber.domain.services import validate_content
 from tiber.domain.value_objects import NotificationContent
 
 
@@ -84,7 +85,7 @@ class NotificationService:
         category: str,
         idempotency_key: str,
         correlation_id: UUID,
-        subject: str | None = None,
+        title: str | None = None,
         body: str | None = None,
         template_id: UUID | None = None,
         template_variables: dict | None = None,
@@ -132,7 +133,7 @@ class NotificationService:
         # exact content snapshot that is persisted and, later, delivered.
         if template_id is not None:
             placeholder = NotificationContent(
-                subject=(
+                title=(
                     "[template pending]"
                     if channel_enum == DeliveryChannel.EMAIL
                     else None
@@ -155,7 +156,11 @@ class NotificationService:
         else:
             if body is None:
                 raise ValueError("Notification body is required without a template")
-            content = NotificationContent(subject=subject, body=body)
+            content = NotificationContent(title=title, body=body)
+            # Intake-time channel validation: the domain owns the rule, the
+            # application invokes it before the notification is persisted.
+            # Template content is validated where the template is created.
+            validate_content(channel_enum, content)
 
         # 4. Build the (pending) notification and run the intake policy.
         notification = self._build(

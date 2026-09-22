@@ -24,7 +24,7 @@ def make_notification(channel: DeliveryChannel = DeliveryChannel.EMAIL) -> Notif
         channel=channel,
         category=NotificationCategory.PROMOTIONAL,
         content=NotificationContent(
-            subject="Hi" if channel == DeliveryChannel.EMAIL else None,
+            title="Hi" if channel == DeliveryChannel.EMAIL else None,
             body="Hello",
         ),
     )

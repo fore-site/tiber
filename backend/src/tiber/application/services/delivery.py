@@ -135,7 +135,7 @@ class NotificationDeliveryProcessor:
 
         result: ProviderResult = await self._provider.send(
             recipient_address=address,
-            subject=content.subject,
+            title=content.title,
             body=content.body,
             metadata={
                 "notification_id": str(notification.id),

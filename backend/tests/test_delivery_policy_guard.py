@@ -80,9 +80,15 @@ class FakeTemplateRepository:
         """Initialize with an optional single template."""
         self._template = template
 
-    async def get_by_id(self, id):
-        """Return the template if it matches."""
-        return self._template if self._template and self._template.id == id else None
+    async def get_by_id(self, id, project_id):
+        """Return the template if it matches and is project-scoped."""
+        if (
+            self._template
+            and self._template.id == id
+            and self._template.project_id == project_id
+        ):
+            return self._template
+        return None
 
 
 class RecordingProvider:
@@ -96,10 +102,10 @@ class RecordingProvider:
         self.sent: list[tuple] = []
 
     async def send(
-        self, recipient_address, subject, body, metadata=None
+        self, recipient_address, title, body, metadata=None
     ) -> ProviderResult:
         """Record and succeed."""
-        self.sent.append((recipient_address, subject, body))
+        self.sent.append((recipient_address, title, body))
         return ProviderResult(success=True, provider_message_id="p-1")
 
     async def health_check(self) -> bool:
@@ -121,7 +127,7 @@ def make_notification(
         correlation_id=uuid4(),
         channel=DeliveryChannel.EMAIL,
         category=NotificationCategory.PROMOTIONAL,
-        content=NotificationContent(subject="Direct", body="Direct body"),
+        content=NotificationContent(title="Direct", body="Direct body"),
         template_id=template_id,
         template_variables=template_variables,
     )
@@ -187,14 +193,13 @@ async def test_policy_violation_marks_policy_rejected_without_attempt():
 
 
 async def test_template_content_renders_into_provider_payload():
-    """A template renders into the subject/body actually sent to the provider."""
+    """A template renders into the title/body actually sent to the provider."""
     project_id = uuid4()
     template = Template.create(
         project_id=project_id,
         name="welcome",
         channel=DeliveryChannel.EMAIL,
-        body="Welcome {{name}}!",
-        subject="Hello {{name}}",
+        content=NotificationContent(body="Welcome {{name}}!", title="Hello {{name}}"),
     )
     notification = make_notification(
         project_id=project_id,

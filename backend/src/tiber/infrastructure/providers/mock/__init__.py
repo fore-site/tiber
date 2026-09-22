@@ -34,7 +34,7 @@ class MockProvider:
     async def send(
         self,
         recipient_address: str,
-        subject: str | None,
+        title: str | None,
         body: str,
         metadata: dict | None = None,
     ) -> ProviderResult:

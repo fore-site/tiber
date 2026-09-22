@@ -89,7 +89,7 @@ def make_notification(
 
 
 def test_render_substitutes_variables():
-    """Present variables are substituted into subject and body."""
+    """Present variables are substituted into title and body."""
     template = make_template(body="Hi {{name}}, code {{code}}", title="For {{name}}")
     rendered = TemplateRenderer().render(template, {"name": "Ada", "code": 1234})
 
@@ -115,11 +115,11 @@ def test_render_handles_whitespace_inside_braces():
 
 def test_render_no_variables_passes_body_through():
     """A template with no placeholders renders unchanged."""
-    template = make_template(body="Static body", subject="Static subject")
+    template = make_template(body="Static body", title="Static title")
     rendered = TemplateRenderer().render(template, None)
 
     assert rendered.body == "Static body"
-    assert rendered.title == "Static subject"
+    assert rendered.title == "Static title"
 
 
 def test_render_passes_urls_through_unchanged():

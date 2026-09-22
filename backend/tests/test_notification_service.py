@@ -24,7 +24,7 @@ from tiber.domain.exceptions import (
     TemplateNotFoundError,
 )
 from tiber.domain.policies import PolicyResolver
-from tiber.domain.value_objects import RecipientPreferences
+from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 
 
 class FakeIdempotency:
@@ -138,14 +138,16 @@ def make_recipient(*, project_id: UUID, addresses: dict[str, str]) -> Recipient:
     )
 
 
-def make_template(*, project_id: UUID, channel=DeliveryChannel.EMAIL, body, subject):
+def make_template(*, project_id: UUID, channel=DeliveryChannel.EMAIL, body, title):
     """Build a template for a project and channel."""
     return Template.create(
         project_id=project_id,
         name="welcome",
         channel=channel,
-        body=body,
-        subject=subject,
+        content=NotificationContent(
+            body=body,
+            title=title if channel == DeliveryChannel.EMAIL else None,
+        ),
     )
 
 
@@ -174,23 +176,23 @@ def service(recipient):
 def build_kwargs(
     recipient,
     *,
-    subject: str | None = "Hi",
+    title: str | None = "Hi",
     body: str | None = "Hello world",
     key: str = "key-1",
     **overrides,
 ):
     """Assemble standard create_notification kwargs from a recipient.
 
-    Email notifications require a subject, so both ``subject`` and ``body``
-    are always present by default; pass ``subject=None`` to exercise the
-    missing-subject path.
+    Email notifications require a title, so both ``title`` and ``body``
+    are always present by default; pass ``title=None`` to exercise the
+    missing-title path.
     """
     kwargs = dict(
         project_id=recipient.project_id,
         recipient_id=recipient.id,
         channel="email",
         category="promotional",
-        subject=subject,
+        title=title,
         body=body,
         idempotency_key=key,
         correlation_id=uuid4(),
@@ -202,19 +204,19 @@ def build_kwargs(
 async def test_create_notification_persists_and_enqueues(service, recipient):
     """Create persists a pending email notification and enqueues it once."""
     notification = await service.create_notification(
-        **build_kwargs(recipient, subject="Hi", body="Hello world")
+        **build_kwargs(recipient, title="Hi", body="Hello world")
     )
 
     assert notification.channel == DeliveryChannel.EMAIL
     assert notification.status == NotificationStatus.PENDING
-    assert notification.content.subject == "Hi"
+    assert notification.content.title == "Hi"
     assert notification.content.body == "Hello world"
     assert service._publisher.published == [notification.id]
 
 
 async def test_duplicate_key_replays_original_without_requeue(service, recipient):
     """A duplicate idempotency key replays the original without a new enqueue."""
-    kwargs = build_kwargs(recipient, subject="Hi", key="key-dup")
+    kwargs = build_kwargs(recipient, title="Hi", key="key-dup")
 
     first = await service.create_notification(**kwargs)
     second = await service.create_notification(**kwargs)
@@ -226,11 +228,11 @@ async def test_duplicate_key_replays_original_without_requeue(service, recipient
     assert len(listed) == 1
 
 
-async def test_email_without_subject_rejected(service, recipient):
-    """An email notification without a subject is rejected."""
+async def test_email_without_title_rejected(service, recipient):
+    """An email notification without a title is rejected at intake."""
     with pytest.raises(Exception) as exc_info:
-        await service.create_notification(**build_kwargs(recipient, subject=None))
-    assert "subject" in str(exc_info.value).lower()
+        await service.create_notification(**build_kwargs(recipient, title=None))
+    assert "title" in str(exc_info.value).lower()
 
 
 async def test_get_and_list_are_scoped_to_project(service, recipient):
@@ -296,11 +298,11 @@ async def test_recipient_from_other_project_reads_as_missing(recipient):
 
 
 async def test_template_only_persists_rendered_snapshot(recipient):
-    """A template-only POST (no body/subject) persists the rendered body."""
+    """A template-only POST (no body/title) persists the rendered body."""
     template = make_template(
         project_id=recipient.project_id,
         body="Welcome {{name}}!",
-        subject="Hi {{name}}",
+        title="Hi {{name}}",
     )
     svc = NotificationService(
         idempotency_guard=FakeIdempotency(),
@@ -325,7 +327,7 @@ async def test_template_only_persists_rendered_snapshot(recipient):
     # The persisted snapshot is the rendered content, not a placeholder.
     assert notification.status == NotificationStatus.PENDING
     assert notification.content.body == "Welcome Ada!"
-    assert notification.content.subject == "Hi Ada"
+    assert notification.content.title == "Hi Ada"
     assert "[template pending]" not in notification.content.body
     assert [notification.id] == svc._publisher.published
 
@@ -339,7 +341,7 @@ async def test_direct_content_without_body_rejected(service, recipient):
 async def test_cross_project_template_rejected():
     """A template owned by another project is rejected at intake."""
     recipient = make_recipient(project_id=uuid4(), addresses={"email": "a@b.io"})
-    template = make_template(project_id=uuid4(), body="Hi", subject="Hi")
+    template = make_template(project_id=uuid4(), body="Hi", title="Hi")
     svc = NotificationService(
         idempotency_guard=FakeIdempotency(),
         repository=FakeRepository(),
@@ -367,7 +369,7 @@ async def test_channel_mismatched_template_rejected():
         project_id=recipient.project_id,
         channel=DeliveryChannel.PUSH,
         body="Hi",
-        subject=None,
+        title=None,
     )
     svc = NotificationService(
         idempotency_guard=FakeIdempotency(),

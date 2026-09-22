@@ -45,7 +45,7 @@ class ChannelProvider(Protocol):
     async def send(
         self,
         recipient_address: str,
-        subject: str | None,
+        title: str | None,
         body: str,
         metadata: dict | None = None,
     ) -> ProviderResult:
@@ -53,7 +53,8 @@ class ChannelProvider(Protocol):
 
         Args:
             recipient_address (str): The address of the recipient.
-            subject (str | None): The subject of the message (optional).
+            title (str | None): The message title (None where the channel
+                has no title concept or the client omitted it).
             body (str): The body of the message.
             metadata (dict | None): Optional metadata for the message.
 
