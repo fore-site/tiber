@@ -97,6 +97,7 @@ def test_reconstitute_loads_stored_slug_as_is():
         slug="acme",  # stored identity from an older derivation
         description=None,
         created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         archived_at=None,
     )
 
@@ -113,6 +114,7 @@ def test_reconstitute_rejects_malformed_stored_slug():
             slug="Not A Slug",
             description=None,
             created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             archived_at=None,
         )
 
@@ -139,6 +141,20 @@ def test_rename_preserves_identity_and_created_at():
     assert renamed.id == project.id
     assert renamed.created_at == project.created_at
     assert renamed.user_id == project.user_id
+
+
+def test_rename_bumps_updated_at():
+    """A mutation stamps itself: the entity's updated_at moves on rename.
+
+    created_at is deliberately pinned unchanged in the same section — the
+    pair of assertions is the invariant: birth never moves, mutation does.
+    """
+    project = make_project("My App")
+
+    renamed = project.rename("New Name")
+
+    assert renamed.updated_at > project.updated_at
+    assert renamed.created_at == project.created_at
 
 
 def test_rename_to_name_variant_yields_same_slug():

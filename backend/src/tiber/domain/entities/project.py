@@ -54,6 +54,7 @@ class Project:
     slug: str | None = None
     description: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     archived_at: datetime | None = field(default=None)
 
     def __post_init__(self) -> None:
@@ -89,6 +90,7 @@ class Project:
         slug: str,
         description: str | None,
         created_at: datetime,
+        updated_at: datetime,
         archived_at: datetime | None,
     ) -> Project:
         """Rebuild an existing project from persisted state.
@@ -103,13 +105,25 @@ class Project:
             slug=slug,
             description=description,
             created_at=created_at,
+            updated_at=updated_at,
             archived_at=archived_at,
         )
 
     def rename(self, name: str) -> Project:
-        """Rename the project; the slug follows the name."""
+        """Rename the project; the slug follows the name.
+
+        Bumps ``updated_at``: a rename is a mutation of the aggregate, and
+        the entity-level stamp is the domain's own record that it happened
+        (the persistence layer's ``onupdate`` only fires when a row is
+        actually written, which is a different fact).
+        """
         if not name or not name.strip():
             raise InvalidProjectStateError("Project name must not be empty")
         _require_derivable_name(name)
 
-        return replace(self, name=name, slug=_derive_slug(name))
+        return replace(
+            self,
+            name=name,
+            slug=_derive_slug(name),
+            updated_at=datetime.now(UTC),
+        )
