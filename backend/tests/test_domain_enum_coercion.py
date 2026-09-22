@@ -159,6 +159,7 @@ def make_attempt(**overrides) -> DeliveryAttempt:
         status="succeeded",
         channel="email",
         provider="postmark",
+        recipient_address="jane@x.com",
     )
     kwargs.update(overrides)
     return DeliveryAttempt.create(**kwargs)

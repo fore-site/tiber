@@ -74,6 +74,13 @@ class DeliveryAttemptModel(Base):
         nullable=False,
     )
 
+    # Dispatch-time snapshot of the address the provider was given (nullable:
+    # an attempt may fail before any contact, e.g. no address on file).
+    recipient_address: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     provider_message_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,

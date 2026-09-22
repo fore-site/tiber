@@ -147,9 +147,12 @@ class NotificationDeliveryProcessor:
             return await self._succeed(
                 processing,
                 provider_message_id=result.provider_message_id,
+                recipient_address=address,
             )
         return await self._fail(
-            processing, error=result.error_message or "delivery failed"
+            processing,
+            error=result.error_message or "delivery failed",
+            recipient_address=address,
         )
 
     async def _attempt_number(self, notification_id: UUID) -> int:
@@ -163,6 +166,7 @@ class NotificationDeliveryProcessor:
         success: bool,
         provider_message_id: str | None,
         error: str | None,
+        recipient_address: str | None,
     ) -> None:
         attempt = DeliveryAttempt.create(
             notification_id=notification.id,
@@ -175,6 +179,7 @@ class NotificationDeliveryProcessor:
             channel=notification.channel,
             provider=getattr(self._provider, "name", None)
             or type(self._provider).__name__,
+            recipient_address=recipient_address,
             provider_message_id=provider_message_id,
             error=error,
         )
@@ -185,12 +190,14 @@ class NotificationDeliveryProcessor:
         notification: Notification,
         *,
         provider_message_id: str | None,
+        recipient_address: str,
     ) -> Notification:
         await self._record_attempt(
             notification,
             success=True,
             provider_message_id=provider_message_id,
             error=None,
+            recipient_address=recipient_address,
         )
         updated = notification.mark_delivered()
         await self._notifications.save(updated)
@@ -201,12 +208,21 @@ class NotificationDeliveryProcessor:
         notification: Notification,
         *,
         error: str,
+        recipient_address: str | None = None,
     ) -> Notification:
+        """Record a failed attempt and transition to FAILED.
+
+        ``recipient_address`` is the address the provider was given. It is
+        ``None`` when the failure preceded any contact - the no-address
+        case - so the snapshot on the attempt distinguishes "failed before
+        contact" from "contacted and rejected".
+        """
         await self._record_attempt(
             notification,
             success=False,
             provider_message_id=None,
             error=error,
+            recipient_address=recipient_address,
         )
         updated = notification.mark_failed(error)
         await self._notifications.save(updated)

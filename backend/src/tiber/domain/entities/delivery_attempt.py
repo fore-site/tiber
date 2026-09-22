@@ -11,6 +11,15 @@ class DeliveryAttempt:
 
     Attempts are immutable records: retries generate additional attempts rather
     than mutating existing ones.
+
+    ``recipient_address`` is a dispatch-time snapshot of the address the
+    provider was given, frozen here because ``Recipient.addresses`` is
+    mutable - without the snapshot, "what address did attempt #2 actually
+    hit?" becomes unreconstructable once the profile changes. ``None``
+    means the attempt failed *before contacting any address* (e.g. no
+    address on file for the channel) - it never means "unknown": a
+    succeeded attempt must have hit a real address, which is enforced
+    below.
     """
 
     # Ids are system-generated: callers never supply one. kw_only makes the
@@ -21,6 +30,7 @@ class DeliveryAttempt:
     status: DeliveryAttemptStatus
     channel: DeliveryChannel
     provider: str
+    recipient_address: str | None = None
     provider_message_id: str | None = None
     error: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -36,6 +46,17 @@ class DeliveryAttempt:
         if not self.provider or not self.provider.strip():
             raise ValueError("DeliveryAttempt provider must not be empty")
 
+        # A success means something was contacted: the snapshot cannot be
+        # empty. A failure may precede any contact (no address on file),
+        # so None is only legal there.
+        if (
+            self.status is DeliveryAttemptStatus.SUCCEEDED
+            and self.recipient_address is None
+        ):
+            raise ValueError(
+                "DeliveryAttempt recipient_address is required when status is succeeded"
+            )
+
     @classmethod
     def create(
         cls,
@@ -45,6 +66,7 @@ class DeliveryAttempt:
         status: DeliveryAttemptStatus,
         channel: DeliveryChannel,
         provider: str,
+        recipient_address: str | None = None,
         provider_message_id: str | None = None,
         error: str | None = None,
     ) -> DeliveryAttempt:
@@ -55,6 +77,7 @@ class DeliveryAttempt:
             status=status,
             channel=channel,
             provider=provider,
+            recipient_address=recipient_address,
             provider_message_id=provider_message_id,
             error=error,
         )
@@ -69,6 +92,7 @@ class DeliveryAttempt:
         status: DeliveryAttemptStatus,
         channel: DeliveryChannel,
         provider: str,
+        recipient_address: str | None,
         provider_message_id: str | None,
         error: str | None,
         created_at: datetime,
@@ -81,6 +105,7 @@ class DeliveryAttempt:
             status=status,
             channel=channel,
             provider=provider,
+            recipient_address=recipient_address,
             provider_message_id=provider_message_id,
             error=error,
             created_at=created_at,
