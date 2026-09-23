@@ -6,7 +6,7 @@ from ..enums import DeliveryChannel
 
 @dataclass(frozen=True)
 class RestrictedWindow:
-    """Value object representing a restricted delivery time window for a channel.
+    """Value object representing a restricted delivery time window (quiet hours) for a channel.
 
     Multiple windows per channel are permitted and composed as OR:
     if any window for the channel matches the current time, delivery is rejected..
