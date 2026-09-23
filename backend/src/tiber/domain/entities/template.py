@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -70,3 +70,11 @@ class Template:
             created_at=created_at,
             updated_at=updated_at,
         )
+
+    def update_content(self, new_content: NotificationContent) -> Template:
+        """Return a new Template instance with updated content."""
+        return replace(self, content=new_content, updated_at=datetime.now(UTC))
+
+    def update_name(self, new_name: str) -> Template:
+        """Return a new Template instance with updated name."""
+        return replace(self, name=new_name, updated_at=datetime.now(UTC))
