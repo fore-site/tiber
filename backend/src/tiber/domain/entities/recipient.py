@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from ..enums import DeliveryChannel
 from ..value_objects import RecipientPreferences
 
-# BCP-47-ish language tag: a 2-3 letter primary subtag (en, pt) optionally
+# BCP-47 language tag: a 2-3 letter primary subtag (en, pt) optionally
 # followed by script/region/variant subtags (en-US, zh-Hans, pt-BR). Tiber
 # validates shape only; it never interprets what the tag selects.
 _LANGUAGE_TAG_RE = re.compile(r"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$")
@@ -18,10 +18,8 @@ class Recipient:
     """Recipient entity - the intended destination of a notification.
 
     Static profile facts (``timezone``, ``language``) are set once by the
-    client and updated when they change (doc 08, D1) - they are facts about
-    a person, so ``None`` means unknown, never a fabricated default. The
-    ML layer's cold-start feature set reads them (doc 05); the domain
-    itself never acts on them.
+    client and updated when they change - they are facts about
+    a person, so ``None`` means unknown.
     """
 
     id: UUID = field(default_factory=uuid4)
@@ -121,23 +119,72 @@ class Recipient:
             archived_at=archived_at,
         )
 
-    def update_profile(
-        self,
-        *,
-        timezone: str | None = None,
-        language: str | None = None,
+    def claim_addresses(
+        self, external_id: str, addresses: dict[DeliveryChannel, str]
     ) -> Recipient:
-        """Return a copy with the given profile facts set.
+        """Attach a human identity and its addresses.
 
-        Facts are provided, not patched: passing ``None`` records the fact
-        as *unknown* (a client withdrawing a fact), distinct from "leave
-        unchanged" - there is no        unchanged case, since the caller holds the
-        full current profile and states what it is now. Validation runs in
-        the constructor, so an invalid fact cannot be set.
+        Merges the incoming addresses over the existing ones (incoming wins
+        on key collision) and stamps ``external_id``. Preconditions:
+
+        - ``external_id`` must be non-empty.
+        - The recipient must be ownerless: a claimed recipient cannot be
+          re-claimed. Uniqueness of ``(project_id, external_id)`` across
+          recipients is a database guarantee; this only enforces the
+          single-recipient invariant.
+        - The merged state must stay valid (post_init): every opted-out
+          channel must retain an address after the merge.
+
+        Registration with an address owned by a *different registered*
+        recipient is a caller-visible conflict; the domain
+        cannot detect it - the caller queries first, and the database
+        constraint backs the race.
         """
+        if not external_id or not external_id.strip():
+            raise ValueError("external_id must be a non-empty string")
+        if self.external_id is not None:
+            raise ValueError("Recipient is already claimed and cannot be re-claimed")
+
+        # Merge is never empty: self.addresses is non-empty by invariant.
+        merged = {**self.addresses, **addresses}
         return replace(
             self,
-            timezone=timezone,
-            language=language,
+            external_id=external_id.strip(),
+            addresses=merged,
             updated_at=datetime.now(UTC),
+        )
+
+    def update_addresses(self, addresses: dict[DeliveryChannel, str]) -> Recipient:
+        """Return a copy with the given addresses replacing the old set.
+
+        The incoming mapping is the full new address book; an omitted
+        channel is removed.
+        """
+        if not addresses:
+            raise ValueError("Addresses must not be empty")
+        return replace(self, addresses=addresses, updated_at=datetime.now(UTC))
+
+    def update_preferences(self, preferences: RecipientPreferences) -> Recipient:
+        """Return a copy with new consent state; stamps updated_at."""
+        return replace(self, preferences=preferences, updated_at=datetime.now(UTC))
+
+    def set_profile_facts(
+        self, *, timezone: str | None, language: str | None
+    ) -> Recipient:
+        """Restate the static profile facts wholesale (doc 08, D1).
+
+        Both parameters are required statements of current truth: passing
+        ``None`` records the fact as *unknown* (withdrawal), which is a
+        deliberate semantic, not a missing argument. There is no
+        "leave unchanged" case - the caller holds the full current profile
+        and states what it is now.
+        """
+        return replace(
+            self, timezone=timezone, language=language, updated_at=datetime.now(UTC)
+        )
+
+    def archive(self) -> Recipient:
+        """Return a copy with archived_at stamped to now."""
+        return replace(
+            self, archived_at=datetime.now(UTC), updated_at=datetime.now(UTC)
         )
