@@ -1,13 +1,8 @@
-# 08 — Send Contract & Identity Model
-
-**Status:** Accepted (domain + persistence implemented; API contract rewrite pending)
-**Date:** 2026-09-18
-**Supersedes:** the per-send `context` field decision; the parked "supersession field" idea
-**Related:** 03 (API service), 05 (ML engine — feature inventory), 06 (domain model)
+# 08 Send Contract & Identity Model
 
 ## Context
 
-Clients asked for less integration work: fewer payload fields, fewer dashboard
+There should be less integration work for clients: fewer payload fields, fewer dashboard
 steps, more inferred behavior from Tiber. Analysis of what actually produces
 that experience showed that most "magic" is not intelligence but *defaults
 resolved from identity*: accept natural names instead of internal UUIDs, fill
@@ -17,8 +12,7 @@ sees. Machine learning is only one source of fill-in; most of it is lookup.
 Three earlier decisions shaped this record:
 
 - The **authorship constitution**: Tiber decides when, how urgent, which
-  channel, whether at all — it never authors content. There is no LLM
-  anywhere in Tiber.
+  channel, whether at all, it never authors content.
 - `send_time_basis` is stored provenance state, classified once at intake.
 - `correlation_id` is a per-request pipeline trace, **not** a grouping key.
 
@@ -29,13 +23,11 @@ Three earlier decisions shaped this record:
 Tiber does not read client databases, even opt-in. Trust and liability costs
 (a notification vendor reading a production users table) vastly exceed the
 benefit, and the useful training signal (opens, clicks, bounces) already
-flows through Tiber. Static facts about a recipient (timezone, language,
-plan) live on the recipient profile, set once and updated when they change —
-never re-sent per notification.
+flows through Tiber. Static facts about a recipient (timezone, language) live on the recipient profile, set once and updated when they change, never re-sent per notification.
 
 ### D2 — Recipients are addressed by client identity or raw address
 
-The client's own id (their `external_id`) or a channel address — never a
+The client's own id (their `external_id`) or a channel address, never a
 Tiber UUID, and never both in one payload (422). The payload uses two named
 fields so intent is explicit and the ambiguity of a polymorphic string is
 avoided:
@@ -103,14 +95,7 @@ field. Explicit channel, when given, is honored.
 rules apply (restricted windows are per-channel), so any future predicted
 channel must re-enter the policy chain. That constraint belongs to doc 05.
 
-### D5 — `context` is retired
-
-The per-send ML feature payload is deleted from the entity. Static facts
-moved to the recipient profile (D1); learned behavior comes from
-engagement events. `Notification.context`, its validation block, and its
-`create()`/`reconstitute()` parameters are removed. Do not reintroduce it.
-
-### D6 — `group_key`: opaque identity of "the same logical thing"
+### D5 — `group_key`: opaque identity of "the same logical thing"
 
 Optional, opaque, client-supplied string on the notification and payload.
 `order-1234-confirm` (an idempotency key) answers *"is this the same send,
@@ -138,7 +123,7 @@ no supersede reference ever enters the payload. Gated on client consent
 for CRITICAL, and open fork at implementation time: whether an
 *explicitly scheduled* send may be cancelled by a newer send.
 
-### D7 — Cancellation reasons are optional
+### D6 — Cancellation reasons are optional
 
 `mark_cancelled(reason: str | None = None)`. A client may cancel freely
 without documenting why — that is their prerogative and none of Tiber's
@@ -169,11 +154,6 @@ Full field map:
 | `send_at` | optional | basis classified at intake (CRITICAL → IMMEDIATE, others → ML_PREDICTED) |
 | `idempotency_key` | optional | — |
 
-`context` is retired (D5). The principle in one line: **the client's
-payload answers what and to whom; Tiber derives which group, which
-channel, and when — every default overridable, every identity decision
-explicit.**
-
 ## Digest assembly (design, pre-implementation)
 
 A digest's "smart one-liner" is not generated — it is assembled:
@@ -193,10 +173,6 @@ template **with a tracked link per item** (that link requirement is what
 makes the ranker trainable). SMS holds no digest; batched categories
 either exclude it or collapse to a single line.
 
-The constitution holds by construction: Tiber assembles the client's own
-words; it never authors. A client wanting an LLM-written summary may
-generate it themselves before sending — that is outside Tiber's pipeline.
-
 **Open fork, deliberate at digest phase:** when the digest delivers, what
 status do the member notifications take? DELIVERED is arguably honest
 (content was delivered inside the digest) or arguably a lie (item 4 was
@@ -208,7 +184,6 @@ stuck state — alert threshold at ML phase.
 
 - [x] `Notification.group_key` (entity + column + mappings + rehydration)
 - [x] `cancellation_reason` column; `mark_cancelled` optional reason (D7)
-- [x] `context` deleted (entity, validation, create/reconstitute, repo note)
 - [x] `mark_cancelled(reason)` prerequisite for latest-wins (D6/D7)
 - [ ] `external_id` unique per project; `(project, channel, address)` unique
 - [ ] Topic name uniqueness per project; persistence model for topics
