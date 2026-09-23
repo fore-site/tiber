@@ -171,7 +171,7 @@ class Recipient:
     def set_profile_facts(
         self, *, timezone: str | None, language: str | None
     ) -> Recipient:
-        """Restate the static profile facts wholesale (doc 08, D1).
+        """Restate the static profile facts wholesale.
 
         Both parameters are required statements of current truth: passing
         ``None`` records the fact as *unknown* (withdrawal), which is a
