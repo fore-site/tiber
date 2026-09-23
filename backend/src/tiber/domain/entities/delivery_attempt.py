@@ -11,22 +11,12 @@ class DeliveryAttempt:
 
     Attempts are immutable records: retries generate additional attempts rather
     than mutating existing ones.
-
-    ``recipient_address`` is a dispatch-time snapshot of the address the
-    provider was given, frozen here because ``Recipient.addresses`` is
-    mutable - without the snapshot, "what address did attempt #2 actually
-    hit?" becomes unreconstructable once the profile changes. ``None``
-    means the attempt failed *before contacting any address* (e.g. no
-    address on file for the channel) - it never means "unknown": a
-    succeeded attempt must have hit a real address, which is enforced
-    below.
     """
 
     # Ids are system-generated: callers never supply one. kw_only makes the
     # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     notification_id: UUID
-    attempt_number: int
     status: DeliveryAttemptStatus
     channel: DeliveryChannel
     provider: str
@@ -41,8 +31,6 @@ class DeliveryAttempt:
         object.__setattr__(self, "status", DeliveryAttemptStatus(self.status.lower()))
         object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
 
-        if self.attempt_number <= 0:
-            raise ValueError("DeliveryAttempt attempt_number must be positive")
         if not self.provider or not self.provider.strip():
             raise ValueError("DeliveryAttempt provider must not be empty")
 
@@ -50,11 +38,11 @@ class DeliveryAttempt:
         # empty. A failure may precede any contact (no address on file),
         # so None is only legal there.
         if (
-            self.status is DeliveryAttemptStatus.SUCCEEDED
+            self.status is DeliveryAttemptStatus.SUCCESS
             and self.recipient_address is None
         ):
             raise ValueError(
-                "DeliveryAttempt recipient_address is required when status is succeeded"
+                "DeliveryAttempt.recipient_address is required when status is success."
             )
 
     @classmethod
@@ -62,7 +50,6 @@ class DeliveryAttempt:
         cls,
         *,
         notification_id: UUID,
-        attempt_number: int,
         status: DeliveryAttemptStatus,
         channel: DeliveryChannel,
         provider: str,
@@ -73,7 +60,6 @@ class DeliveryAttempt:
         """Record a new delivery attempt with a system-generated id and timestamp."""
         return cls(
             notification_id=notification_id,
-            attempt_number=attempt_number,
             status=status,
             channel=channel,
             provider=provider,
@@ -88,7 +74,6 @@ class DeliveryAttempt:
         *,
         id: UUID,
         notification_id: UUID,
-        attempt_number: int,
         status: DeliveryAttemptStatus,
         channel: DeliveryChannel,
         provider: str,
@@ -101,7 +86,6 @@ class DeliveryAttempt:
         return cls(
             id=id,
             notification_id=notification_id,
-            attempt_number=attempt_number,
             status=status,
             channel=channel,
             provider=provider,

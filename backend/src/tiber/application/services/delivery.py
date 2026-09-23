@@ -155,10 +155,6 @@ class NotificationDeliveryProcessor:
             recipient_address=address,
         )
 
-    async def _attempt_number(self, notification_id: UUID) -> int:
-        attempts = await self._attempts.list_by_notification(notification_id)
-        return len(attempts) + 1
-
     async def _record_attempt(
         self,
         notification: Notification,
@@ -170,11 +166,8 @@ class NotificationDeliveryProcessor:
     ) -> None:
         attempt = DeliveryAttempt.create(
             notification_id=notification.id,
-            attempt_number=await self._attempt_number(notification.id),
             status=(
-                DeliveryAttemptStatus.SUCCEEDED
-                if success
-                else DeliveryAttemptStatus.FAILED
+                DeliveryAttemptStatus.SUCCESS if success else DeliveryAttemptStatus.FAIL
             ),
             channel=notification.channel,
             provider=getattr(self._provider, "name", None)
