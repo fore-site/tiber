@@ -25,8 +25,10 @@ class DeliveryConstraint:
         # Validate timezone
         try:
             ZoneInfo(self.timezone)
+        except ValueError as e:
+            raise ValueError(f"Invalid timezone format: {self.timezone}") from e
         except ZoneInfoNotFoundError as e:
-            raise ValueError(f"Invalid timezone: {self.timezone}") from e
+            raise ValueError(f"Unknown or missing timezone: {self.timezone}") from e
 
     @classmethod
     def create(
