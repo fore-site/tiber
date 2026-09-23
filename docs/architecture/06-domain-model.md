@@ -90,6 +90,11 @@ The Recipient aggregate owns:
 
 - **Delivery channel and service name are separate values:** A delivery channel represents how a notification is sent (Email, SMS, Push), while each delivery attempt records the external service name as a string. Adapters can be replaced or added without introducing a persisted service entity.
 
+### BlackoutPeriod vs RestrictedWindow
+
+Blackoutperiod is a configuration that is checked once and can expire naturally due to a date constraint.
+RestrictedWindow is a re-occurring time window that is constantly checked until removed. This perfectly captures quiet hours. However, some applications may want to configure a one-time hour-based quiet window, which is where BlackoutPeriod can also be used due to its datetime type.
+
 ## What this diagram does not show
 
 This domain model intentionally omits implementation details including:
