@@ -19,7 +19,7 @@ class EngagementEvent:
     channel: DeliveryChannel
     provider: str
     occurred_at: datetime
-    metadata: dict
+    metadata: dict | None = None
     is_synthetic: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -43,7 +43,7 @@ class EngagementEvent:
         channel: DeliveryChannel,
         provider: str,
         occurred_at: datetime,
-        metadata: dict,
+        metadata: dict | None = None,
         is_synthetic: bool = False,
     ) -> EngagementEvent:
         """Create a new engagement event with a system-generated id and timestamps."""
@@ -71,7 +71,7 @@ class EngagementEvent:
         channel: DeliveryChannel,
         provider: str,
         occurred_at: datetime,
-        metadata: dict,
+        metadata: dict | None = None,
         is_synthetic: bool,
         created_at: datetime,
     ) -> EngagementEvent:
