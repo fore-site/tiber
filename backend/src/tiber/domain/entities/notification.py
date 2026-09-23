@@ -33,11 +33,6 @@ class Notification:
     topic_id: UUID | None = None
     template_id: UUID | None = None
     template_variables: dict[str, str] | None = None
-    # Client-supplied identity of the logical thing this send is about
-    # ("order-1234"), shared across the sends that concern it. Opaque by
-    # contract: Tiber stores and indexes it, never parses structure from
-    # it. Inert at intake; consumers are batching collapse, dedup, and
-    # per-entity learning, all later phases.
     group_key: str | None = None
     idempotency_key: str | None = None
     send_at: datetime | None = None
@@ -67,7 +62,7 @@ class Notification:
 
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise InvalidNotificationStateError(
-                "`send_at` must not be set for CRITICAL notifications"
+                "`send_at` must not be set for CRITICAL notifications. They are sent immediately."
             )
 
         if self.send_at is not None and self.send_at.tzinfo is None:
@@ -77,8 +72,7 @@ class Notification:
 
         # Intake-time classification: runs only when the caller did not
         # supply a basis. This is a one-time decision at creation, NOT a
-        # standing invariant — send_at set does not imply EXPLICIT, because
-        # (send_at=T, ML_PREDICTED) is the ML-scheduled state.
+        # standing invariant.
         if self.send_time_basis is None:
             if self.send_at is not None:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.EXPLICIT)
@@ -87,9 +81,7 @@ class Notification:
             else:
                 object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
 
-        # Invariants coupling the stored basis to the rest of the state.
-        # Deliberately no "send_at set -> EXPLICIT" rule: the ML path writes
-        # a predicted time via schedule() while the basis stays ML_PREDICTED.
+        # Invariants coupling the stored basis to the rest of the state..
         if self.send_time_basis is SendTimeBasis.EXPLICIT and self.send_at is None:
             raise InvalidNotificationStateError(
                 "`send_at` is required when send_time_basis is EXPLICIT"
@@ -187,10 +179,7 @@ class Notification:
         This is the primary creation path: the id and timestamps are generated
         here, and the notification always starts PENDING. The send-time basis
         is classified here from the intake facts: EXPLICIT when send_at is
-        supplied, IMMEDIATE for CRITICAL, ML_PREDICTED otherwise. Terminal
-        states and their coupled fields (policy_violation_reason,
-        failure_reason, delivered_at) are unreachable from here on purpose -
-        they arise only through state transitions.
+        supplied, IMMEDIATE for CRITICAL notifications, ML_PREDICTED otherwise.
         """
         return cls(
             project_id=project_id,
@@ -236,11 +225,6 @@ class Notification:
         Every field is required with no default: a reconstituted entity must
         receive the full stored row, including its identity and timestamps.
         Forgetting one is a TypeError, never silently regenerated state.
-
-        ``context`` was retired by decision: static recipient facts live on
-        the recipient profile and learned behavior on engagement events, so
-        a per-send feature payload no longer exists. Do not reintroduce it —
-        the reasoning is recorded in the send-contract decision record.
         """
         return cls(
             id=id,
@@ -268,11 +252,8 @@ class Notification:
     def schedule(self, send_at: datetime) -> Notification:
         """Attach a system-predicted send time (the ML path).
 
-        Only legal from ML_PREDICTED and only while PENDING: the
-        client-owned schedule is create(send_at=...) with basis EXPLICIT,
-        and the basis never changes after intake — it is the provenance
-        record of who chose the time. Re-prediction is allowed until
-        dispatch; each call replaces the predicted time.
+        Only legal from ML_PREDICTED and only while PENDING.
+        Re-prediction is allowed until dispatch; each call replaces the predicted time.
         """
         if self.send_time_basis is not SendTimeBasis.ML_PREDICTED:
             raise InvalidNotificationStateError(
@@ -321,16 +302,7 @@ class Notification:
         return self._transition(status=NotificationStatus.PROCESSING)
 
     def mark_cancelled(self, reason: str | None = None) -> Notification:
-        """Transition the notification to the cancelled state.
-
-        The reason is optional because its necessity depends on who is
-        cancelling. A client may cancel freely without documenting why -
-        that is their prerogative and none of Tiber's business. A
-        system-initiated cancellation (digest absorption, future
-        latest-wins supersession) must supply the reason it generated:
-        there the reason is a system fact, not client documentation, and
-        the row remains the permanent record of why nothing was sent.
-        """
+        """Transition the notification to the cancelled state."""
         if self.status != NotificationStatus.PENDING:
             raise InvalidStateTransitionError(self.status, NotificationStatus.CANCELLED)
 
