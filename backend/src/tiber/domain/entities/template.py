@@ -9,7 +9,11 @@ from ..value_objects import NotificationContent
 
 @dataclass(frozen=True, kw_only=True)
 class Template:
-    """Template entity - reusable notification content."""
+    """Template entity - reusable notification content.
+
+    Contains a title and body with ``{{variable}}`` placeholders, an optional
+    action URL, and an optional image URL.
+    """
 
     # Ids are system-generated: callers never supply one. kw_only makes the
     # defaulted id legal ahead of required fields.
