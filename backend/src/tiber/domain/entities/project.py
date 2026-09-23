@@ -14,9 +14,7 @@ def _derive_slug(name: str) -> str:
     """Derive a URL-safe slug from a project name.
 
     Lowercase ASCII letters and digits are kept as tokens and joined with
-    single hyphens; everything else — spaces, punctuation, non-ASCII — acts
-    as a separator. Returns "" when the name contains no ASCII alnum token
-    at all, which the caller treats as an invalid name.
+    single hyphens. All other characters are treated as token separators and discarded.
     """
     return "-".join(_SLUG_TOKEN_RE.findall(name.lower()))
 
@@ -32,19 +30,7 @@ def _require_derivable_name(name: str) -> None:
 
 @dataclass(frozen=True, kw_only=True)
 class Project:
-    """Project entity.
-
-    ``slug`` is the normalized form of the current name: derived on every
-    construction path (including direct instantiation) and re-derived on
-    rename. Clients never author it. Per-user slug uniqueness is what
-    enforces project name uniqueness, because derivation collapses name
-    variants ("My App" and "my.app" normalize to the same slug).
-
-    ``slug`` is ``None`` only as a *construction input* meaning "derive
-    from name". After ``__post_init__`` it is always a format-valid str;
-    reconstitute() supplies the stored slug so rehydration reproduces the
-    row exactly instead of re-deriving.
-    """
+    """Project entity."""
 
     # Ids are system-generated: callers never supply one. kw_only makes the
     # defaulted id legal ahead of required fields.
@@ -110,13 +96,7 @@ class Project:
         )
 
     def rename(self, name: str) -> Project:
-        """Rename the project; the slug follows the name.
-
-        Bumps ``updated_at``: a rename is a mutation of the aggregate, and
-        the entity-level stamp is the domain's own record that it happened
-        (the persistence layer's ``onupdate`` only fires when a row is
-        actually written, which is a different fact).
-        """
+        """Rename the project; the slug follows the name."""
         if not name or not name.strip():
             raise InvalidProjectStateError("Project name must not be empty")
         _require_derivable_name(name)
