@@ -7,42 +7,25 @@ from uuid import UUID
 from ..enums import DeliveryChannel, NotificationCategory
 
 if TYPE_CHECKING:
-    # Type-only: importing the entity at runtime would create a circular
-    # import (entities.topic imports this package for TopicTitle).
     from ..entities import NotificationTopic
+    from .blackout_period import BlackoutPeriod
+    from .quiet_hours import QuietHours
 
 
 @dataclass(frozen=True)
 class RecipientPreferences:
-    """Value object holding a recipient's consent state.
-
-    Three consent collections, each normalized to a frozenset:
-
-    - ``opted_out_channels``: channels the recipient refuses outright.
-    - ``unsubscribed_categories``: notification categories the recipient
-      has unsubscribed from, across all topics and channels.
-    - ``unsubscribed_topics``: ids of registered NotificationTopics the
-      recipient has unsubscribed from.
-
-    INVARIANT: ``NotificationCategory.CRITICAL`` is unstorable. The
-    essential category is always deliverable, so unsubscribing from it is
-    unrepresentable rather than merely ignored - enforced at construction,
-    the only place consent state is created.
-
-    Topic ids are opaque to this object: it cannot know which category a
-    topic maps to. A CRITICAL-mapped topic id inside ``unsubscribed_topics``
-    is therefore harmless - ``is_topic_subscribed`` short-circuits on the
-    topic's category before consulting any stored state.
-    """
+    """Value object holding a recipient's consent state."""
 
     opted_out_channels: frozenset[DeliveryChannel] = field(default_factory=frozenset)
     unsubscribed_categories: frozenset[NotificationCategory] = field(
         default_factory=frozenset
     )
     unsubscribed_topics: frozenset[UUID] = field(default_factory=frozenset)
+    blackout_period: BlackoutPeriod | None = None
+    quiet_hours: QuietHours | None = None
 
     def __post_init__(self) -> None:
-        """Normalize inputs and enforce the CRITICAL-unstorable invariant.
+        """Normalize inputs and enforce a CRITICAL-unstorable invariant.
 
         Accepts raw strings and enum members (rehydration and API payloads
         arrive untyped); an unknown channel or category value raises the
