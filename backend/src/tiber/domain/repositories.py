@@ -75,13 +75,7 @@ class NotificationRepository(Protocol):
         ...
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> Notification | None:
-        """Get a notification by its ID within a project's scope.
-
-        Scoped like every other tenant-owned fetch: a mismatched project
-        reads as a miss, so a caller bug surfaces as not-found instead of
-        a cross-tenant read. Uniqueness of the UUID is not the point -
-        the tenancy check being un-forgettable is.
-        """
+        """Get a notification by its ID within a project's scope."""
         ...
 
     async def get_by_idempotency_key(
