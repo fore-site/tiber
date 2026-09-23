@@ -291,7 +291,7 @@ class InvalidProjectStateError(TiberError):
 
 
 class ProjectNameConflictError(TiberError):
-    """Raised when a project name is already in use by the same user."""
+    """Raised when a project name is already in use."""
 
     error_code = "project_name_conflict"
     status_code = 409
