@@ -16,6 +16,10 @@ class NotificationContent:
         if not self.body or not self.body.strip():
             raise ValueError("Notification content body must not be empty")
         if self.action_url:
-            result = urlparse(self.action_url)
-            if not all([result.scheme in ("http", "https"), result.netloc]):
+            result = urlparse(self.action_url.strip())
+            if not all([result.scheme in ("http", "https"), result.netloc.strip()]):
                 raise ValueError("Invalid action URL")
+        if self.image_url:
+            result = urlparse(self.image_url.strip())
+            if not all([result.scheme in ("http", "https"), result.netloc.strip()]):
+                raise ValueError("Invalid image URL")
