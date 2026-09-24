@@ -10,8 +10,6 @@ tested in isolation.
 Missing variables are substituted with the empty string rather than raising,
 mirroring the "graceful degradation" principle used elsewhere in the pipeline.
 
-``action_url`` / ``image_url`` are not rendered — they are opaque values that
-pass through from the template's content unchanged.
 """
 
 from __future__ import annotations
