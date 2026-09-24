@@ -47,16 +47,16 @@ class NotificationModel(Base):
         CheckConstraint(
             """
             (
-                status = 'policy_rejected'
-                AND policy_violation_reason IS NOT NULL
+                status = 'suppressed'
+                AND suppression_reason IS NOT NULL
             )
             OR
             (
-                status <> 'policy_rejected'
-                AND policy_violation_reason IS NULL
+                status <> 'suppressed'
+                AND suppression_reason IS NULL
             )
             """,
-            name="notifications_policy_violation_check",
+            name="notifications_suppression_reason_check",
         ),
         CheckConstraint(
             """
@@ -75,16 +75,29 @@ class NotificationModel(Base):
         CheckConstraint(
             """
             (
-                status = 'failed'
+                status IN ('failed', 'bounced')
                 AND failure_reason IS NOT NULL
             )
             OR
             (
-                status <> 'failed'
+                status NOT IN ('failed', 'bounced')
                 AND failure_reason IS NULL
             )
             """,
             name="notifications_failure_reason_check",
+        ),
+        CheckConstraint(
+            """
+            (
+                status = 'postponed'
+                AND send_at IS NOT NULL
+            )
+            OR
+            (
+                status <> 'postponed'
+            )
+            """,
+            name="notifications_postponed_send_at_check",
         ),
     )
 
@@ -167,7 +180,7 @@ class NotificationModel(Base):
         server_default="immediate",
     )
 
-    policy_violation_reason: Mapped[str | None] = mapped_column(
+    suppression_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

@@ -17,9 +17,9 @@ class ProjectModel(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "user_id",
+            "account_id",
             "slug",
-            name="projects_user_slug_unique",
+            name="projects_account_slug_unique",
         ),
     )
 
@@ -29,9 +29,9 @@ class ProjectModel(Base):
         server_default=func.gen_random_uuid(),
     )
 
-    user_id: Mapped[UUID] = mapped_column(
+    account_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
