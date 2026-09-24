@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from ..entities import DeliveryConstraint, Notification, Recipient
 from ..enums import NotificationCategory
-from ..value_objects import RestrictedWindow
+from ..value_objects import QuietHours
 
 
 @dataclass(frozen=True)
@@ -116,9 +116,15 @@ class RecipientPreferenceRule:
 class BlackoutPeriodRule:
     """Reject a notification when it is sent during a blackout period.
 
-    A blackout period is a date range during which notifications are not
-    allowed to be sent. The rule checks if the send date falls within any
+    A blackout period is a datetime range during which notifications are not
+    allowed to be sent. The rule checks if the send instant falls within any
     of the defined blackout periods for the project.
+
+    Because a blackout is now an absolute window in time, no timezone
+    projection is performed: an instant is either inside the range or it is
+    not, identically in every timezone. Silencing a *local calendar day*
+    is the caller's responsibility — they declare the day's boundaries as
+    instants in their own timezone.
 
     A violation is a hard rejection: the notification is never rescheduled
     to after the blackout. The blackout is the client's own configuration,
@@ -142,17 +148,14 @@ class BlackoutPeriodRule:
             return PolicyDecision.allow()
 
         blackout_periods = delivery_constraint.blackout_periods
-        project_timezone = ZoneInfo(delivery_constraint.timezone)
+        if not blackout_periods:
+            return PolicyDecision.allow()
+
         notification = ctx.notification
-        send_date = (
-            (notification.send_at or ctx.now).astimezone(project_timezone).date()
-        )
+        send_at = notification.send_at or ctx.now
 
         for blackout_period in blackout_periods:
-            if (
-                send_date >= blackout_period.start_date
-                and send_date <= blackout_period.end_date
-            ):
+            if blackout_period.start <= send_at <= blackout_period.end:
                 return PolicyDecision.reject(
                     reason=f"notification cannot be sent within {blackout_period.name} blackout period",
                     rule=self.name,
@@ -160,12 +163,12 @@ class BlackoutPeriodRule:
         return PolicyDecision.allow()
 
 
-class RestrictedWindowsRule:
-    """Reject a notification when it is sent within the range of restricted windows.
+class QuietHoursRule:
+    """Reject a notification when it is sent within a quiet-hours window.
 
-    A restricted window is a time range during which notifications are not
-    allowed to be sent. The rule checks if the current time falls within any
-    of the defined restricted windows for the project.
+    A quiet hours window is a recurring time-of-day range during which
+    notifications are not allowed to be sent. The rule checks if the send
+    time falls within any of the defined quiet hours for the project.
 
     CRITICAL notifications bypass this rule, on the same grounds as the
     preference and blackout rules: the recipient's need to receive the
@@ -174,9 +177,9 @@ class RestrictedWindowsRule:
     be rejected by landing inside one prohibition but not another.
     """
 
-    name = "restricted_windows"
+    name = "quiet_hours"
 
-    def _covers(self, window: RestrictedWindow, t: time) -> bool:
+    def _covers(self, window: QuietHours, t: time) -> bool:
         """Check if the given time falls within the restricted window."""
         if window.window_start <= window.window_end:
             return t >= window.window_start and t <= window.window_end
@@ -192,14 +195,14 @@ class RestrictedWindowsRule:
         if not delivery_constraint:
             return PolicyDecision.allow()
 
-        restricted_windows = delivery_constraint.restricted_windows
+        quiet_hours = delivery_constraint.quiet_hours
         project_timezone = ZoneInfo(delivery_constraint.timezone)
 
         send_time = (
             (notification.send_at or ctx.now).astimezone(project_timezone).time()
         )
 
-        for window in restricted_windows:
+        for window in quiet_hours:
             if window.channel == notification.channel and self._covers(
                 window, send_time
             ):
@@ -225,7 +228,7 @@ class PolicyResolver:
         Rules run in order; the first rejection short-circuits the chain and
         becomes the overall decision. The default chain is the documented
         intake order: address availability, then recipient
-        preferences, then blackout periods, then restricted windows.
+        preferences, then blackout periods, then quiet hours.
         """
         self._rules = list(rules) if rules is not None else list(INTAKE_RULES)
 
@@ -262,10 +265,10 @@ INTAKE_RULES: tuple[PolicyRule, ...] = (
     RecipientAddressRule(),
     RecipientPreferenceRule(),
     BlackoutPeriodRule(),
-    RestrictedWindowsRule(),
+    QuietHoursRule(),
 )
 DISPATCH_GUARD_RULES: tuple[PolicyRule, ...] = (
     RecipientPreferenceRule(),
     BlackoutPeriodRule(),
-    RestrictedWindowsRule(),
+    QuietHoursRule(),
 )

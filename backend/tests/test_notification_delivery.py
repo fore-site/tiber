@@ -164,7 +164,7 @@ async def test_success_marks_delivered_and_records_attempt():
     assert updated.status == NotificationStatus.DELIVERED
     assert updated.delivered_at is not None
     assert len(attempts.attempts) == 1
-    assert attempts.attempts[0].status == DeliveryAttemptStatus.SUCCEEDED
+    assert attempts.attempts[0].status == DeliveryAttemptStatus.SUCCESS
     assert attempts.attempts[0].provider_message_id is not None
     # The attempt freezes the address the provider actually saw.
     assert attempts.attempts[0].recipient_address == "a@b.io"
@@ -182,7 +182,7 @@ async def test_failure_marks_failed_and_records_failed_attempt():
     )
 
     assert updated.status == NotificationStatus.FAILED
-    assert attempts.attempts[0].status == DeliveryAttemptStatus.FAILED
+    assert attempts.attempts[0].status == DeliveryAttemptStatus.FAIL
     assert attempts.attempts[0].error == "provider down"
     # A contact failure still snapshots the address it tried.
     assert attempts.attempts[0].recipient_address == "a@b.io"
@@ -200,7 +200,7 @@ async def test_missing_channel_address_marks_failed():
     )
 
     assert updated.status == NotificationStatus.FAILED
-    assert attempts.attempts[0].status == DeliveryAttemptStatus.FAILED
+    assert attempts.attempts[0].status == DeliveryAttemptStatus.FAIL
     assert "no email address" in attempts.attempts[0].error
     # Failed before any contact: the snapshot is None, meaning "nothing was
     # attempted", never "unknown address".
@@ -292,7 +292,7 @@ async def test_scheduled_notification_delivers_once_due():
     assert updated.status == NotificationStatus.DELIVERED
     assert updated.delivered_at is not None
     assert len(attempts.attempts) == 1
-    assert attempts.attempts[0].status == DeliveryAttemptStatus.SUCCEEDED
+    assert attempts.attempts[0].status == DeliveryAttemptStatus.SUCCESS
 
 
 async def test_concurrent_redispatch_is_idempotent():

@@ -1,6 +1,6 @@
 """Tests for the time-based domain policy rules.
 
-``BlackoutPeriodRule`` and ``RestrictedWindowsRule`` are the most subtle
+``BlackoutPeriodRule`` and ``QuietHoursRule`` are the most subtle
 rules in the domain: timezone projection, midnight wraparound, inclusive
 boundaries, channel filtering, and two send-time branches (``send_at`` vs
 ``ctx.now``). Every test pins exactly one fact with a fixed
@@ -12,12 +12,15 @@ These tests encode deliberate decisions, not accidents:
 - a window with ``window_start > window_end`` spans midnight;
 - windows are additive prohibitions — any match rejects, so the verdict
   must be independent of registration order (see the regression test);
-- the first matching window in registration order supplies the reason.
+- the first matching window in registration order supplies the reason;
+- blackout periods are absolute datetime ranges: the send instant is
+  inside or outside identically in every timezone — no local-date
+  projection (see the blackout instant tests).
 """
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, time
+from datetime import UTC, datetime, time
 from uuid import uuid4
 
 import pytest
@@ -25,12 +28,12 @@ import pytest
 from tiber.domain.entities import DeliveryConstraint, Notification, Recipient
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.policies import PolicyContext
-from tiber.domain.policies.rules import BlackoutPeriodRule, RestrictedWindowsRule
+from tiber.domain.policies.rules import BlackoutPeriodRule, QuietHoursRule
 from tiber.domain.value_objects import (
     BlackoutPeriod,
     NotificationContent,
+    QuietHours,
     RecipientPreferences,
-    RestrictedWindow,
 )
 
 
@@ -75,9 +78,9 @@ def make_ctx(
     )
 
 
-def sms_window(start: time, end: time) -> RestrictedWindow:
+def sms_window(start: time, end: time) -> QuietHours:
     """Build a restricted window bound to the SMS channel."""
-    return RestrictedWindow(
+    return QuietHours(
         name="restriction",
         window_start=start,
         window_end=end,
@@ -85,32 +88,32 @@ def sms_window(start: time, end: time) -> RestrictedWindow:
     )
 
 
-def blackout(start: date, end: date, name: str = "holiday") -> BlackoutPeriod:
-    """Build a blackout period spanning the given inclusive date range."""
-    return BlackoutPeriod(name=name, start_date=start, end_date=end)
+def blackout(start: datetime, end: datetime, name: str = "holiday") -> BlackoutPeriod:
+    """Build a blackout period spanning the given inclusive instant range."""
+    return BlackoutPeriod(name=name, start=start, end=end)
 
 
 def constraint_with(
-    windows: tuple[RestrictedWindow, ...] = (),
+    windows: tuple[QuietHours, ...] = (),
     blackouts: tuple[BlackoutPeriod, ...] = (),
     tz: str = "UTC",
 ) -> DeliveryConstraint:
     """Build a project delivery constraint holding the given windows/periods."""
     return DeliveryConstraint.create(
         project_id=uuid4(),
-        restricted_windows=list(windows),
+        quiet_hours=list(windows),
         blackout_periods=list(blackouts),
         timezone=tz,
     )
 
 
-# --- RestrictedWindow VO: degenerate windows are unrepresentable ---
+# --- QuietHours VO: degenerate windows are unrepresentable ---
 
 
 def test_single_instant_window_is_rejected_at_construction():
     """Pin that window_start == window_end is invalid config, rejected early."""
     with pytest.raises(ValueError):
-        RestrictedWindow(
+        QuietHours(
             name="x",
             window_start=time(9, 0),
             window_end=time(9, 0),
@@ -122,18 +125,35 @@ def test_single_instant_window_is_rejected_at_construction():
 
 
 def test_inverted_blackout_period_is_rejected_at_construction():
-    """Pin that start_date > end_date is invalid config, rejected early.
+    """Pin that start > end is invalid config, rejected early.
 
-    An inverted range can never match a send_date, so without this guard the
-    blackout silently blackouts nothing forever.
+    An inverted range can never match a send instant, so without this guard
+    the blackout silently blackouts nothing forever.
     """
     with pytest.raises(ValueError):
         BlackoutPeriod(
-            name="x", start_date=date(2026, 9, 17), end_date=date(2026, 9, 15)
+            name="x",
+            start=datetime(2026, 9, 17, tzinfo=UTC),
+            end=datetime(2026, 9, 15, tzinfo=UTC),
         )
 
 
-# --- RestrictedWindowsRule: membership ---
+def test_mixed_awareness_blackout_period_is_rejected_at_construction():
+    """Pin that mixing a naive endpoint with an aware one is rejected.
+
+    An aware datetime can never be compared against a naive one; the
+    mismatch would surface as a TypeError deep inside the policy rule
+    instead of at configuration time.
+    """
+    with pytest.raises(ValueError):
+        BlackoutPeriod(
+            name="x",
+            start=datetime(2026, 9, 15, tzinfo=UTC),
+            end=datetime(2026, 9, 17),
+        )
+
+
+# --- QuietHoursRule: membership ---
 
 LUNCH = sms_window(time(9, 0), time(12, 0))
 OVERNIGHT = sms_window(time(22, 0), time(6, 0))  # spans midnight
@@ -145,10 +165,10 @@ async def test_window_rejects_when_send_time_inside():
         constraint=constraint_with(windows=(LUNCH,)),
         now=datetime(2026, 9, 15, 10, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
-    assert decision.rule == "restricted_windows"
+    assert decision.rule == "quiet_hours"
 
 
 async def test_window_allows_when_send_time_outside_all_windows():
@@ -157,7 +177,7 @@ async def test_window_allows_when_send_time_outside_all_windows():
         constraint=constraint_with(windows=(LUNCH,)),
         now=datetime(2026, 9, 15, 12, 1, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert decision.allowed
 
@@ -168,7 +188,7 @@ async def test_window_start_boundary_is_inclusive():
         constraint=constraint_with(windows=(LUNCH,)),
         now=datetime(2026, 9, 15, 9, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
 
@@ -179,12 +199,12 @@ async def test_window_end_boundary_is_inclusive():
         constraint=constraint_with(windows=(LUNCH,)),
         now=datetime(2026, 9, 15, 12, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
 
 
-# --- RestrictedWindowsRule: additive prohibitions (OR-composition) ---
+# --- QuietHoursRule: additive prohibitions (OR-composition) ---
 
 
 async def test_window_rejects_inside_second_window_after_first_window_misses():
@@ -199,7 +219,7 @@ async def test_window_rejects_inside_second_window_after_first_window_misses():
         constraint=constraint_with(windows=(LUNCH, OVERNIGHT)),
         now=datetime(2026, 9, 15, 23, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
     assert "22:00:00" in decision.reason
@@ -208,7 +228,7 @@ async def test_window_rejects_inside_second_window_after_first_window_misses():
 
 async def test_window_verdict_is_independent_of_registration_order():
     """Pin that same facts with reordered windows give identical verdict AND reason."""
-    rule = RestrictedWindowsRule()
+    rule = QuietHoursRule()
     first = await rule.evaluate(
         make_ctx(constraint=constraint_with(windows=(LUNCH, OVERNIGHT)))
     )
@@ -226,13 +246,13 @@ async def test_window_first_matching_window_supplies_the_reason():
         constraint=constraint_with(windows=(LUNCH, wider)),
         now=datetime(2026, 9, 15, 10, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
     assert "09:00:00" in decision.reason  # LUNCH's bounds, not wider's
 
 
-# --- RestrictedWindowsRule: midnight wraparound ---
+# --- QuietHoursRule: midnight wraparound ---
 
 
 async def test_window_midnight_spanning_window_rejects_before_midnight():
@@ -241,7 +261,7 @@ async def test_window_midnight_spanning_window_rejects_before_midnight():
         constraint=constraint_with(windows=(OVERNIGHT,)),
         now=datetime(2026, 9, 15, 23, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
 
@@ -252,7 +272,7 @@ async def test_window_midnight_spanning_window_rejects_after_midnight():
         constraint=constraint_with(windows=(OVERNIGHT,)),
         now=datetime(2026, 9, 15, 1, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
 
@@ -263,17 +283,17 @@ async def test_window_midnight_spanning_window_allows_between_boundaries():
         constraint=constraint_with(windows=(OVERNIGHT,)),
         now=datetime(2026, 9, 15, 12, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert decision.allowed
 
 
-# --- RestrictedWindowsRule: channel filter ---
+# --- QuietHoursRule: channel filter ---
 
 
 async def test_window_ignores_windows_for_other_channels():
     """Pin that an SMS notification is not judged against an EMAIL window."""
-    email_quiet = RestrictedWindow(
+    email_quiet = QuietHours(
         name="email-quiet",
         window_start=time(21, 0),
         window_end=time(23, 0),
@@ -284,12 +304,12 @@ async def test_window_ignores_windows_for_other_channels():
         constraint=constraint_with(windows=(email_quiet,)),
         now=datetime(2026, 9, 15, 22, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert decision.allowed
 
 
-# --- RestrictedWindowsRule: send-time branch ---
+# --- QuietHoursRule: send-time branch ---
 
 
 async def test_window_send_at_inside_rejects_even_when_ctx_now_outside():
@@ -299,7 +319,7 @@ async def test_window_send_at_inside_rejects_even_when_ctx_now_outside():
         now=datetime(2026, 9, 14, 23, 0, tzinfo=UTC),  # day before: outside
         send_at=datetime(2026, 9, 15, 10, 30, tzinfo=UTC),  # inside lunch
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
 
@@ -315,12 +335,12 @@ async def test_window_send_at_outside_allows_even_when_ctx_now_inside():
         now=datetime(2026, 9, 15, 10, 0, tzinfo=UTC),  # inside lunch
         send_at=datetime(2026, 9, 16, 14, 0, tzinfo=UTC),  # 14:00: outside
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert decision.allowed
 
 
-# --- RestrictedWindowsRule: timezone projection ---
+# --- QuietHoursRule: timezone projection ---
 
 
 async def test_window_projects_send_time_into_project_timezone():
@@ -336,17 +356,17 @@ async def test_window_projects_send_time_into_project_timezone():
         send_at=datetime(2026, 7, 15, 23, 30, tzinfo=UTC),
         now=datetime(2026, 7, 15, 12, 0, tzinfo=UTC),
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
 
 
-# --- RestrictedWindowsRule: no-constraint paths ---
+# --- QuietHoursRule: no-constraint paths ---
 
 
 async def test_window_allows_when_no_delivery_constraint():
     """Pin the self-consistent no-constraints path of the window rule."""
-    decision = await RestrictedWindowsRule().evaluate(make_ctx())
+    decision = await QuietHoursRule().evaluate(make_ctx())
 
     assert decision.allowed
 
@@ -355,7 +375,7 @@ async def test_window_allows_when_constraint_has_no_windows():
     """Pin that a constraint with only blackouts does not reject windows."""
     ctx = make_ctx(constraint=constraint_with())
 
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert decision.allowed
 
@@ -363,11 +383,16 @@ async def test_window_allows_when_constraint_has_no_windows():
 # --- BlackoutPeriodRule: membership ---
 
 
-async def test_blackout_rejects_when_send_date_inside():
-    """Pin that a send date within the blackout's inclusive range rejects."""
+async def test_blackout_rejects_when_send_instant_inside():
+    """Pin that a send instant within the blackout's inclusive range rejects."""
     ctx = make_ctx(
         constraint=constraint_with(
-            blackouts=(blackout(date(2026, 9, 15), date(2026, 9, 17)),)
+            blackouts=(
+                blackout(
+                    datetime(2026, 9, 15, tzinfo=UTC),
+                    datetime(2026, 9, 18, tzinfo=UTC),
+                ),
+            )
         )
     )
     decision = await BlackoutPeriodRule().evaluate(ctx)
@@ -378,10 +403,15 @@ async def test_blackout_rejects_when_send_date_inside():
 
 
 async def test_blackout_allows_after_blackout_ends():
-    """Pin that a send date after end_date allows."""
+    """Pin that a send instant after end allows."""
     ctx = make_ctx(
         constraint=constraint_with(
-            blackouts=(blackout(date(2026, 9, 15), date(2026, 9, 17)),)
+            blackouts=(
+                blackout(
+                    datetime(2026, 9, 15, tzinfo=UTC),
+                    datetime(2026, 9, 18, tzinfo=UTC),
+                ),
+            )
         ),
         now=datetime(2026, 9, 18, 9, 0, tzinfo=UTC),
     )
@@ -390,17 +420,51 @@ async def test_blackout_allows_after_blackout_ends():
     assert decision.allowed
 
 
-async def test_blackout_end_date_is_inclusive():
-    """Pin that a send on end_date itself is inside the blackout."""
+async def test_blackout_end_instant_is_inclusive():
+    """Pin that a send exactly at end is inside the blackout.
+
+    Note the semantic change from the date-range version: end is a single
+    instant, not an entire calendar day. 23:59 on the last day is OUTSIDE a
+    range ending at midnight — silencing the whole final day means declaring
+    its end as the next midnight.
+    """
     ctx = make_ctx(
         constraint=constraint_with(
-            blackouts=(blackout(date(2026, 9, 15), date(2026, 9, 17)),)
+            blackouts=(
+                blackout(
+                    datetime(2026, 9, 15, tzinfo=UTC),
+                    datetime(2026, 9, 18, tzinfo=UTC),
+                ),
+            )
         ),
-        now=datetime(2026, 9, 17, 23, 59, tzinfo=UTC),
+        now=datetime(2026, 9, 18, 0, 0, tzinfo=UTC),
     )
     decision = await BlackoutPeriodRule().evaluate(ctx)
 
     assert not decision.allowed
+
+
+async def test_blackout_is_an_absolute_window_not_a_calendar_day():
+    """Pin that the final day after the end instant is NOT silenced.
+
+    Under the old date-range semantics a send on the last blackout day was
+    rejected all day. A datetime range silences instants, not days: this pin
+    freezes the deliberate behavior change so nobody 'fixes' it back.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(
+            blackouts=(
+                blackout(
+                    datetime(2026, 9, 15, tzinfo=UTC),
+                    datetime(2026, 9, 18, tzinfo=UTC),
+                ),
+            )
+        ),
+        now=datetime(2026, 9, 18, 12, 0, tzinfo=UTC),
+    )
+    decision = await BlackoutPeriodRule().evaluate(ctx)
+
+    assert decision.allowed
 
 
 # --- BlackoutPeriodRule: CRITICAL bypass ---
@@ -421,7 +485,12 @@ async def test_blackout_bypasses_critical_notifications():
     """
     ctx = make_ctx(
         constraint=constraint_with(
-            blackouts=(blackout(date(2026, 9, 15), date(2026, 9, 17)),)
+            blackouts=(
+                blackout(
+                    datetime(2026, 9, 15, tzinfo=UTC),
+                    datetime(2026, 9, 18, tzinfo=UTC),
+                ),
+            )
         ),
         # default now = 2026-09-15 23:00 UTC, inside the blackout range
         category=NotificationCategory.CRITICAL,
@@ -431,10 +500,10 @@ async def test_blackout_bypasses_critical_notifications():
     assert decision.allowed
 
 
-# --- RestrictedWindowsRule: CRITICAL bypass ---
+# --- QuietHoursRule: CRITICAL bypass ---
 
 
-async def test_restricted_window_bypasses_critical_notifications():
+async def test_quiet_hours_bypasses_critical_notifications():
     """Pin that a CRITICAL send inside a restricted window is never rejected.
 
     Same grounds as the blackout and preference bypasses: the recipient's
@@ -451,7 +520,7 @@ async def test_restricted_window_bypasses_critical_notifications():
         # default now = 2026-09-15 23:00 UTC, inside the wrapped window
         category=NotificationCategory.CRITICAL,
     )
-    decision = await RestrictedWindowsRule().evaluate(ctx)
+    decision = await QuietHoursRule().evaluate(ctx)
 
     assert decision.allowed
 
@@ -463,7 +532,12 @@ async def test_blackout_send_at_inside_rejects_even_when_ctx_now_outside():
     """Pin that an explicitly scheduled send is judged against its own date."""
     ctx = make_ctx(
         constraint=constraint_with(
-            blackouts=(blackout(date(2026, 9, 15), date(2026, 9, 17)),)
+            blackouts=(
+                blackout(
+                    datetime(2026, 9, 15, tzinfo=UTC),
+                    datetime(2026, 9, 18, tzinfo=UTC),
+                ),
+            )
         ),
         now=datetime(2026, 9, 18, 9, 0, tzinfo=UTC),  # after blackout
         send_at=datetime(2026, 9, 16, 9, 0, tzinfo=UTC),  # inside blackout
@@ -476,15 +550,24 @@ async def test_blackout_send_at_inside_rejects_even_when_ctx_now_outside():
 # --- BlackoutPeriodRule: timezone projection ---
 
 
-async def test_blackout_projects_send_date_into_project_timezone():
-    """Pin that the UTC calendar date is never compared against local dates.
+async def test_blackout_is_judged_by_instant_not_local_calendar():
+    """Pin that blackout ranges are absolute instants, never projected.
 
-    23:30 UTC on 2026-09-15 is already 2026-09-16 in Europe/London (BST), so
-    a Sep 16-only blackout must reject. Fails if the rule compares UTC dates.
+    23:30 UTC on 2026-09-15 is already 2026-09-16 in Europe/London (BST),
+    yet it is OUTSIDE a Sep 16 00:00-12:00 UTC blackout: the instant
+    precedes the range. The old date-range rule projected the calendar date
+    into the project timezone and rejected; this pin freezes the new
+    semantics. Silencing a local calendar day is the caller's job — they
+    declare the day's boundaries as instants in their own timezone.
     """
     ctx = make_ctx(
         constraint=constraint_with(
-            blackouts=(blackout(date(2026, 9, 16), date(2026, 9, 16)),),
+            blackouts=(
+                blackout(
+                    datetime(2026, 9, 16, 0, 0, tzinfo=UTC),
+                    datetime(2026, 9, 16, 12, 0, tzinfo=UTC),
+                ),
+            ),
             tz="Europe/London",
         ),
         send_at=datetime(2026, 9, 15, 23, 30, tzinfo=UTC),
@@ -492,7 +575,7 @@ async def test_blackout_projects_send_date_into_project_timezone():
     )
     decision = await BlackoutPeriodRule().evaluate(ctx)
 
-    assert not decision.allowed
+    assert decision.allowed
 
 
 # --- BlackoutPeriodRule: no-constraint paths ---

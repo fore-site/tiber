@@ -1794,7 +1794,7 @@ components:
 
     DeliveryAttemptStatus:
       type: string
-      enum: [succeeded, failed, policy_rejected]
+      enum: [success, fail, policy_rejected]
 
     TimeWindow:
       type: object

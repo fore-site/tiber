@@ -48,8 +48,8 @@ class UserRole(StrEnum):
 class DeliveryAttemptStatus(StrEnum):
     """Status of a delivery attempt."""
 
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
+    SUCCESS = "success"
+    FAIL = "fail"
 
 
 class EngagementEventType(StrEnum):

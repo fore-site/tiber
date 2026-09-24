@@ -30,7 +30,7 @@ from tiber.domain.enums import (
 from tiber.domain.exceptions import InvalidNotificationStateError
 from tiber.domain.value_objects import (
     NotificationContent,
-    RestrictedWindow,
+    QuietHours,
     TopicTitle,
 )
 
@@ -155,8 +155,7 @@ def make_attempt(**overrides) -> DeliveryAttempt:
     """Build a valid delivery attempt with member-typed fields."""
     kwargs = dict(
         notification_id=uuid4(),
-        attempt_number=1,
-        status="succeeded",
+        status="success",
         channel="email",
         provider="postmark",
         recipient_address="jane@x.com",
@@ -170,21 +169,21 @@ def test_attempt_raw_strings_are_coerced():
     attempt = make_attempt()
 
     assert attempt.channel is DeliveryChannel.EMAIL
-    assert attempt.status.value == "succeeded"
+    assert attempt.status.value == "success"
 
 
 def test_attempt_unknown_status_value_raises():
     """A string that is not an attempt status raises."""
     with pytest.raises(ValueError):
-        make_attempt(status="delivered")  # the member is 'succeeded'
+        make_attempt(status="delivered")  # the value is 'success'
 
 
-# --- RestrictedWindow.channel (value object) ---
+# --- QuietHours.channel (value object) ---
 
 
 def test_window_raw_channel_string_is_coerced():
     """A raw channel string arrives as the member on the VO too."""
-    window = RestrictedWindow(
+    window = QuietHours(
         name="quiet-hours",
         window_start=time(22, 0),
         window_end=time(23, 0),
@@ -197,7 +196,7 @@ def test_window_raw_channel_string_is_coerced():
 def test_window_unknown_channel_value_raises():
     """A string that is not a channel value raises at construction."""
     with pytest.raises(ValueError):
-        RestrictedWindow(
+        QuietHours(
             name="quiet-hours",
             window_start=time(22, 0),
             window_end=time(23, 0),

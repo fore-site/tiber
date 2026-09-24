@@ -12,6 +12,14 @@ class BlackoutPeriod:
 
     def __post_init__(self):
         """Validate the value object's invariants after initialization."""
+        # Both endpoints must agree on awareness: an aware datetime can never
+        # be compared against a naive one (TypeError), so the mismatch must
+        # fail here rather than surface later inside the policy rule.
+        if (self.start.tzinfo is None) != (self.end.tzinfo is None):
+            raise ValueError(
+                "Blackout period start and end must both be timezone-aware "
+                "or both be naive"
+            )
         if self.start > self.end:
             raise ValueError(
                 f"Blackout period start ({self.start.strftime('%Y-%m-%d %H:%M:%S')}) cannot be after end ({self.end.strftime('%Y-%m-%d %H:%M:%S')})"
