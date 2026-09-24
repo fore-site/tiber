@@ -10,7 +10,11 @@ from uuid import uuid4
 
 from tiber.application.services import DeliveryPolicyGuard
 from tiber.domain.entities import Notification, Recipient
-from tiber.domain.enums import DeliveryChannel, NotificationCategory
+from tiber.domain.enums import (
+    DeliveryChannel,
+    NotificationCategory,
+    PolicyConsequence,
+)
 from tiber.domain.policies import PolicyDecision, PolicyResolver
 from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 
@@ -100,7 +104,9 @@ async def test_resolver_short_circuits_on_first_rejection():
             self.name = name
 
         async def evaluate(self, ctx) -> PolicyDecision:
-            return PolicyDecision.reject("nope", rule=self.name)
+            return PolicyDecision.reject(
+                "nope", self.name, consequence=PolicyConsequence.SUPPRESS
+            )
 
     notification = make_notification(DeliveryChannel.EMAIL)
     recipient = make_recipient(notification, {"email": "a@b.io"})
@@ -130,7 +136,7 @@ async def test_guard_does_not_recheck_address():
     """The dispatch guard omits the address rule (doc 04's contract).
 
     An address cannot usefully drift between intake and dispatch, and
-    re-classifying a missing address as policy_rejected would mislabel a
+    re-classifying a missing address as suppressed would mislabel a
     lookup/attempt failure. The processor's own missing-address check
     guards that path with a failed attempt instead.
     """
@@ -165,7 +171,9 @@ async def test_guard_with_custom_resolver_rules():
         name = "always_block"
 
         async def evaluate(self, ctx) -> PolicyDecision:
-            return PolicyDecision.reject("nope", rule=self.name)
+            return PolicyDecision.reject(
+                "nope", self.name, consequence=PolicyConsequence.SUPPRESS
+            )
 
     notification = make_notification(DeliveryChannel.EMAIL)
     recipient = make_recipient(notification, {"email": "a@b.io"})

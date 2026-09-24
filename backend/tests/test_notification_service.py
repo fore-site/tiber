@@ -393,8 +393,8 @@ async def test_channel_mismatched_template_rejected():
 # ---------------------------------------------------------------------------
 
 
-async def test_policy_rejection_persists_and_does_not_publish(recipient):
-    """A recipient lacking the channel address is persisted as policy_rejected."""
+async def test_policy_suppression_persists_and_does_not_publish(recipient):
+    """A recipient lacking the channel address is persisted as suppressed."""
     # Recipient has no email address -> RecipientAddressRule rejects.
     no_email = make_recipient(
         project_id=recipient.project_id, addresses={"push": "token"}
@@ -410,8 +410,8 @@ async def test_policy_rejection_persists_and_does_not_publish(recipient):
 
     notification = await svc.create_notification(**build_kwargs(no_email, key="pol-1"))
 
-    assert notification.status == NotificationStatus.POLICY_REJECTED
-    assert notification.policy_violation_reason is not None
-    assert "email" in notification.policy_violation_reason
+    assert notification.status == NotificationStatus.SUPPRESSED
+    assert notification.suppression_reason is not None
+    assert "email" in notification.suppression_reason
     # A rejected notification is a created record but is never enqueued.
     assert svc._publisher.published == []

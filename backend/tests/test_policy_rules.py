@@ -27,7 +27,7 @@ import pytest
 
 from tiber.domain.entities import DeliveryConstraint, Notification, Recipient
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
-from tiber.domain.policies import PolicyContext
+from tiber.domain.policies import PolicyContext, PolicyResolver
 from tiber.domain.policies.rules import BlackoutPeriodRule, QuietHoursRule
 from tiber.domain.value_objects import (
     BlackoutPeriod,
@@ -470,18 +470,13 @@ async def test_blackout_is_an_absolute_window_not_a_calendar_day():
 # --- BlackoutPeriodRule: CRITICAL bypass ---
 
 
-async def test_blackout_bypasses_critical_notifications():
-    """Pin that a CRITICAL send during a blackout is never rejected.
+async def test_blackout_rule_does_not_special_case_critical():
+    """Pin that the rule itself is bypass-free for CRITICAL sends.
 
-    Same grounds as the preference rule's CRITICAL bypass: the recipient's
-    need to receive the message (fraud alert, MFA token) outranks the
-    project's configured silence. The blackout is the sender's own rule;
-    the criticality is about the recipient's need.
-
-    The scenario is judged against ``now`` because the entity forbids
-    ``send_at`` on CRITICAL notifications (immediate-only basis) — the
-    reachable bypass path is a dispatch moment landing inside a blackout,
-    exactly what the guard re-checks.
+    The CRITICAL bypass is chain-level (PolicyResolver short-circuits to
+    allow() before any rule runs), so the rule is a pure prohibition: a
+    CRITICAL send inside the range is rejected here exactly like any other.
+    The chain-level pin lives in test_blackout_chain_bypasses_critical.
     """
     ctx = make_ctx(
         constraint=constraint_with(
@@ -497,22 +492,45 @@ async def test_blackout_bypasses_critical_notifications():
     )
     decision = await BlackoutPeriodRule().evaluate(ctx)
 
+    assert not decision.allowed
+
+
+async def test_blackout_chain_bypasses_critical_notifications():
+    """Pin that a CRITICAL send during a blackout is never rejected by the chain.
+
+    Same grounds as every other bypass: the recipient's need to receive the
+    message (fraud alert, MFA token) outranks the project's configured
+    silence. The bypass is uniform at the resolver, so a CRITICAL dispatch
+    can never be rejected by one rule but not another. The blackout range
+    spans 1970-2100, so the pin is deterministic against the real clock.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(
+            blackouts=(
+                blackout(
+                    datetime(1970, 1, 1, tzinfo=UTC),
+                    datetime(2100, 1, 1, tzinfo=UTC),
+                ),
+            )
+        ),
+        category=NotificationCategory.CRITICAL,
+    )
+    decision = await PolicyResolver().evaluate(
+        ctx.notification, ctx.recipient, ctx.delivery_constraint
+    )
+
     assert decision.allowed
 
 
 # --- QuietHoursRule: CRITICAL bypass ---
 
 
-async def test_quiet_hours_bypasses_critical_notifications():
-    """Pin that a CRITICAL send inside a restricted window is never rejected.
+async def test_quiet_hours_rule_does_not_special_case_critical():
+    """Pin that the rule itself is bypass-free for CRITICAL sends.
 
-    Same grounds as the blackout and preference bypasses: the recipient's
-    need to receive the message outranks the project's configured silence,
-    and the bypass is uniform across every time-based rule so a CRITICAL
-    dispatch cannot be rejected by one prohibition but not another. The
-    window wraps midnight (22:00-06:00) so the pin also exercises the
-    wraparound membership check; the judged time is ``now`` because the
-    entity forbids ``send_at`` on CRITICAL notifications.
+    The CRITICAL bypass is chain-level: the rule is a pure time-of-day
+    prohibition, identical for every category. The chain-level pin lives in
+    test_quiet_hours_chain_bypasses_critical_notifications.
     """
     ctx = make_ctx(
         constraint=constraint_with(windows=(sms_window(time(22, 0), time(6, 0)),)),
@@ -521,6 +539,29 @@ async def test_quiet_hours_bypasses_critical_notifications():
         category=NotificationCategory.CRITICAL,
     )
     decision = await QuietHoursRule().evaluate(ctx)
+
+    assert not decision.allowed
+
+
+async def test_quiet_hours_chain_bypasses_critical_notifications():
+    """Pin that a CRITICAL send inside a restricted window is never rejected.
+
+    Same grounds as the blackout chain bypass: the recipient's need to
+    receive the message outranks the project's configured silence, and the
+    bypass is uniform across the whole chain. The window wraps midnight
+    (22:00-06:00) so the pin also exercises the wraparound membership check
+    through the resolver path; the judged time is ``now`` because the entity
+    forbids ``send_at`` on CRITICAL notifications.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(windows=(sms_window(time(22, 0), time(6, 0)),)),
+        channel=DeliveryChannel.SMS,
+        # default now = 2026-09-15 23:00 UTC, inside the wrapped window
+        category=NotificationCategory.CRITICAL,
+    )
+    decision = await PolicyResolver().evaluate(
+        ctx.notification, ctx.recipient, ctx.delivery_constraint
+    )
 
     assert decision.allowed
 

@@ -20,35 +20,16 @@ from tiber.domain.entities import (
     EngagementEvent,
     NotificationTopic,
     Template,
-    User,
 )
 from tiber.domain.enums import (
     DeliveryChannel,
     NotificationCategory,
-    UserRole,
 )
 from tiber.domain.exceptions import InvalidNotificationStateError
 from tiber.domain.value_objects import (
     NotificationContent,
     QuietHours,
-    TopicTitle,
 )
-
-# --- User.role ---
-
-
-def test_user_raw_role_string_is_coerced():
-    """A raw wire-format role string arrives as the member."""
-    user = User.create(email="a@b.io", role="admin")
-
-    assert user.role is UserRole.ADMIN
-
-
-def test_user_unknown_role_value_raises():
-    """A string that is not a role value raises, never silently stored."""
-    with pytest.raises(ValueError):
-        User.create(email="a@b.io", role="superuser")
-
 
 # --- Template.channel ---
 
@@ -132,7 +113,7 @@ def test_topic_raw_category_string_is_coerced():
     topic = NotificationTopic.create(
         project_id=uuid4(),
         category="critical",
-        title=TopicTitle("Password resets"),
+        title="Password resets",
     )
 
     assert topic.category is NotificationCategory.CRITICAL
@@ -144,7 +125,7 @@ def test_topic_unknown_category_value_raises():
         NotificationTopic.create(
             project_id=uuid4(),
             category="urgent",
-            title=TopicTitle("Urgent"),
+            title="Urgent",
         )
 
 

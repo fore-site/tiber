@@ -12,7 +12,7 @@ send_time_basis as the member would.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -24,7 +24,10 @@ from tiber.domain.enums import (
     NotificationStatus,
     SendTimeBasis,
 )
-from tiber.domain.exceptions import InvalidNotificationStateError
+from tiber.domain.exceptions import (
+    InvalidNotificationStateError,
+    InvalidStateTransitionError,
+)
 from tiber.domain.value_objects import NotificationContent
 
 
@@ -192,13 +195,75 @@ def test_rehydrated_group_key_is_preserved():
         idempotency_key=None,
         send_at=None,
         send_time_basis=SendTimeBasis.ML_PREDICTED,
-        policy_violation_reason=None,
+        suppression_reason=None,
         cancellation_reason=None,
         failure_reason=None,
         delivered_at=None,
     )
 
     assert restored.group_key == "order-1234"
+
+
+# --- postponement carries its resume time ---
+
+
+def test_mark_postponed_sets_send_at_to_resume_time():
+    """POSTPONED is a scheduled deferral: send_at becomes the resume instant."""
+    resume_at = datetime(2026, 9, 25, 6, 5, tzinfo=UTC)
+
+    postponed = make_notification().mark_postponed(resume_at)
+
+    assert postponed.status is NotificationStatus.POSTPONED
+    assert postponed.send_at == resume_at
+
+
+def test_mark_postponed_requires_timezone_aware_resume_time():
+    """A naive resume time is rejected, never silently stored."""
+    with pytest.raises(InvalidNotificationStateError, match="resume_at"):
+        make_notification().mark_postponed(datetime(2026, 9, 25, 6, 5))
+
+
+def test_postponed_without_send_at_is_not_representable():
+    """A POSTPONED row without a resume time is corrupt state."""
+    with pytest.raises(InvalidNotificationStateError, match="send_at"):
+        Notification(
+            project_id=uuid4(),
+            recipient_id=uuid4(),
+            correlation_id=uuid4(),
+            channel=DeliveryChannel.EMAIL,
+            category=NotificationCategory.PROMOTIONAL,
+            content=NotificationContent(title="Hi", body="Hello"),
+            status=NotificationStatus.POSTPONED,
+            send_at=None,
+        )
+
+
+def test_resume_returns_postponed_notification_to_pending():
+    """The worker's resume path: POSTPONED -> PENDING with send_at intact."""
+    resume_at = datetime.now(UTC)
+
+    resumed = make_notification().mark_postponed(resume_at).resume()
+
+    assert resumed.status is NotificationStatus.PENDING
+    assert resumed.send_at == resume_at
+
+
+def test_resume_is_invalid_from_non_postponed_states():
+    """resume() exists only for the POSTPONED state."""
+    with pytest.raises(InvalidStateTransitionError):
+        make_notification().resume()
+
+
+def test_mark_processing_is_legal_from_postponed():
+    """The worker dispatches a resumed notification into PROCESSING."""
+    processing = (
+        make_notification()
+        .mark_postponed(datetime.now(UTC) - timedelta(seconds=1))
+        .resume()
+        .mark_processing()
+    )
+
+    assert processing.status is NotificationStatus.PROCESSING
 
 
 # --- cancellation carries its reason ---
@@ -273,7 +338,7 @@ def test_rehydrated_ml_predicted_with_send_at_keeps_its_basis():
         idempotency_key=None,
         send_at=predicted_time,
         send_time_basis=SendTimeBasis.ML_PREDICTED,
-        policy_violation_reason=None,
+        suppression_reason=None,
         cancellation_reason=None,
         failure_reason=None,
         delivered_at=None,
@@ -303,7 +368,7 @@ def test_rehydrate_explicit_without_send_at_is_rejected():
             idempotency_key=None,
             send_at=None,
             send_time_basis=SendTimeBasis.EXPLICIT,
-            policy_violation_reason=None,
+            suppression_reason=None,
             cancellation_reason=None,
             failure_reason=None,
             delivered_at=None,
