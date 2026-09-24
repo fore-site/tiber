@@ -64,12 +64,7 @@ class RecipientPreferences:
         return category not in self.unsubscribed_categories
 
     def is_topic_subscribed(self, topic: NotificationTopic) -> bool:
-        """Return whether the recipient receives a specific registered topic.
-
-        The CRITICAL check must precede every stored-state consultation -
-        including the topic-id set - so a CRITICAL-mapped topic stays
-        deliverable no matter what a client seeded.
-        """
+        """Return whether the recipient receives a specific registered topic."""
         if topic.category is NotificationCategory.CRITICAL:
             return True
         return (
