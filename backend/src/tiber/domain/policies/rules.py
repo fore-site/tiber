@@ -2,26 +2,34 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from ..entities import DeliveryConstraint, Notification, Recipient
-from ..enums import NotificationCategory
-from ..value_objects import QuietHours
+from ..enums import NotificationCategory, PolicyConsequence
+from ..value_objects import BlackoutPeriod, QuietHours
+
+GRACE_MINUTES = 5
 
 
 @dataclass(frozen=True)
 class PolicyDecision:
     """The outcome of evaluating a delivery policy.
 
-    A rejected decision always carries a human-readable ``reason`` so callers
-    can surface it as ``policy_violation_reason`` on the notification.
+    A rejected decision carries the business consequence of the violation
+    (``consequence``) — the domain owns the mapping from violation kind to
+    what happens next, so application code never string-matches rule names.
+    It also always carries a human-readable ``reason`` so the consequence can
+    be surfaced with its justification on the notification.
     """
 
     allowed: bool
+    consequence: PolicyConsequence | None = None
     reason: str | None = None
     rule: str | None = None
+    # For POSTPONE decisions: the instant after which delivery may proceed.
+    resume_at: datetime | None = None
 
     @classmethod
     def allow(cls) -> PolicyDecision:
@@ -29,9 +37,22 @@ class PolicyDecision:
         return cls(allowed=True)
 
     @classmethod
-    def reject(cls, reason: str, rule: str | None = None) -> PolicyDecision:
-        """Return a reject decision with a reason."""
-        return cls(allowed=False, reason=reason, rule=rule)
+    def reject(
+        cls,
+        reason: str,
+        rule: str,
+        *,
+        consequence: PolicyConsequence,
+        resume_at: datetime | None = None,
+    ) -> PolicyDecision:
+        """Return a reject decision with its consequence and reason."""
+        return cls(
+            allowed=False,
+            consequence=consequence,
+            reason=reason,
+            rule=rule,
+            resume_at=resume_at,
+        )
 
 
 @dataclass(frozen=True)
@@ -54,6 +75,28 @@ class PolicyRule(Protocol):
         ...
 
 
+def next_window_end(window: QuietHours, after: datetime, tz: ZoneInfo) -> datetime:
+    """Return the first instant at or after ``after`` when ``window`` ends.
+
+    The window is a recurring time-of-day range in ``tz``. The next end is
+    the next occurrence of ``window.window_end`` on the local wall clock:
+    today's end when ``after`` has not passed it, tomorrow's when it has
+    (true for both normal and midnight-spanning windows, since a spanning
+    window's end on the start's calendar day has already passed whenever the
+    start time is behind us — checked, not assumed).
+    """
+    local = after.astimezone(tz)
+    candidate = local.replace(
+        hour=window.window_end.hour,
+        minute=window.window_end.minute,
+        second=window.window_end.second,
+        microsecond=0,
+    )
+    if candidate <= local:
+        candidate += timedelta(days=1)
+    return candidate
+
+
 class RecipientAddressRule:
     """Reject a notification when the recipient has no address for its channel.
 
@@ -70,79 +113,134 @@ class RecipientAddressRule:
         if not address:
             return PolicyDecision.reject(
                 f"recipient has no {ctx.notification.channel} address",
-                rule=self.name,
+                self.name,
+                consequence=PolicyConsequence.SUPPRESS,
             )
         return PolicyDecision.allow()
 
 
 class RecipientPreferenceRule:
-    """Reject a notification when the notification delivery violates user preference configuration."""
+    """Reject a notification that violates the recipient's consent state.
+
+    Covers the recipient's stored consent: unsubscribed categories, opted-out
+    channels, and unsubscribed topics. Consent is a permanent decision, so the
+    consequence is suppression, never postponement.
+    """
 
     name = "recipient_preference"
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
-        """Reject when the recipient has unsubscribed from a category of notifications, a topic or a delivery channel.
-
-        CRITICAL notifications bypass this rule entirely: security-relevant
-        messages must reach the recipient even on an opted-out channel, so
-        the category is consulted before any stored consent state.
-        """
-        category = ctx.notification.category
-        if category is NotificationCategory.CRITICAL:
-            return PolicyDecision.allow()
-
+        """Reject when the notification violates the recipient's consent state."""
         preferences = ctx.recipient.preferences
         channel = ctx.notification.channel
         topic = ctx.notification.topic_id
 
-        if category in preferences.unsubscribed_categories:
+        if ctx.notification.category in preferences.unsubscribed_categories:
             return PolicyDecision.reject(
-                f"recipient unsubscribed from {category.value} notifications",
-                rule=self.name,
+                f"recipient unsubscribed from "
+                f"{ctx.notification.category.value} notifications",
+                self.name,
+                consequence=PolicyConsequence.SUPPRESS,
             )
         if channel in preferences.opted_out_channels:
             return PolicyDecision.reject(
                 f"recipient opted out of {channel.value} delivery channel",
-                rule=self.name,
+                self.name,
+                consequence=PolicyConsequence.SUPPRESS,
             )
         if topic and topic in preferences.unsubscribed_topics:
             return PolicyDecision.reject(
                 f"recipient unsubscribed from topic {topic}",
-                rule=self.name,
+                self.name,
+                consequence=PolicyConsequence.SUPPRESS,
             )
         return PolicyDecision.allow()
 
 
+class RecipientLevelRestrictionRule:
+    """Reject a notification that lands inside a recipient-level restriction.
+
+    The recipient may carry their own quiet hours and blackout period on top
+    of the project's delivery constraint. Per the project's policy ruling the
+    two restriction kinds differ in consequence at BOTH levels:
+
+    - a recipient quiet-hours window postpones (temporary, recurring);
+    - a recipient blackout period suppresses (absolute, one-shot).
+
+    Quiet windows are interpreted on the recipient's own wall clock (their
+    profile timezone, falling back to UTC when unset) — quiet hours are a
+    property of the person being disturbed, not of the sending project.
+    """
+
+    name = "recipient_restriction"
+
+    def _covers(self, window: QuietHours, t: time) -> bool:
+        """Check if the given local time falls within the window."""
+        if window.window_start <= window.window_end:
+            return window.window_start <= t <= window.window_end
+        return t >= window.window_start or t <= window.window_end
+
+    async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
+        """Reject when the send instant lands in a recipient-level restriction."""
+        preferences = ctx.recipient.preferences
+        notification = ctx.notification
+        send_at = notification.send_at or ctx.now
+
+        recipient_timezone = ctx.recipient.timezone
+        zone = ZoneInfo(recipient_timezone) if recipient_timezone else ZoneInfo("UTC")
+
+        if preferences.blackout_period is not None:
+            blackout: BlackoutPeriod = preferences.blackout_period
+            if blackout.start <= send_at <= blackout.end:
+                return PolicyDecision.reject(
+                    reason=(
+                        f"recipient blackout period {blackout.name} covers the "
+                        f"send time"
+                    ),
+                    rule=self.name,
+                    consequence=PolicyConsequence.SUPPRESS,
+                )
+
+        if preferences.quiet_hours is not None:
+            window = preferences.quiet_hours
+            if window.channel == notification.channel and self._covers(
+                window, send_at.astimezone(zone).time()
+            ):
+                return PolicyDecision.reject(
+                    reason=(
+                        f"recipient quiet hours ({window.window_start} - "
+                        f"{window.window_end}) cover the send time for channel "
+                        f"{window.channel.value}"
+                    ),
+                    rule=self.name,
+                    consequence=PolicyConsequence.POSTPONE,
+                    resume_at=next_window_end(window, send_at, zone)
+                    + timedelta(minutes=GRACE_MINUTES),
+                )
+
+        return PolicyDecision.allow()
+
+
 class BlackoutPeriodRule:
-    """Reject a notification when it is sent during a blackout period.
+    """Reject a notification sent during a project blackout period.
 
-    A blackout period is a datetime range during which notifications are not
-    allowed to be sent. The rule checks if the send instant falls within any
-    of the defined blackout periods for the project.
-
-    Because a blackout is now an absolute window in time, no timezone
-    projection is performed: an instant is either inside the range or it is
-    not, identically in every timezone. Silencing a *local calendar day*
-    is the caller's responsibility — they declare the day's boundaries as
-    instants in their own timezone.
+    A blackout period is an absolute datetime range during which
+    notifications are not allowed to be sent. Because a blackout is an
+    absolute window in time, no timezone projection is performed: an instant
+    is either inside the range or it is not, identically in every timezone.
+    Silencing a *local calendar day* is the caller's responsibility — they
+    declare the day's boundaries as instants in their own timezone.
 
     A violation is a hard rejection: the notification is never rescheduled
     to after the blackout. The blackout is the client's own configuration,
     so a send that lands inside it contradicts the client's declared rule,
     and Tiber does not silently override client declarations.
-
-    CRITICAL notifications bypass this rule, on the same grounds as the
-    preference rule: the recipient's need to receive the message outranks
-    the project's configured silence.
     """
 
     name = "blackout_period"
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject when the notification is sent during a blackout period."""
-        if ctx.notification.category is NotificationCategory.CRITICAL:
-            return PolicyDecision.allow()
-
         delivery_constraint = ctx.delivery_constraint
         if not delivery_constraint:
             return PolicyDecision.allow()
@@ -157,24 +255,26 @@ class BlackoutPeriodRule:
         for blackout_period in blackout_periods:
             if blackout_period.start <= send_at <= blackout_period.end:
                 return PolicyDecision.reject(
-                    reason=f"notification cannot be sent within {blackout_period.name} blackout period",
+                    reason=(
+                        f"notification cannot be sent within "
+                        f"{blackout_period.name} blackout period"
+                    ),
                     rule=self.name,
+                    consequence=PolicyConsequence.SUPPRESS,
                 )
         return PolicyDecision.allow()
 
 
 class QuietHoursRule:
-    """Reject a notification when it is sent within a quiet-hours window.
+    """Reject a notification sent within a project quiet-hours window.
 
     A quiet hours window is a recurring time-of-day range during which
-    notifications are not allowed to be sent. The rule checks if the send
-    time falls within any of the defined quiet hours for the project.
-
-    CRITICAL notifications bypass this rule, on the same grounds as the
-    preference and blackout rules: the recipient's need to receive the
-    message outranks the project's configured silence. Keeping the bypass
-    uniform across every time-based rule means a CRITICAL dispatch cannot
-    be rejected by landing inside one prohibition but not another.
+    notifications are not allowed to be sent, evaluated on the project's
+    configured wall clock. Unlike opt-outs and blackouts, the restriction is
+    temporary and recurring: the violation's consequence is postponement,
+    with ``resume_at`` computed as the next window end (project timezone)
+    plus a small grace margin, so delivery resumes after the window closes
+    instead of being dropped or silently retried against the same wall clock.
     """
 
     name = "quiet_hours"
@@ -186,10 +286,7 @@ class QuietHoursRule:
         return t >= window.window_start or t <= window.window_end
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
-        """Reject when the notification is sent inside the restricted windows."""
-        if ctx.notification.category is NotificationCategory.CRITICAL:
-            return PolicyDecision.allow()
-
+        """Reject (postpone) when the notification is sent inside a window."""
         notification = ctx.notification
         delivery_constraint = ctx.delivery_constraint
         if not delivery_constraint:
@@ -198,26 +295,38 @@ class QuietHoursRule:
         quiet_hours = delivery_constraint.quiet_hours
         project_timezone = ZoneInfo(delivery_constraint.timezone)
 
-        send_time = (
-            (notification.send_at or ctx.now).astimezone(project_timezone).time()
-        )
+        send_at = notification.send_at or ctx.now
+        send_time = send_at.astimezone(project_timezone).time()
 
         for window in quiet_hours:
             if window.channel == notification.channel and self._covers(
                 window, send_time
             ):
+                resume_at = next_window_end(
+                    window, send_at, project_timezone
+                ) + timedelta(minutes=GRACE_MINUTES)
                 return PolicyDecision.reject(
                     reason=(
-                        f"notification cannot be sent within configured restricted window"
-                        f" ({window.window_start} - {window.window_end}) for channel {window.channel.value}"
+                        "notification cannot be sent within configured restricted "
+                        f"window ({window.window_start} - {window.window_end}) "
+                        f"for channel {window.channel.value}"
                     ),
                     rule=self.name,
+                    consequence=PolicyConsequence.POSTPONE,
+                    resume_at=resume_at,
                 )
         return PolicyDecision.allow()
 
 
 class PolicyResolver:
-    """Evaluate a chain of rules against a notification and recipient."""
+    """Evaluate a chain of rules against a notification and recipient.
+
+    Rules run in order; the first rejection short-circuits the chain and
+    becomes the overall decision. CRITICAL notifications bypass the whole
+    chain: security-relevant messages must reach the recipient regardless of
+    consent or configured silence, and the bypass must be uniform — a
+    CRITICAL dispatch can never be rejected by one rule but not another.
+    """
 
     def __init__(
         self,
@@ -227,8 +336,9 @@ class PolicyResolver:
 
         Rules run in order; the first rejection short-circuits the chain and
         becomes the overall decision. The default chain is the documented
-        intake order: address availability, then recipient
-        preferences, then blackout periods, then quiet hours.
+        intake order: address availability, then recipient preferences, then
+        recipient-level restrictions, then project blackout periods, then
+        project quiet hours.
         """
         self._rules = list(rules) if rules is not None else list(INTAKE_RULES)
 
@@ -252,6 +362,9 @@ class PolicyResolver:
         delivery_constraint: DeliveryConstraint | None = None,
     ) -> PolicyDecision:
         """Evaluate all rules and return the aggregate decision."""
+        if notification.category is NotificationCategory.CRITICAL:
+            return PolicyDecision.allow()
+
         ctx = self.build_context(notification, recipient, delivery_constraint)
         for rule in self._rules:
             decision = await rule.evaluate(ctx)
@@ -260,15 +373,17 @@ class PolicyResolver:
         return PolicyDecision.allow()
 
 
-# Canonical rule chains. The evaluation order is documented business policy
+# Canonical rule chains. The evaluation order is documented business policy.
 INTAKE_RULES: tuple[PolicyRule, ...] = (
     RecipientAddressRule(),
     RecipientPreferenceRule(),
+    RecipientLevelRestrictionRule(),
     BlackoutPeriodRule(),
     QuietHoursRule(),
 )
 DISPATCH_GUARD_RULES: tuple[PolicyRule, ...] = (
     RecipientPreferenceRule(),
+    RecipientLevelRestrictionRule(),
     BlackoutPeriodRule(),
     QuietHoursRule(),
 )

@@ -134,16 +134,19 @@ class Notification:
                 "`cancellation_reason` must only be set when status is CANCELLED"
             )
 
-        # 2b. failed to reason consistency
-        if self.status is NotificationStatus.FAILED:
+        # 2b. failed/bounced to reason consistency
+        if (
+            self.status is NotificationStatus.FAILED
+            or self.status is NotificationStatus.BOUNCED
+        ):
             if self.failure_reason is None:
                 raise InvalidNotificationStateError(
-                    "`failure_reason` is required when status is FAILED"
+                    "`failure_reason` is required when status is FAILED or BOUNCED."
                 )
         else:
             if self.failure_reason is not None:
                 raise InvalidNotificationStateError(
-                    "`failure_reason` must only be set when status is FAILED"
+                    "`failure_reason` must only be set when status is FAILED or BOUNCED."
                 )
 
         # 3. delivered status ↔ delivered_at consistency
@@ -157,6 +160,15 @@ class Notification:
                 raise InvalidNotificationStateError(
                     "`delivered_at` must only be set when status is DELIVERED"
                 )
+
+        # 4. postponed status ↔ resume time consistency. POSTPONED is a
+        # scheduled deferral, not a parking lot: the row always carries the
+        # instant after which delivery may proceed (the worker re-queues on
+        # it), and send_at is the only representation it has.
+        if self.status is NotificationStatus.POSTPONED and self.send_at is None:
+            raise InvalidNotificationStateError(
+                "`send_at` is required when status is POSTPONED (the resume time)"
+            )
 
     @classmethod
     def create(
@@ -287,14 +299,20 @@ class Notification:
         return replace(self, content=content, updated_at=datetime.now(UTC))
 
     def mark_processing(self) -> Notification:
-        """Transition the notification from pending to the in-flight processing state.
+        """Transition the notification into the in-flight processing state.
 
-        Marks the notification as being actively worked by a worker so that a
-        duplicate or concurrent dispatch of the same id will no longer see it as
-        PENDING and therefore will not re-deliver. Processing is transient - a
-        terminal transition (delivered/failed/...) is expected next.
+        Legal from PENDING (first dispatch) and from POSTPONED (the worker
+        has re-queued the notification after its quiet-hours window ended
+        and is now sending it). Marks the notification as being actively
+        worked so a duplicate or concurrent dispatch of the same id will no
+        longer see it as deliverable and therefore will not re-deliver.
+        Processing is transient - a terminal transition (delivered/failed/...)
+        is expected next.
         """
-        if self.status != NotificationStatus.PENDING:
+        if self.status not in (
+            NotificationStatus.PENDING,
+            NotificationStatus.POSTPONED,
+        ):
             raise InvalidStateTransitionError(
                 self.status, NotificationStatus.PROCESSING
             )
@@ -330,15 +348,47 @@ class Notification:
             suppression_reason=reason,
         )
 
-    def mark_postponed(self) -> Notification:
-        """Transition the notification to the postponed state."""
+    def mark_postponed(self, resume_at: datetime) -> Notification:
+        """Transition the notification to the postponed state.
+
+        Postponement is a scheduled deferral, not a drop: ``resume_at`` is
+        the instant after which delivery may proceed (computed by the domain
+        policy from the violated quiet-hours window). It replaces ``send_at``
+        — the worker re-queues on it, and a resumed notification is PENDING
+        with an already-past send time, which flows through the existing
+        scheduling guard unchanged. The prior send time is deliberately not
+        preserved: policy pre-empted it, and the resume time is when delivery
+        will actually happen.
+        """
         if self.status not in (
             NotificationStatus.PENDING,
             NotificationStatus.PROCESSING,
         ):
             raise InvalidStateTransitionError(self.status, NotificationStatus.POSTPONED)
+        if resume_at.tzinfo is None:
+            raise InvalidNotificationStateError(
+                "`resume_at` must be timezone-aware (UTC or other)"
+            )
 
-        return self._transition(status=NotificationStatus.POSTPONED)
+        return self._transition(
+            status=NotificationStatus.POSTPONED,
+            send_at=resume_at,
+        )
+
+    def resume(self) -> Notification:
+        """Return the notification to PENDING once its postponement has lapsed.
+
+        The worker calls this when a POSTPONED notification's resume time has
+        passed, handing the notification back to the normal dispatch path.
+        ``send_at`` keeps the (now past) resume instant: for an EXPLICIT
+        notification it documents when delivery actually happened, and the
+        scheduling guard treats a past send time as due, so no separate
+        due-check for POSTPONED is needed.
+        """
+        if self.status is not NotificationStatus.POSTPONED:
+            raise InvalidStateTransitionError(self.status, NotificationStatus.PENDING)
+
+        return self._transition(status=NotificationStatus.PENDING)
 
     def mark_delivered(self) -> Notification:
         """Transition the notification to the delivered state.
@@ -378,4 +428,20 @@ class Notification:
         return self._transition(
             status=NotificationStatus.FAILED,
             failure_reason=reason,
+        )
+
+    def mark_bounced(self, reason: str) -> Notification:
+        """Transition the notification to the bounced state."""
+        if self.status not in (
+            NotificationStatus.PENDING,
+            NotificationStatus.PROCESSING,
+        ):
+            raise InvalidStateTransitionError(self.status, NotificationStatus.BOUNCED)
+        if not reason:
+            raise InvalidNotificationStateError(
+                "failure_reason is required when bouncing"
+            )
+
+        return self._transition(
+            status=NotificationStatus.BOUNCED, failure_reason=reason
         )

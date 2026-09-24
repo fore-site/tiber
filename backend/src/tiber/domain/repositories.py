@@ -14,6 +14,7 @@ from typing import Protocol
 from uuid import UUID
 
 from .entities import (
+    Account,
     APIKey,
     DeliveryAttempt,
     DeliveryConstraint,
@@ -23,26 +24,26 @@ from .entities import (
     Project,
     Recipient,
     Template,
-    User,
     WebhookEndpoint,
 )
 from .enums import DeliveryChannel, NotificationCategory
-from .value_objects import TopicTitle
 
 
-class UserRepository(Protocol):
-    """Contract for user data access."""
+class AccountRepository(Protocol):
+    """Contract for account data access.
 
-    async def save(self, user: User) -> User:
-        """Persist a user."""
+    Accounts are the id-only domain representation of platform accounts:
+    ownership roots, not authentication state. Credentials, emails, and
+    roles live in infrastructure storage and are accessed through
+    application-layer ports, never through this domain repository.
+    """
+
+    async def save(self, account: Account) -> Account:
+        """Persist an account."""
         ...
 
-    async def get_by_id(self, id: UUID) -> User | None:
-        """Get a user by its ID."""
-        ...
-
-    async def get_by_email(self, email: str) -> User | None:
-        """Get a user by its email address."""
+    async def get_by_id(self, id: UUID) -> Account | None:
+        """Get an account by its ID."""
         ...
 
 
@@ -57,12 +58,13 @@ class ProjectRepository(Protocol):
         """Get a project by its ID."""
         ...
 
-    async def get_by_slug(self, slug: str, user_id: UUID) -> Project | None:
-        """Get a project by its slug within a user's scope.
+    async def get_by_slug(self, slug: str, account_id: UUID) -> Project | None:
+        """Get a project by its slug within an account's scope.
 
-        Scoped to ``user_id`` because the storage constraint is per-user
-        uniqueness: the same slug can exist under different users, so an
-        unscoped lookup would return an arbitrary row among them.
+        Scoped to ``account_id`` because the storage constraint is
+        per-account uniqueness: the same slug can exist under different
+        accounts, so an unscoped lookup would return an arbitrary row among
+        them.
         """
         ...
 
@@ -198,7 +200,7 @@ class NotificationTopicRepository(Protocol):
         ...
 
     async def get_by_title(
-        self, title: TopicTitle, project_id: UUID
+        self, title: str, project_id: UUID
     ) -> NotificationTopic | None:
         """Get a notification topic by its title."""
         ...
@@ -247,6 +249,16 @@ class DeliveryConstraintRepository(Protocol):
 
     async def get_by_project(self, project_id: UUID) -> DeliveryConstraint | None:
         """Get a delivery policy by its project ID."""
+        ...
+
+    async def load_constraint(self, project_id: UUID) -> DeliveryConstraint | None:
+        """Load the constraint for policy evaluation, None when absent.
+
+        Deliberately distinct from ``get_by_project``: policy evaluation is
+        a read-for-decision, not a read-for-display. A missing configuration
+        is a normal state (permissive default: no constraints configured),
+        not an error, so the lookup returns None instead of raising.
+        """
         ...
 
 

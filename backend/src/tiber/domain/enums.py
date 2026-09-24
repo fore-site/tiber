@@ -32,6 +32,26 @@ class NotificationStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class PolicyConsequence(StrEnum):
+    """What happens to a notification when a policy rule rejects it.
+
+    The consequence is domain vocabulary, not application detail: each rule
+    declares the business meaning of its violation, and the application layer
+    maps the consequence onto the notification's state machine without ever
+    string-matching rule names.
+
+    - ``SUPPRESS`` — a permanent, intentional drop (recipient opt-outs,
+      blackout periods). The notification is stored with a reason and never
+      delivered.
+    - ``POSTPONE`` — a temporary deferral (quiet hours). Delivery will happen
+      when the restrictive window ends, so the notification is re-queued
+      rather than dropped.
+    """
+
+    SUPPRESS = "suppress"
+    POSTPONE = "postpone"
+
+
 class SendTimeBasis(StrEnum):
     """Enum values for send time basis."""
 
@@ -96,4 +116,4 @@ class WebhookEventType(StrEnum):
     NOTIFICATION_FAILED = "notification.failed"
     NOTIFICATION_BOUNCED = "notification.bounced"
     NOTIFICATION_CANCELLED = "notification.cancelled"
-    NOTIFICATION_POLICY_REJECTED = "notification.policy_rejected"
+    NOTIFICATION_SUPPRESSED = "notification.suppressed"
