@@ -175,9 +175,7 @@ class Recipient:
 
         Both parameters are required statements of current truth: passing
         ``None`` records the fact as *unknown* (withdrawal), which is a
-        deliberate semantic, not a missing argument. There is no
-        "leave unchanged" case - the caller holds the full current profile
-        and states what it is now.
+        deliberate semantic, not a missing argument.
         """
         return replace(
             self, timezone=timezone, language=language, updated_at=datetime.now(UTC)
