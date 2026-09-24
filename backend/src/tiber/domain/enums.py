@@ -25,8 +25,10 @@ class NotificationStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     DELIVERED = "delivered"
-    FAILED = "failed"
-    POLICY_REJECTED = "policy_rejected"
+    FAILED = "failed"  # Internal, network, or provider outages
+    BOUNCED = "bounced"  # Recipient-side rejection
+    SUPPRESSED = "suppressed"  # System-level intentional drops
+    POSTPONED = "postponed"
     CANCELLED = "cancelled"
 
 
@@ -36,13 +38,6 @@ class SendTimeBasis(StrEnum):
     IMMEDIATE = "immediate"
     EXPLICIT = "explicit"
     ML_PREDICTED = "ml_predicted"
-
-
-class UserRole(StrEnum):
-    """User role for access control."""
-
-    ADMIN = "admin"
-    USER = "user"
 
 
 class DeliveryAttemptStatus(StrEnum):
@@ -99,5 +94,6 @@ class WebhookEventType(StrEnum):
 
     NOTIFICATION_DELIVERED = "notification.delivered"
     NOTIFICATION_FAILED = "notification.failed"
+    NOTIFICATION_BOUNCED = "notification.bounced"
     NOTIFICATION_CANCELLED = "notification.cancelled"
     NOTIFICATION_POLICY_REJECTED = "notification.policy_rejected"

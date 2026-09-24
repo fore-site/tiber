@@ -37,7 +37,7 @@ class Notification:
     idempotency_key: str | None = None
     send_at: datetime | None = None
     send_time_basis: SendTimeBasis | None = None
-    policy_violation_reason: str | None = None
+    suppression_reason: str | None = None
     cancellation_reason: str | None = None
     failure_reason: str | None = None
     delivered_at: datetime | None = None
@@ -112,16 +112,16 @@ class Notification:
                     "`group_key` must be at most 255 characters"
                 )
 
-        # 2. policy_rejected to reason consistency
-        if self.status is NotificationStatus.POLICY_REJECTED:
-            if self.policy_violation_reason is None:
+        # 2. suppressed to reason consistency
+        if self.status is NotificationStatus.SUPPRESSED:
+            if self.suppression_reason is None:
                 raise InvalidNotificationStateError(
-                    "`policy_violation_reason` is required when status is POLICY_REJECTED"
+                    "`suppression_reason` is required when status is SUPPRESSED."
                 )
         else:
-            if self.policy_violation_reason is not None:
+            if self.suppression_reason is not None:
                 raise InvalidNotificationStateError(
-                    "`policy_violation_reason` must only be set when status is POLICY_REJECTED"
+                    "`suppression_reason` must only be set when status is SUPPRESSED"
                 )
 
         # 2c. cancellation reason is optional (clients cancel freely),
@@ -215,7 +215,7 @@ class Notification:
         idempotency_key: str | None,
         send_at: datetime | None,
         send_time_basis: SendTimeBasis,
-        policy_violation_reason: str | None,
+        suppression_reason: str | None,
         cancellation_reason: str | None,
         failure_reason: str | None,
         delivered_at: datetime | None,
@@ -243,7 +243,7 @@ class Notification:
             idempotency_key=idempotency_key,
             send_at=send_at,
             send_time_basis=send_time_basis,
-            policy_violation_reason=policy_violation_reason,
+            suppression_reason=suppression_reason,
             cancellation_reason=cancellation_reason,
             failure_reason=failure_reason,
             delivered_at=delivered_at,
@@ -311,21 +311,34 @@ class Notification:
             cancellation_reason=reason,
         )
 
-    def mark_policy_rejected(self, reason: str) -> Notification:
-        """Transition the notification to the policy_rejected state."""
-        if self.status != NotificationStatus.PENDING:
+    def mark_suppressed(self, reason: str) -> Notification:
+        """Transition the notification to the suppressed state."""
+        if self.status not in (
+            NotificationStatus.PENDING,
+            NotificationStatus.PROCESSING,
+        ):
             raise InvalidStateTransitionError(
-                self.status, NotificationStatus.POLICY_REJECTED
+                self.status, NotificationStatus.SUPPRESSED
             )
         if not reason:
             raise InvalidNotificationStateError(
-                "policy_violation_reason is required when rejecting"
+                "suppression_reason is required when suppressing"
             )
 
         return self._transition(
-            status=NotificationStatus.POLICY_REJECTED,
-            policy_violation_reason=reason,
+            status=NotificationStatus.SUPPRESSED,
+            suppression_reason=reason,
         )
+
+    def mark_postponed(self) -> Notification:
+        """Transition the notification to the postponed state."""
+        if self.status not in (
+            NotificationStatus.PENDING,
+            NotificationStatus.PROCESSING,
+        ):
+            raise InvalidStateTransitionError(self.status, NotificationStatus.POSTPONED)
+
+        return self._transition(status=NotificationStatus.POSTPONED)
 
     def mark_delivered(self) -> Notification:
         """Transition the notification to the delivered state.
