@@ -35,7 +35,7 @@ class Project:
     # Ids are system-generated: callers never supply one. kw_only makes the
     # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
-    user_id: UUID
+    account_id: UUID
     name: str
     slug: str | None = None
     description: str | None = None
@@ -61,17 +61,17 @@ class Project:
 
     @classmethod
     def create(
-        cls, *, user_id: UUID, name: str, description: str | None = None
+        cls, *, account_id: UUID, name: str, description: str | None = None
     ) -> Project:
         """Create a new project; the slug is derived from the name."""
-        return cls(user_id=user_id, name=name, description=description)
+        return cls(account_id=account_id, name=name, description=description)
 
     @classmethod
     def reconstitute(
         cls,
         *,
         id: UUID,
-        user_id: UUID,
+        account_id: UUID,
         name: str,
         slug: str,
         description: str | None,
@@ -86,7 +86,7 @@ class Project:
         """
         return cls(
             id=id,
-            user_id=user_id,
+            account_id=account_id,
             name=name,
             slug=slug,
             description=description,
