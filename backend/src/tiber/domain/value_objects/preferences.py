@@ -25,12 +25,7 @@ class RecipientPreferences:
     quiet_hours: QuietHours | None = None
 
     def __post_init__(self) -> None:
-        """Normalize inputs and enforce a CRITICAL-unstorable invariant.
-
-        Accepts raw strings and enum members (rehydration and API payloads
-        arrive untyped); an unknown channel or category value raises the
-        enum's ValueError rather than being silently dropped.
-        """
+        """Normalize inputs and enforce a CRITICAL-unstorable invariant."""
         channels = frozenset(
             DeliveryChannel(channel.lower()) for channel in self.opted_out_channels
         )
