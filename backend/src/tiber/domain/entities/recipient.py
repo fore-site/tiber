@@ -119,7 +119,7 @@ class Recipient:
             archived_at=archived_at,
         )
 
-    def claim_addresses(
+    def claim(
         self, external_id: str, addresses: dict[DeliveryChannel, str]
     ) -> Recipient:
         """Attach a human identity and its addresses.

@@ -1,15 +1,19 @@
-"""Tests for Recipient static profile facts (doc 08, D1).
+"""Tests for Recipient profile, addresses, and claim lifecycle.
 
-``timezone`` and ``language`` are facts about a person, set once by the
-client and updated when they change. Pins:
+Pins:
 
-- ``None`` means unknown — no fabricated default (facts, not configuration;
-  contrasts with DeliveryConstraint.timezone's UTC default).
+- ``timezone``/``language`` are facts about a person: ``None`` means
+  unknown, never a fabricated default (contrasts with
+  DeliveryConstraint.timezone's UTC default — facts vs configuration).
 - Facts validate on every construction path: create(), reconstitute(),
-  direct instantiation, and update_profile() all funnel through
-  __post_init__, so an invalid fact is unrepresentable anywhere.
-- update_profile() is a full restatement, not a patch: passing None
+  direct instantiation all funnel through __post_init__, so an invalid
+  fact is unrepresentable anywhere.
+- set_profile_facts() is a full restatement, not a patch: passing None
   withdraws a fact. The copy carries a fresh updated_at.
+- update_addresses() and update_preferences() replace their state group;
+  update_addresses() enforces the non-empty invariant explicitly.
+- claim_addresses() attaches a human identity: merges addresses
+  (incoming wins), rejects empty/duplicate claims, stamps updated_at.
 - Facts survive persistence round-trips (model column <-> entity field).
 """
 
@@ -90,15 +94,15 @@ def test_reconstitute_validates_timezone():
         )
 
 
-# --- update_profile(): full restatement semantics ---
+# --- set_profile_facts(): full restatement semantics ---
 
 
-def test_update_profile_sets_facts():
+def test_set_profile_facts_states_current_truth():
     """Setting facts bumps updated_at; the frozen original is untouched."""
     recipient = make_recipient()
     before = recipient.updated_at
 
-    updated = recipient.update_profile(timezone="Europe/Lisbon", language="pt")
+    updated = recipient.set_profile_facts(timezone="Europe/Lisbon", language="pt")
 
     assert updated.timezone == "Europe/Lisbon"
     assert updated.language == "pt"
@@ -107,25 +111,121 @@ def test_update_profile_sets_facts():
     assert recipient.timezone is None
 
 
-def test_update_profile_withdraws_a_fact():
+def test_set_profile_facts_withdraws_a_fact():
     """None is a restatement to unknown, not a no-op patch."""
     recipient = make_recipient(timezone="Europe/Lisbon")
 
-    updated = recipient.update_profile(timezone=None, language="en")
+    updated = recipient.set_profile_facts(timezone=None, language="en")
 
     assert updated.timezone is None
     assert updated.language == "en"
 
 
-def test_update_profile_rejects_invalid_fact():
+def test_set_profile_facts_rejects_invalid_fact():
     """Validation runs on the mutation path too; failure leaves no trace."""
     recipient = make_recipient(timezone="Europe/Lisbon")
 
     with pytest.raises(ValueError, match="Invalid timezone"):
-        recipient.update_profile(timezone="Bogus/Zone", language="en")
+        recipient.set_profile_facts(timezone="Bogus/Zone", language="en")
 
     # The original survives untouched — frozen entity, invalid copy rejected.
     assert recipient.timezone == "Europe/Lisbon"
+
+
+# --- update_addresses(): replaces the whole address book ---
+
+
+def test_update_addresses_replaces_and_normalizes_keys():
+    """The incoming mapping is the new state; raw string keys are coerced."""
+    recipient = make_recipient()
+
+    updated = recipient.update_addresses(
+        {"sms": "+15551234567"}  # raw string key, not the enum member
+    )
+
+    assert set(updated.addresses) == {DeliveryChannel.SMS}
+    assert DeliveryChannel.EMAIL not in updated.addresses
+
+
+def test_update_addresses_rejects_empty():
+    """The non-empty invariant is enforced on the mutation path too."""
+    with pytest.raises(ValueError, match="must not be empty"):
+        make_recipient().update_addresses({})
+
+
+def test_update_addresses_respects_opt_out_invariant():
+    """A opted-out channel cannot lose its address in the replacement."""
+    recipient = make_recipient(
+        preferences=RecipientPreferences(opted_out_channels=["sms"]),
+        addresses={
+            DeliveryChannel.EMAIL: "jane@example.com",
+            DeliveryChannel.SMS: "+15551234567",
+        },
+    )
+
+    with pytest.raises(ValueError, match="opted-out"):
+        recipient.update_addresses({DeliveryChannel.EMAIL: "jane@example.com"})
+
+
+# --- update_preferences(): consent replacement ---
+
+
+def test_update_preferences_replaces_consent():
+    """New consent state replaces the old wholesale."""
+    recipient = make_recipient()
+
+    updated = recipient.update_preferences(
+        RecipientPreferences(unsubscribed_categories=["promotional"])
+    )
+
+    assert updated.preferences.unsubscribed_categories == frozenset({"promotional"})
+
+
+# --- claim_addresses(): the doc 08 lifecycle event ---
+
+
+def test_claim_attaches_identity_and_merges_addresses():
+    """Ownerless + claim = registered; incoming addresses win on collision."""
+    ownerless = make_recipient()  # no external_id
+
+    claimed = ownerless.claim("user_12345", {DeliveryChannel.EMAIL: "new@example.com"})
+
+    assert claimed.external_id == "user_12345"
+    assert claimed.addresses[DeliveryChannel.EMAIL] == "new@example.com"
+
+
+def test_claim_merges_without_dropping_existing_channels():
+    """A claim adding a second channel keeps the first."""
+    ownerless = make_recipient()
+
+    claimed = ownerless.claim("user_12345", {DeliveryChannel.SMS: "+15551234567"})
+
+    assert set(claimed.addresses) == {DeliveryChannel.EMAIL, DeliveryChannel.SMS}
+
+
+def test_claim_rejects_empty_external_id():
+    """An empty identity is not a claim."""
+    with pytest.raises(ValueError, match="external_id"):
+        make_recipient().claim("   ", {})
+
+
+def test_claim_rejects_double_claim():
+    """A claimed recipient cannot be re-claimed (doc 08: explicit act)."""
+    claimed = make_recipient(external_id="user_12345")
+
+    with pytest.raises(ValueError, match="already claimed"):
+        claimed.claim("user_67890", {DeliveryChannel.SMS: "+15551234567"})
+
+
+def test_claim_stamps_updated_at_and_leaves_original_frozen():
+    """Mutation semantics: fresh stamp, original untouched."""
+    ownerless = make_recipient()
+    before = ownerless.updated_at
+
+    claimed = ownerless.claim("user_12345", {DeliveryChannel.SMS: "+15551234567"})
+
+    assert claimed.updated_at > before
+    assert ownerless.external_id is None
 
 
 # --- Facts survive the persistence round-trip ---
