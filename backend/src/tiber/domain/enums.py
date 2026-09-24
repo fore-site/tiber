@@ -35,11 +35,6 @@ class NotificationStatus(StrEnum):
 class PolicyConsequence(StrEnum):
     """What happens to a notification when a policy rule rejects it.
 
-    The consequence is domain vocabulary, not application detail: each rule
-    declares the business meaning of its violation, and the application layer
-    maps the consequence onto the notification's state machine without ever
-    string-matching rule names.
-
     - ``SUPPRESS`` — a permanent, intentional drop (recipient opt-outs,
       blackout periods). The notification is stored with a reason and never
       delivered.
