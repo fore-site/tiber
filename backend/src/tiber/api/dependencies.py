@@ -22,6 +22,9 @@ from ..infrastructure.cache.idempotency import IdempotencyStore
 from ..infrastructure.messaging.celery_publisher import CeleryPublisher
 from ..infrastructure.models import ProjectModel
 from ..infrastructure.rate_limit.ingestion_rate_limiter import IngestionRateLimiter
+from ..infrastructure.repositories.sqlalchemy_delivery_constraint_repository import (
+    SQLAlchemyDeliveryConstraintRepository,
+)
 from ..infrastructure.repositories.sqlalchemy_notification_repository import (
     SQLAlchemyNotificationRepository,
 )
@@ -131,6 +134,13 @@ def get_template_repository(
     return SQLAlchemyTemplateRepository(db)
 
 
+def get_delivery_constraint_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemyDeliveryConstraintRepository:
+    """Provide the SQLAlchemy delivery constraint repository bound to the request session."""
+    return SQLAlchemyDeliveryConstraintRepository(db)
+
+
 def get_template_resolver(
     template_repository: Annotated[
         SQLAlchemyTemplateRepository, Depends(get_template_repository)
@@ -169,6 +179,10 @@ def get_notification_service(
         NotificationTemplateResolver, Depends(get_template_resolver)
     ],
     policy_resolver: Annotated[PolicyResolver, Depends(get_policy_resolver)],
+    constraint_repository: Annotated[
+        SQLAlchemyDeliveryConstraintRepository,
+        Depends(get_delivery_constraint_repository),
+    ],
 ) -> NotificationService:
     """Provide the notification application service."""
     return NotificationService(
@@ -178,4 +192,5 @@ def get_notification_service(
         recipient_repository=recipient_repository,
         template_resolver=template_resolver,
         policy_resolver=policy_resolver,
+        constraint_repository=constraint_repository,
     )
