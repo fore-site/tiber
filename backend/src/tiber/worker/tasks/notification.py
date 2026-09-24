@@ -31,6 +31,9 @@ from ...infrastructure.providers.manager import ProviderManager
 from ...infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (
     SQLAlchemyDeliveryAttemptRepository,
 )
+from ...infrastructure.repositories.sqlalchemy_delivery_constraint_repository import (
+    SQLAlchemyDeliveryConstraintRepository,
+)
 from ...infrastructure.repositories.sqlalchemy_notification_repository import (
     SQLAlchemyNotificationRepository,
 )
@@ -63,6 +66,7 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
         recipients = SQLAlchemyRecipientRepository(session)
         attempts = SQLAlchemyDeliveryAttemptRepository(session)
         templates = SQLAlchemyTemplateRepository(session)
+        constraints = SQLAlchemyDeliveryConstraintRepository(session)
 
         notification = await notifications.get_by_id(notification_id, project_id)
         if notification is None:
@@ -82,6 +86,7 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
             template_resolver=NotificationTemplateResolver(
                 template_repository=templates
             ),
+            constraint_repository=constraints,
         )
 
         updated = await processor.process(notification_id, project_id=project_id)
@@ -101,7 +106,13 @@ def _seconds_until(send_at: datetime) -> int:
 
 
 def _should_defer(notification: Notification) -> bool:
-    """Return True when the notification is not yet due and must be rescheduled."""
+    """Return True when the notification is not yet due and must be rescheduled.
+
+    POSTPONED notifications are always re-queued on their resume time: the
+    decision to postpone already recorded when delivery may proceed.
+    """
+    if notification.status is NotificationStatus.POSTPONED:
+        return True
     if notification.status != NotificationStatus.PENDING:
         return False
     if notification.send_at is None:
@@ -127,8 +138,10 @@ def process_notification(self, job) -> None:
     The worker never delivers before ``send_at``: if the notification is
     still PENDING and its scheduled time lies in the future, the job is
     re-dispatched with a countdown of the remaining delay instead of being
-    delivered early. Re-dispatches are idempotent - the processor only ever
-    delivers a notification that is PENDING and due.
+    delivered early. A POSTPONED notification (quiet hours) is likewise
+    re-dispatched on its resume time. Re-dispatches are idempotent - the
+    processor only ever delivers a notification that is PENDING and due,
+    or POSTPONED and past its resume time.
     """
     payload = _coerce_payload(job)
     logger.info(

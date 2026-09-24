@@ -4,10 +4,12 @@ Policy evaluation itself is domain logic: ``PolicyResolver`` and the rule
 chains live in ``tiber.domain.policies``. This module holds only the
 application-side seam — the ``DeliveryPolicyGuard`` the delivery processor
 calls just before handing a notification to a provider. The guard uses the
-drift-sensitive ``DISPATCH_GUARD_RULES`` subset (preferences, blackout
-periods, restricted windows; deliberately no address re-check — see doc
-04): if a constraint now fails, the notification is marked
-``policy_rejected`` with a reason instead of being delivered.
+drift-sensitive ``DISPATCH_GUARD_RULES`` subset (preferences, recipient
+restrictions, blackout periods, quiet hours; deliberately no address
+re-check — see doc 04). If a constraint now fails, the decision's
+consequence decides the outcome: a quiet-hours violation postpones the
+notification to after the window, any other violation suppresses it with
+a reason.
 """
 
 from __future__ import annotations

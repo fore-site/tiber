@@ -8,13 +8,18 @@ from uuid import UUID
 
 from tiber.application.ports.channel_provider import ChannelProvider, ProviderResult
 from tiber.domain.entities import DeliveryAttempt, Notification
-from tiber.domain.enums import DeliveryAttemptStatus, NotificationStatus
+from tiber.domain.enums import (
+    DeliveryAttemptStatus,
+    NotificationStatus,
+    PolicyConsequence,
+)
 from tiber.domain.exceptions import (
     NotificationNotFoundError,
     RecipientNotFoundError,
 )
 from tiber.domain.repositories import (
     DeliveryAttemptRepository,
+    DeliveryConstraintRepository,
     NotificationRepository,
     RecipientRepository,
 )
@@ -42,15 +47,19 @@ class NotificationDeliveryProcessor:
         provider: ChannelProvider,
         policy_guard: DeliveryPolicyGuard | None = None,
         template_resolver: NotificationTemplateResolver | None = None,
+        constraint_repository: DeliveryConstraintRepository | None = None,
     ) -> None:
         """Initialize the processor with its ports and the chosen provider.
 
         ``policy_guard`` and ``template_resolver`` are optional. When supplied
-        the processor performs a worker-time policy re-check (marking the
-        notification ``policy_rejected`` on violation, with no delivery attempt
-        recorded) and resolves/renders template content before dispatch. When
-        omitted the processor behaves exactly as before (no re-check, direct
-        content only).
+        the processor performs a worker-time policy re-check: a quiet-hours
+        violation postpones the notification to after the window (the worker
+        re-queues it on the resume time), any other violation suppresses it
+        with a reason - in both cases with no delivery attempt recorded.
+        When omitted the processor behaves exactly as before (no re-check,
+        direct content only). ``constraint_repository`` is optional and only
+        consulted when the guard is present; without it the re-check runs
+        against the recipient alone (project-level constraints unseen).
         """
         self._notifications = notification_repository
         self._recipients = recipient_repository
@@ -58,6 +67,7 @@ class NotificationDeliveryProcessor:
         self._provider = provider
         self._policy_guard = policy_guard
         self._template_resolver = template_resolver
+        self._constraints = constraint_repository
 
     async def process(self, notification_id: UUID, *, project_id: UUID) -> Notification:
         """Deliver a notification and return its updated state.
@@ -76,13 +86,20 @@ class NotificationDeliveryProcessor:
         if notification is None:
             raise NotificationNotFoundError(str(notification_id))
 
-        # Idempotent: a notification already past PENDING (PROCESSING,
-        # delivered, failed, ...) is not re-dispatched.
-        if notification.status != NotificationStatus.PENDING:
+        now = datetime.now(UTC)
+
+        # Idempotent: only deliverable states are dispatched. A PENDING
+        # notification is a normal dispatch; a POSTPONED notification whose
+        # resume time has passed is resumed and delivered; anything else
+        # (in-flight, terminal, postponed-not-yet-due) is left untouched.
+        if notification.status is NotificationStatus.POSTPONED:
+            if notification.send_at is None or notification.send_at > now:
+                return notification
+            notification = notification.resume()
+        elif notification.status is not NotificationStatus.PENDING:
             return notification
 
         # Scheduling guard - never deliver before send_at.
-        now = datetime.now(UTC)
         if notification.send_at is not None and notification.send_at > now:
             return notification
 
@@ -96,15 +113,31 @@ class NotificationDeliveryProcessor:
             # reached a provider, so no delivery attempt is recorded.
             raise RecipientNotFoundError(str(notification.recipient_id))
 
-        # Worker-time policy re-check while still PENDING. A violation is a
-        # terminal policy rejection (with a reason and no delivery attempt
-        # recorded), not a delivery failure.
+        # Worker-time policy re-check while still deliverable. The decision's
+        # consequence decides the outcome: quiet-hours violations are
+        # postponed to after the window (the worker re-queues on the resume
+        # time), any other violation is suppressed with a reason. No delivery
+        # attempt is recorded for either - nothing reached a provider.
         if self._policy_guard is not None:
-            decision = await self._policy_guard.check(notification, recipient)
+            constraint = (
+                await self._constraints.load_constraint(notification.project_id)
+                if self._constraints is not None
+                else None
+            )
+            decision = await self._policy_guard.check(
+                notification, recipient, constraint
+            )
             if not decision.allowed:
-                updated = notification.mark_policy_rejected(
-                    decision.reason or "policy violation"
-                )
+                if decision.consequence is PolicyConsequence.POSTPONE:
+                    if decision.resume_at is None:
+                        raise ValueError(
+                            "policy returned POSTPONE without a resume time"
+                        )
+                    updated = notification.mark_postponed(decision.resume_at)
+                else:
+                    updated = notification.mark_suppressed(
+                        decision.reason or "policy violation"
+                    )
                 await self._notifications.save(updated)
                 return updated
 

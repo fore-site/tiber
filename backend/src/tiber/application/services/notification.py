@@ -5,13 +5,14 @@ from tiber.application.ports.idempotency import IdempotencyGuard
 from tiber.application.ports.message_publisher import MessagePublisher
 from tiber.application.services.template import NotificationTemplateResolver
 from tiber.domain.entities import Notification
-from tiber.domain.enums import DeliveryChannel, NotificationCategory
+from tiber.domain.enums import DeliveryChannel, NotificationCategory, PolicyConsequence
 from tiber.domain.exceptions import (
     NotificationNotFoundError,
     RecipientNotFoundError,
 )
 from tiber.domain.policies import PolicyResolver
 from tiber.domain.repositories import (
+    DeliveryConstraintRepository,
     NotificationRepository,
     RecipientRepository,
 )
@@ -39,6 +40,7 @@ class NotificationService:
         recipient_repository: RecipientRepository,
         template_resolver: NotificationTemplateResolver,
         policy_resolver: PolicyResolver,
+        constraint_repository: DeliveryConstraintRepository | None = None,
     ) -> None:
         """Initialize the service with its ports and intake collaborators."""
         self._idempotency = idempotency_guard
@@ -47,6 +49,7 @@ class NotificationService:
         self._recipients = recipient_repository
         self._template_resolver = template_resolver
         self._policy = policy_resolver
+        self._constraints = constraint_repository
 
     @staticmethod
     def _build(
@@ -105,9 +108,11 @@ class NotificationService:
         3. Resolve/validate/render template content (ownership, channel) so
            the persisted body is the rendered snapshot. Direct content
            (``template_id`` is None) requires a body.
-        4. Evaluate the delivery policy. A rejected notification is persisted
-           in the ``policy_rejected`` state (with a reason) and is *not*
-           enqueued; an allowed notification is persisted then enqueued.
+        4. Evaluate the delivery policy. A violation's consequence decides
+           the outcome: SUPPRESS persists the notification with a reason and
+           it is never delivered; POSTPONE persists it with a resume time
+           (after the violated quiet window) and enqueues delivery for that
+           time. An allowed notification is persisted then enqueued.
         """
         # 1. Idempotency check - replay the original on a duplicate key.
         existing_id = await self._idempotency.get_existing_notification_id(
@@ -163,6 +168,8 @@ class NotificationService:
             validate_content(channel_enum, content)
 
         # 4. Build the (pending) notification and run the intake policy.
+        # The project's delivery constraint is loaded for evaluation; a
+        # missing configuration is the permissive default, not an error.
         notification = self._build(
             project_id=project_id,
             recipient_id=recipient_id,
@@ -176,20 +183,35 @@ class NotificationService:
             scheduled_at=scheduled_at,
         )
 
-        decision = await self._policy.evaluate(notification, recipient)
+        constraint = (
+            await self._constraints.load_constraint(project_id)
+            if self._constraints is not None
+            else None
+        )
+        decision = await self._policy.evaluate(notification, recipient, constraint)
         if not decision.allowed:
-            # Persist the policy_rejected notification (with a reason) but do
-            # not enqueue it for delivery - it is a created record, not an
-            # error response.
-            rejected = notification.mark_policy_rejected(
-                decision.reason or "policy violation"
-            )
+            # The consequence is domain vocabulary: the application maps it
+            # onto the state machine without inspecting rule names.
+            if decision.consequence is PolicyConsequence.POSTPONE:
+                if decision.resume_at is None:
+                    raise ValueError("policy returned POSTPONE without a resume time")
+                rejected = notification.mark_postponed(decision.resume_at)
+            else:
+                rejected = notification.mark_suppressed(
+                    decision.reason or "policy violation"
+                )
+            # Persist the suppressed/postponed notification but do not
+            # enqueue it for immediate delivery - it is a created record,
+            # not an error response. A postponed notification's send_at is
+            # the resume time, so the published job defers to it naturally.
             await self._repository.save(rejected)
             await self._idempotency.check_and_store(
                 project_id,
                 idempotency_key,
                 rejected.id,
             )
+            if decision.consequence is PolicyConsequence.POSTPONE:
+                await self._publisher.publish_notification(rejected)
             return rejected
 
         # 5. Persist, record the idempotency key, then enqueue.
