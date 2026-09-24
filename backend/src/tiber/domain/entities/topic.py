@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import NotificationCategory
-from ..value_objects import TopicTitle
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -13,7 +12,7 @@ class NotificationTopic:
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     category: NotificationCategory
-    title: TopicTitle
+    title: str
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -24,10 +23,14 @@ class NotificationTopic:
         object.__setattr__(
             self, "category", NotificationCategory(self.category.lower())
         )
+        if not self.title or not self.title.strip():
+            raise ValueError("Topic title must not be empty")
+
+        object.__setattr__(self, "value", self.title.lower().strip())
 
     @classmethod
     def create(
-        cls, *, project_id: UUID, category: NotificationCategory, title: TopicTitle
+        cls, *, project_id: UUID, category: NotificationCategory, title: str
     ) -> NotificationTopic:
         """Create a new notification topic with a system-generated id and timestamps."""
         return cls(project_id=project_id, category=category, title=title)
@@ -39,7 +42,7 @@ class NotificationTopic:
         id: UUID,
         project_id: UUID,
         category: NotificationCategory,
-        title: TopicTitle,
+        title: str,
         created_at: datetime,
         updated_at: datetime,
     ) -> NotificationTopic:
