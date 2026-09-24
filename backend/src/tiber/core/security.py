@@ -95,7 +95,7 @@ def create_refresh_token() -> str:
 
         Value:
             {
-                "user_id": "<user_id>"
+                "account_id": "<account_id>"
             }
 
     The Redis entry is the source of truth for refresh token validity.

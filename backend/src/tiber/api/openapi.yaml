@@ -194,7 +194,7 @@ paths:
   /v1/auth/logout:
     post:
       tags: [Auth]
-      summary: Logout the current user
+      summary: Logout the current account
       operationId: postv1authlogout
       description: |
         Revokes the current access token and refresh token immediately.
@@ -209,7 +209,7 @@ paths:
   /v1/auth/me:
     get:
       tags: [Auth]
-      summary: Get the current user
+      summary: Get the current account
       operationId: getv1authme
       description: |
         Returns the profile of the currently authenticated dashboard user.
@@ -219,13 +219,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/Account"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
     patch:
       tags: [Auth]
-      summary: Update the current user
+      summary: Update the current account
       operationId: patchv1authme
       requestBody:
         required: true
@@ -235,11 +235,11 @@ paths:
               $ref: "#/components/schemas/UpdateMeRequest"
       responses:
         "200":
-          description: User profile updated
+          description: Account profile updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/Account"
         "409":
           $ref: "#/components/responses/Conflict"
         "401":
@@ -252,7 +252,7 @@ paths:
 
     delete:
       tags: [Auth]
-      summary: Delete the current user account
+      summary: Delete the current account
       operationId: deletev1authme
       responses:
         "204":
@@ -1780,21 +1780,27 @@ components:
       description: |
         The current lifecycle state of the notification.
 
-        - `pending` — Accepted by the API, passed validation, persisted, handed off to the messaging infrastructure and undergoing processing/delivery.
+        - `pending` — Accepted by the API, passed validation, persisted, and awaiting delivery.
+        - `processing` — Currently being delivered by a worker.
         - `delivered` — Successfully dispatched to the provider.
         - `failed` — Delivery failed after all retry attempts were exhausted.
-        - `policy_rejected` — Persisted but intentionally prevented from entering the delivery pipeline because a delivery policy was violated.
+        - `bounced` — The recipient's side rejected the message after it was dispatched.
+        - `postponed` — Deferred by a quiet-hours policy; delivery is re-queued for the resume time (`scheduled_at`).
+        - `suppressed` — Intentionally not delivered because a delivery policy was violated (opt-out, blackout, or missing address); the reason is permanent.
         - `cancelled` — Cancelled before processing began.
       enum:
         - pending
-        - policy_rejected
+        - processing
+        - postponed
         - cancelled
         - delivered
         - failed
+        - bounced
+        - suppressed
 
     DeliveryAttemptStatus:
       type: string
-      enum: [success, fail, policy_rejected]
+      enum: [success, fail]
 
     TimeWindow:
       type: object
@@ -1810,13 +1816,13 @@ components:
           pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
           example: "17:00"
 
-    UserRole:
+    AccountRole:
       type: string
       enum: [admin, user]
 
     # Auth
 
-    User:
+    Account:
       type: object
       required: [id, email, role, is_verified, pending_email, created_at, updated_at]
       properties:
@@ -1826,19 +1832,19 @@ components:
           type: string
           format: email
         role:
-          $ref: "#/components/schemas/UserRole"
+          $ref: "#/components/schemas/AccountRole"
         is_verified:
           type: boolean
           description: |
-            Whether the user has confirmed their email address.
+            Whether the account has confirmed its email address.
             Always True for accounts created via Github Oauth.
-            Unverified users cannot access protected endpoints.
+            Unverified accounts cannot access protected endpoints.
         pending_email:
           type: [string, "null"]
           format: email
           description: |
             A new email address awaiting verification.
-            Set when the user submits a new email via PATCH /v1/auth/me.
+            Set when the account submits a new email via PATCH /v1/auth/me.
             Becomes the active email once verified via POST /v1/auth/email/verify.
             Null if no email change is pending.
         created_at:
@@ -2482,9 +2488,6 @@ components:
           type: [string, "null"]
         error_message:
           type: [string, "null"]
-        policy_violation_reason:
-          type: [string, "null"]
-          description: Set when status is policy_rejected.
         latency_ms:
           type: [integer, "null"]
           format: int32
@@ -2578,7 +2581,8 @@ components:
       enum:
         - notification.delivered
         - notification.failed
-        - notification.policy_rejected
+        - notification.bounced
+        - notification.suppressed
         - notification.cancelled
 
     WebhookEndpoint:

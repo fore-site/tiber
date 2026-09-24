@@ -92,7 +92,7 @@ per project). ML channel selection may later occupy the same missing
 field. Explicit channel, when given, is honored.
 
 **Policy interaction, recorded:** a channel override changes which policy
-rules apply (restricted windows are per-channel), so any future predicted
+rules apply (quiet-hours windows are per-channel), so any future predicted
 channel must re-enter the policy chain. That constraint belongs to doc 05.
 
 ### D5 — `group_key`: opaque identity of "the same logical thing"
