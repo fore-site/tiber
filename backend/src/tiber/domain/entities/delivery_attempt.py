@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import DeliveryAttemptStatus, DeliveryChannel
+from ..exceptions import InvalidEntityAttributeError
+from ..services import set_enum_attribute
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -25,12 +27,13 @@ class DeliveryAttempt:
 
     def __post_init__(self) -> None:
         """Validate the delivery attempt's state after initialization."""
-        # Boundary coercion before any validation reads the fields.
-        object.__setattr__(self, "status", DeliveryAttemptStatus(self.status.lower()))
-        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
+        set_enum_attribute(self, "status", DeliveryAttemptStatus, self.status)
+        set_enum_attribute(self, "channel", DeliveryChannel, self.channel)
 
         if not self.provider or not self.provider.strip():
-            raise ValueError("DeliveryAttempt provider must not be empty")
+            raise InvalidEntityAttributeError(
+                "DeliveryAttempt provider must not be empty"
+            )
 
         # A success means something was contacted: the snapshot cannot be
         # empty. A failure may precede any contact (no address on file),
@@ -39,7 +42,7 @@ class DeliveryAttempt:
             self.status is DeliveryAttemptStatus.SUCCESS
             and self.recipient_address is None
         ):
-            raise ValueError(
+            raise InvalidEntityAttributeError(
                 "DeliveryAttempt.recipient_address is required when status is success."
             )
 

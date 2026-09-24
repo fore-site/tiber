@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import NotificationCategory
+from ..exceptions import InvalidEntityAttributeError
+from ..services import set_enum_attribute
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -18,11 +20,10 @@ class NotificationTopic:
 
     def __post_init__(self) -> None:
         """Validate the topic's state after initialization."""
-        object.__setattr__(
-            self, "category", NotificationCategory(self.category.lower())
-        )
+        set_enum_attribute(self, "category", NotificationCategory, self.category)
+
         if not self.title or not self.title.strip():
-            raise ValueError("Topic title must not be empty")
+            raise InvalidEntityAttributeError("Topic title must not be empty")
 
         object.__setattr__(self, "value", self.title.lower().strip())
 

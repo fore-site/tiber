@@ -8,8 +8,8 @@ from ..enums import (
     NotificationStatus,
     SendTimeBasis,
 )
-from ..exceptions import InvalidNotificationStateError, InvalidStateTransitionError
-from ..services.channel_content import validate_content
+from ..exceptions import InvalidEntityAttributeError, InvalidStateTransitionError
+from ..services import set_enum_attribute, validate_content
 from ..value_objects import NotificationContent
 
 
@@ -44,27 +44,24 @@ class Notification:
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""
-        # Coerce enum-typed fields before any check reads them
-        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
-        object.__setattr__(
-            self, "category", NotificationCategory(self.category.lower())
-        )
-        object.__setattr__(self, "status", NotificationStatus(self.status.lower()))
+        set_enum_attribute(self, "channel", DeliveryChannel, self.channel)
+        set_enum_attribute(self, "category", NotificationCategory, self.category)
+        set_enum_attribute(self, "status", NotificationStatus, self.status)
         if self.send_time_basis is not None:
-            object.__setattr__(
-                self, "send_time_basis", SendTimeBasis(self.send_time_basis)
+            set_enum_attribute(
+                self, "send_time_basis", SendTimeBasis, self.send_time_basis
             )
 
         # validate notification content for the channel
         validate_content(self.channel, self.content)
 
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`send_at` must not be set for CRITICAL notifications. They are sent immediately."
             )
 
         if self.send_at is not None and self.send_at.tzinfo is None:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`send_at` must be timezone-aware (UTC or other)"
             )
 
@@ -81,44 +78,44 @@ class Notification:
 
         # Invariants coupling the stored basis to the rest of the state..
         if self.send_time_basis is SendTimeBasis.EXPLICIT and self.send_at is None:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`send_at` is required when send_time_basis is EXPLICIT"
             )
         if (
             self.send_time_basis is SendTimeBasis.IMMEDIATE
             and self.category is not NotificationCategory.CRITICAL
         ):
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "send_time_basis IMMEDIATE is only valid for CRITICAL notifications"
             )
         if (
             self.category is NotificationCategory.CRITICAL
             and self.send_time_basis is not SendTimeBasis.IMMEDIATE
         ):
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "CRITICAL notifications must have send_time_basis IMMEDIATE"
             )
 
         # 1b. group_key: opaque client-supplied identity, never parsed.
         if self.group_key is not None:
             if not isinstance(self.group_key, str) or not self.group_key.strip():
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`group_key` must be a non-empty string when provided"
                 )
             if len(self.group_key) > 255:
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`group_key` must be at most 255 characters"
                 )
 
         # 2. suppressed to reason consistency
         if self.status is NotificationStatus.SUPPRESSED:
             if self.suppression_reason is None:
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`suppression_reason` is required when status is SUPPRESSED."
                 )
         else:
             if self.suppression_reason is not None:
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`suppression_reason` must only be set when status is SUPPRESSED"
                 )
 
@@ -128,7 +125,7 @@ class Notification:
             self.status is not NotificationStatus.CANCELLED
             and self.cancellation_reason is not None
         ):
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`cancellation_reason` must only be set when status is CANCELLED"
             )
 
@@ -138,30 +135,30 @@ class Notification:
             or self.status is NotificationStatus.BOUNCED
         ):
             if self.failure_reason is None:
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`failure_reason` is required when status is FAILED or BOUNCED."
                 )
         else:
             if self.failure_reason is not None:
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`failure_reason` must only be set when status is FAILED or BOUNCED."
                 )
 
         # 3. delivered status ↔ delivered_at consistency
         if self.status is NotificationStatus.DELIVERED:
             if self.delivered_at is None:
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`delivered_at` is required when status is DELIVERED"
                 )
         else:
             if self.delivered_at is not None:
-                raise InvalidNotificationStateError(
+                raise InvalidEntityAttributeError(
                     "`delivered_at` must only be set when status is DELIVERED"
                 )
 
         # 4. postponed status ↔ resume time consistency.
         if self.status is NotificationStatus.POSTPONED and self.send_at is None:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`send_at` is required when status is POSTPONED (the resume time)"
             )
 
@@ -263,15 +260,15 @@ class Notification:
         Re-prediction is allowed until dispatch; each call replaces the predicted time.
         """
         if self.send_time_basis is not SendTimeBasis.ML_PREDICTED:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`schedule` is only valid for ML_PREDICTED notifications"
             )
         if self.status is not NotificationStatus.PENDING:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`schedule` is only valid while the notification is PENDING"
             )
         if send_at.tzinfo is None:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`send_at` must be timezone-aware (UTC or other)"
             )
 
@@ -334,7 +331,7 @@ class Notification:
                 self.status, NotificationStatus.SUPPRESSED
             )
         if not reason:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "suppression_reason is required when suppressing"
             )
 
@@ -356,7 +353,7 @@ class Notification:
         ):
             raise InvalidStateTransitionError(self.status, NotificationStatus.POSTPONED)
         if resume_at.tzinfo is None:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "`resume_at` must be timezone-aware (UTC or other)"
             )
 
@@ -403,9 +400,7 @@ class Notification:
         ):
             raise InvalidStateTransitionError(self.status, NotificationStatus.FAILED)
         if not reason:
-            raise InvalidNotificationStateError(
-                "failure_reason is required when failing"
-            )
+            raise InvalidEntityAttributeError("failure_reason is required when failing")
 
         return self._transition(
             status=NotificationStatus.FAILED,
@@ -420,7 +415,7 @@ class Notification:
         ):
             raise InvalidStateTransitionError(self.status, NotificationStatus.BOUNCED)
         if not reason:
-            raise InvalidNotificationStateError(
+            raise InvalidEntityAttributeError(
                 "failure_reason is required when bouncing"
             )
 

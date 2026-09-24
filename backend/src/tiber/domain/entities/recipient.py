@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..enums import DeliveryChannel
+from ..exceptions import InvalidEntityAttributeError
 from ..value_objects import RecipientPreferences
 
 # BCP-47 language tag
@@ -34,12 +35,18 @@ class Recipient:
     def __post_init__(self) -> None:
         """Validate the recipient's state after initialization."""
         if not self.addresses:
-            raise ValueError("Recipient addresses must not be empty")
+            raise InvalidEntityAttributeError("Recipient addresses must not be empty")
 
-        # Validate address keys
-        normalized_addresses = {
-            DeliveryChannel(key.lower()): value for key, value in self.addresses.items()
-        }
+        try:
+            # Validate address keys
+            normalized_addresses = {
+                DeliveryChannel(key.lower()): value
+                for key, value in self.addresses.items()
+            }
+        except ValueError as e:
+            raise InvalidEntityAttributeError(
+                "Invalid key provided in field 'addresses'"
+            ) from e
 
         opted_out_channels = self.preferences.opted_out_channels
         unavailable_channels = set(opted_out_channels) - set(normalized_addresses)
@@ -53,10 +60,12 @@ class Recipient:
             try:
                 ZoneInfo(self.timezone)
             except (ZoneInfoNotFoundError, ValueError) as e:
-                raise ValueError(f"Invalid timezone: {self.timezone}") from e
+                raise InvalidEntityAttributeError(
+                    f"Invalid timezone: {self.timezone}"
+                ) from e
 
         if self.language is not None and not _LANGUAGE_TAG_RE.fullmatch(self.language):
-            raise ValueError(
+            raise InvalidEntityAttributeError(
                 "Recipient language must be a language tag such as 'en' or "
                 f"'pt-BR' (got: {self.language!r})"
             )

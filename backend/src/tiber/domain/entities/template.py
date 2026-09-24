@@ -3,7 +3,8 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel
-from ..services.channel_content import validate_content
+from ..exceptions import InvalidEntityAttributeError
+from ..services import set_enum_attribute, validate_content
 from ..value_objects import NotificationContent
 
 
@@ -25,11 +26,10 @@ class Template:
 
     def __post_init__(self) -> None:
         """Validate the template's state after initialization."""
-        # Boundary coercion before the channel/title check reads the field.
-        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
+        set_enum_attribute(self, "channel", DeliveryChannel, self.channel)
 
         if not self.name or not self.name.strip():
-            raise ValueError("Template name must not be empty")
+            raise InvalidEntityAttributeError("Template name must not be empty")
 
         validate_content(self.channel, self.content)
 

@@ -185,19 +185,6 @@ class AuthenticationFailedError(TiberError):
         self.message = message
 
 
-# Rate limiting
-class RateLimitExceededError(TiberError):
-    """Raised when a rate limit is exceeded."""
-
-    error_code = "ratelimit_exceeded"
-    status_code = 429
-
-    def __init__(self, retry_after: int | None) -> None:
-        """Initialize a RateLimitExceededError."""
-        self.retry_after = retry_after
-        super().__init__("Rate limit exceeded.")
-
-
 # Delivery
 class DeliveryFailedError(TiberError):
     """Raised when a delivery attempt fails."""
@@ -266,28 +253,16 @@ class InvalidStateTransitionError(TiberError):
         self.target = target
 
 
-class InvalidNotificationStateError(TiberError):
-    """Raised when a Notification invariant is violated."""
+class InvalidEntityAttributeError(TiberError):
+    """Raised when an entity attribute fails value validation or enum parsing."""
 
-    error_code = "invalid_notification_state"
+    error_code = "invalid_entity_attribute"
     status_code = 422
 
-    def __init__(self, message: str) -> None:
-        """Initialize an InvalidNotificationStateError with a message."""
+    def __init__(self, message: str):
+        """Initialize an InvalidEntityAttributeError."""
         self.message = message
-        super().__init__(message)
-
-
-class InvalidProjectStateError(TiberError):
-    """Raised when a Project invariant is violated."""
-
-    error_code = "invalid_project_state"
-    status_code = 422
-
-    def __init__(self, message: str) -> None:
-        """Initialize an InvalidProjectStateError with a message."""
-        self.message = message
-        super().__init__(message)
+        super().__init__(f"{self.message}")
 
 
 class ProjectNameConflictError(TiberError):
