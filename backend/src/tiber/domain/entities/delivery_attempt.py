@@ -13,8 +13,6 @@ class DeliveryAttempt:
     than mutating existing ones.
     """
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     notification_id: UUID
     status: DeliveryAttemptStatus

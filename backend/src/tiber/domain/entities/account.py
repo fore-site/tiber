@@ -9,6 +9,4 @@ class Account:
     Accounts are ownership roots only: the domain represents them by id.
     """
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)

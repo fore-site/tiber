@@ -9,8 +9,6 @@ from ..enums import WebhookEventType
 class WebhookEndpoint:
     """Domain entity representing client-registered outbound callback destinations."""
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     url: str

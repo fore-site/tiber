@@ -32,8 +32,6 @@ def _require_derivable_name(name: str) -> None:
 class Project:
     """Project entity."""
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     account_id: UUID
     name: str

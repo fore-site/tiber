@@ -9,8 +9,6 @@ from ..enums import DeliveryChannel, EngagementEventType
 class EngagementEvent:
     """Domain entity representing recipient interaction reported by delivery providers."""
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     notification_id: UUID
     project_id: UUID
@@ -25,8 +23,6 @@ class EngagementEvent:
 
     def __post_init__(self) -> None:
         """Validate the engagement event's state after initialization."""
-        # Boundary coercion: webhook payloads arrive untyped, so raw strings
-        # become members and invalid values raise the enum's ValueError.
         object.__setattr__(
             self, "event_type", EngagementEventType(self.event_type.lower())
         )

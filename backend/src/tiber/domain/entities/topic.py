@@ -18,8 +18,6 @@ class NotificationTopic:
 
     def __post_init__(self) -> None:
         """Validate the topic's state after initialization."""
-        # Boundary coercion: raw strings become members, invalid values raise
-        # the enum's ValueError, members pass through unchanged.
         object.__setattr__(
             self, "category", NotificationCategory(self.category.lower())
         )

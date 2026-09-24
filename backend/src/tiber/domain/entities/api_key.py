@@ -7,8 +7,6 @@ from uuid import UUID, uuid4
 class APIKey:
     """API Key entity - Auth tokens for client applications submitting notifications."""
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     name: str

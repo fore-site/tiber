@@ -10,8 +10,6 @@ from ..value_objects import BlackoutPeriod, QuietHours
 class DeliveryConstraint:
     """Domain entity representing Project-level delivery rule."""
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     blackout_periods: list[BlackoutPeriod] = field(default_factory=list)

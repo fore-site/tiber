@@ -15,8 +15,6 @@ class Template:
     action URL, and an optional image URL.
     """
 
-    # Ids are system-generated: callers never supply one. kw_only makes the
-    # defaulted id legal ahead of required fields.
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     name: str
