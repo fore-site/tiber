@@ -7,9 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from ..enums import DeliveryChannel
 from ..value_objects import RecipientPreferences
 
-# BCP-47 language tag: a 2-3 letter primary subtag (en, pt) optionally
-# followed by script/region/variant subtags (en-US, zh-Hans, pt-BR). Tiber
-# validates shape only; it never interprets what the tag selects.
+# BCP-47 language tag
 _LANGUAGE_TAG_RE = re.compile(r"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$")
 
 

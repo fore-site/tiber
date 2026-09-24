@@ -7,10 +7,6 @@ class Account:
     """Account entity - a platform account that owns projects.
 
     Accounts are ownership roots only: the domain represents them by id.
-    Authentication and profile data (email, credentials, verification)
-    belong to the supporting auth capability and are stored in
-    infrastructure, accessed through application-layer ports — Tiber is a
-    notification-delivery platform, not an authentication service.
     """
 
     # Ids are system-generated: callers never supply one. kw_only makes the

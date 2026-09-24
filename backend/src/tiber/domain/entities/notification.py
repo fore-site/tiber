@@ -161,10 +161,7 @@ class Notification:
                     "`delivered_at` must only be set when status is DELIVERED"
                 )
 
-        # 4. postponed status ↔ resume time consistency. POSTPONED is a
-        # scheduled deferral, not a parking lot: the row always carries the
-        # instant after which delivery may proceed (the worker re-queues on
-        # it), and send_at is the only representation it has.
+        # 4. postponed status ↔ resume time consistency.
         if self.status is NotificationStatus.POSTPONED and self.send_at is None:
             raise InvalidNotificationStateError(
                 "`send_at` is required when status is POSTPONED (the resume time)"
@@ -353,12 +350,7 @@ class Notification:
 
         Postponement is a scheduled deferral, not a drop: ``resume_at`` is
         the instant after which delivery may proceed (computed by the domain
-        policy from the violated quiet-hours window). It replaces ``send_at``
-        — the worker re-queues on it, and a resumed notification is PENDING
-        with an already-past send time, which flows through the existing
-        scheduling guard unchanged. The prior send time is deliberately not
-        preserved: policy pre-empted it, and the resume time is when delivery
-        will actually happen.
+        policy from the violated quiet-hours window).
         """
         if self.status not in (
             NotificationStatus.PENDING,
@@ -376,15 +368,7 @@ class Notification:
         )
 
     def resume(self) -> Notification:
-        """Return the notification to PENDING once its postponement has lapsed.
-
-        The worker calls this when a POSTPONED notification's resume time has
-        passed, handing the notification back to the normal dispatch path.
-        ``send_at`` keeps the (now past) resume instant: for an EXPLICIT
-        notification it documents when delivery actually happened, and the
-        scheduling guard treats a past send time as due, so no separate
-        due-check for POSTPONED is needed.
-        """
+        """Return the notification to PENDING once its postponement has lapsed."""
         if self.status is not NotificationStatus.POSTPONED:
             raise InvalidStateTransitionError(self.status, NotificationStatus.PENDING)
 
