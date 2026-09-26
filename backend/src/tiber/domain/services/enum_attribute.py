@@ -7,7 +7,7 @@ from ..exceptions import InvalidEntityAttributeError
 def set_enum_attribute(
     obj: Any, field_name: str, enum_cls: type[StrEnum], raw_value: str
 ) -> None:
-    """Safely converts a raw string to an Enum and assigns it to a frozen dataclass field."""
+    """Safely converts a string to an Enum and assigns it to a frozen dataclass field."""
     try:
         normalized_value = raw_value.lower()
         enum_value = enum_cls(normalized_value)
