@@ -5,13 +5,11 @@ contract, the concrete rules, the resolver, and the canonical chains —
 lives in ``rules`` as one self-contained module.
 """
 
+from .definitions import PolicyContext, PolicyDecision, PolicyRule
 from .rules import (
     DISPATCH_GUARD_RULES,
     INTAKE_RULES,
-    PolicyContext,
-    PolicyDecision,
     PolicyResolver,
-    PolicyRule,
 )
 
 __all__ = [
