@@ -169,7 +169,7 @@ class RecipientPreferenceRule:
         )
 
 
-class BlackoutPeriodRule:
+class ProjectBlackoutPeriodRule:
     """Reject a notification sent during a project blackout period.
 
     A blackout period is an absolute datetime range during which
@@ -220,7 +220,7 @@ class BlackoutPeriodRule:
         return PolicyDecision.allow()
 
 
-class QuietHoursRule:
+class ProjectQuietHoursRule:
     """Reject a notification sent within a project quiet-hours window.
 
     A quiet hours window is a recurring time-of-day range during which
@@ -332,11 +332,11 @@ class PolicyResolver:
 INTAKE_RULES: tuple[PolicyRule, ...] = (
     RecipientAddressRule(),
     RecipientPreferenceRule(),
-    BlackoutPeriodRule(),
-    QuietHoursRule(),
+    ProjectBlackoutPeriodRule(),
+    ProjectQuietHoursRule(),
 )
 DISPATCH_GUARD_RULES: tuple[PolicyRule, ...] = (
     RecipientPreferenceRule(),
-    BlackoutPeriodRule(),
-    QuietHoursRule(),
+    ProjectBlackoutPeriodRule(),
+    ProjectQuietHoursRule(),
 )
