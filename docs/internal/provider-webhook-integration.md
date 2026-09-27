@@ -7,7 +7,7 @@
 
 ## Purpose
 
-Delivery providers (Resend, SendGrid, FCM) send inbound HTTP callbacks to Tiber when engagement events occur — a recipient opens an email, clicks a link, a message bounces, or a recipient unsubscribes. This document describes how Tiber receives, validates, and processes those callbacks.
+Delivery providers (Resend, SendGrid, FCM) send inbound HTTP callbacks to Tiber when engagement events occur — a recipient opens an email, clicks a link, a message bounces, a recipient unsubscribes, or a recipient reports a message as spam. This document describes how Tiber receives, validates, and processes those callbacks.
 
 This is distinct from outbound webhook callbacks, which Tiber fires to *client applications* when notification lifecycle events occur. That flow is documented in the customer-facing OpenAPI spec under the Webhooks tag.
 
@@ -66,6 +66,15 @@ Never return `500` to a provider. If internal processing fails after signature v
 
 ## Provider Configuration
 
+**Spam complaints vs. unsubscribes:** both email providers report spam
+complaints (Resend `email.spam_complaint`, SendGrid `spamreport`). Both map to
+the `complaint` engagement event, never `unsubscribe`. These are different
+facts: an unsubscribe means the recipient used the sender's opt-out mechanism
+to stop future mail, while a complaint means the recipient used the mailbox
+provider's "report spam" button on a message that was already delivered. A
+complaint is a deliverability red flag (it damages sender reputation), so it
+is recorded as its own event type rather than flattened into a consent signal.
+
 ### Resend
 
 **Webhook events to subscribe:**
@@ -73,7 +82,7 @@ Never return `500` to a provider. If internal processing fails after signature v
 - `email.clicked`
 - `email.bounced`
 - `email.delivery_delayed`
-- `email.spam_complaint` (maps to `unsubscribe`)
+- `email.spam_complaint` (maps to `complaint`)
 
 **Endpoint to register in Resend dashboard:**
 ```
@@ -108,7 +117,7 @@ RESEND_WEBHOOK_SECRET=whsec_xxxxx
 | `email.opened` | `open` |
 | `email.clicked` | `click` |
 | `email.bounced` | `bounce` |
-| `email.spam_complaint` | `unsubscribe` |
+| `email.spam_complaint` | `complaint` |
 | `email.delivery_delayed` | — (logged, not recorded as engagement event) |
 
 ---
@@ -120,7 +129,7 @@ RESEND_WEBHOOK_SECRET=whsec_xxxxx
 - `click`
 - `bounce`
 - `unsubscribe`
-- `spamreport` (maps to `unsubscribe`)
+- `spamreport` (maps to `complaint`)
 
 **Endpoint to register in SendGrid dashboard:**
 ```
@@ -157,7 +166,7 @@ SendGrid sends an array of events per request:
 | `click` | `click` |
 | `bounce` | `bounce` |
 | `unsubscribe` | `unsubscribe` |
-| `spamreport` | `unsubscribe` |
+| `spamreport` | `complaint` |
 | `deferred` | — (logged, not recorded as engagement event) |
 | `delivered` | — (handled by delivery tracking, not engagement) |
 
