@@ -4,12 +4,9 @@ from uuid import UUID
 from tiber.application.ports.idempotency import IdempotencyGuard
 from tiber.application.ports.message_publisher import MessagePublisher
 from tiber.application.services.template import NotificationTemplateResolver
-from tiber.domain.entities import Notification
+from tiber.domain.entities import Notification, Recipient
 from tiber.domain.enums import DeliveryChannel, NotificationCategory, PolicyConsequence
-from tiber.domain.exceptions import (
-    NotificationNotFoundError,
-    RecipientNotFoundError,
-)
+from tiber.domain.exceptions import EntityNotFoundError
 from tiber.domain.policies import PolicyResolver
 from tiber.domain.repositories import (
     DeliveryConstraintRepository,
@@ -131,7 +128,7 @@ class NotificationService:
         # a cross-project id reads as a miss, not a foreign row.
         recipient = await self._recipients.get_by_id(recipient_id, project_id)
         if recipient is None:
-            raise RecipientNotFoundError(str(recipient_id))
+            raise EntityNotFoundError(Recipient, str(recipient_id))
 
         # 3. Resolve and render template content at intake. The template
         # resolver validates ownership and channel; rendering produces the
@@ -233,7 +230,7 @@ class NotificationService:
         """Get a notification scoped to a project."""
         notification = await self._repository.get_by_id(notification_id, project_id)
         if notification is None or notification.project_id != project_id:
-            raise NotificationNotFoundError(str(notification_id))
+            raise EntityNotFoundError(Notification, str(notification_id))
         return notification
 
     async def list_notifications(

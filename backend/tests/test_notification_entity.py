@@ -25,7 +25,7 @@ from tiber.domain.enums import (
     SendTimeBasis,
 )
 from tiber.domain.exceptions import (
-    InvalidNotificationStateError,
+    InvalidEntityAttributeError,
     InvalidStateTransitionError,
 )
 from tiber.domain.value_objects import NotificationContent
@@ -96,13 +96,13 @@ def test_members_pass_through_unchanged():
 
 def test_unknown_category_value_raises():
     """A string that is not a category value raises the enum's ValueError."""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidEntityAttributeError):
         make_notification(category="transactional")
 
 
 def test_unknown_channel_value_raises():
     """A string that is not a channel value raises the enum's ValueError."""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidEntityAttributeError):
         make_notification(channel="fax")
 
 
@@ -113,7 +113,7 @@ def test_cross_enum_impostor_raises():
     value but not a NotificationCategory value, so passing the wrong enum's
     member is rejected rather than silently accepted.
     """
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidEntityAttributeError):
         make_notification(category=DeliveryChannel.SMS)
 
 
@@ -162,13 +162,13 @@ def test_group_key_accepts_arbitrary_opaque_strings():
 
 def test_group_key_rejects_blank_string():
     """An empty or whitespace key is not an identity — reject, don't coerce."""
-    with pytest.raises(InvalidNotificationStateError, match="group_key"):
+    with pytest.raises(InvalidEntityAttributeError, match="group_key"):
         make_notification(group_key="   ")
 
 
 def test_group_key_rejects_over_length_string():
     """The 255-char ceiling mirrors the persistence column's bound."""
-    with pytest.raises(InvalidNotificationStateError, match="group_key"):
+    with pytest.raises(InvalidEntityAttributeError, match="group_key"):
         make_notification(group_key="x" * 256)
 
 
@@ -219,13 +219,13 @@ def test_mark_postponed_sets_send_at_to_resume_time():
 
 def test_mark_postponed_requires_timezone_aware_resume_time():
     """A naive resume time is rejected, never silently stored."""
-    with pytest.raises(InvalidNotificationStateError, match="resume_at"):
+    with pytest.raises(InvalidEntityAttributeError, match="resume_at"):
         make_notification().mark_postponed(datetime(2026, 9, 25, 6, 5))
 
 
 def test_postponed_without_send_at_is_not_representable():
     """A POSTPONED row without a resume time is corrupt state."""
-    with pytest.raises(InvalidNotificationStateError, match="send_at"):
+    with pytest.raises(InvalidEntityAttributeError, match="send_at"):
         Notification(
             project_id=uuid4(),
             recipient_id=uuid4(),
@@ -296,7 +296,7 @@ def test_cancellation_reason_only_set_when_cancelled():
     Direct instantiation path: create() never accepts status or the reason,
     so this invariant guards the rehydration/reconstitution boundary.
     """
-    with pytest.raises(InvalidNotificationStateError, match="cancellation_reason"):
+    with pytest.raises(InvalidEntityAttributeError, match="cancellation_reason"):
         Notification(
             project_id=uuid4(),
             recipient_id=uuid4(),
@@ -350,7 +350,7 @@ def test_rehydrated_ml_predicted_with_send_at_keeps_its_basis():
 
 def test_rehydrate_explicit_without_send_at_is_rejected():
     """EXPLICIT claims a client schedule: no time means corrupt state."""
-    with pytest.raises(InvalidNotificationStateError, match="send_at"):
+    with pytest.raises(InvalidEntityAttributeError, match="send_at"):
         Notification.reconstitute(
             id=uuid4(),
             project_id=uuid4(),
@@ -377,7 +377,7 @@ def test_rehydrate_explicit_without_send_at_is_rejected():
 
 def test_immediate_basis_requires_critical_category():
     """IMMEDIATE is the CRITICAL-only path: not representable elsewhere."""
-    with pytest.raises(InvalidNotificationStateError, match="IMMEDIATE"):
+    with pytest.raises(InvalidEntityAttributeError, match="IMMEDIATE"):
         Notification(
             project_id=uuid4(),
             recipient_id=uuid4(),
@@ -391,7 +391,7 @@ def test_immediate_basis_requires_critical_category():
 
 def test_critical_basis_is_pinned_to_immediate():
     """CRITICAL must be IMMEDIATE — even if a caller asserts otherwise."""
-    with pytest.raises(InvalidNotificationStateError, match="CRITICAL"):
+    with pytest.raises(InvalidEntityAttributeError, match="CRITICAL"):
         Notification(
             project_id=uuid4(),
             recipient_id=uuid4(),
@@ -433,7 +433,7 @@ def test_schedule_rejects_client_scheduled_notification():
     """EXPLICIT is client-owned: the ML path cannot override it."""
     notification = make_notification(send_at=datetime(2026, 9, 19, 9, 0, tzinfo=UTC))
 
-    with pytest.raises(InvalidNotificationStateError, match="ML_PREDICTED"):
+    with pytest.raises(InvalidEntityAttributeError, match="ML_PREDICTED"):
         notification.schedule(datetime(2026, 9, 20, 9, 0, tzinfo=UTC))
 
 
@@ -441,13 +441,13 @@ def test_schedule_rejects_critical():
     """CRITICAL dispatches immediately; there is nothing to schedule."""
     notification = make_notification(category=NotificationCategory.CRITICAL)
 
-    with pytest.raises(InvalidNotificationStateError, match="ML_PREDICTED"):
+    with pytest.raises(InvalidEntityAttributeError, match="ML_PREDICTED"):
         notification.schedule(datetime(2026, 9, 20, 9, 0, tzinfo=UTC))
 
 
 def test_schedule_rejects_naive_datetime():
     """Same tz-awareness rule as client-supplied send_at."""
-    with pytest.raises(InvalidNotificationStateError, match="timezone"):
+    with pytest.raises(InvalidEntityAttributeError, match="timezone"):
         make_notification().schedule(datetime(2026, 9, 20, 9, 0))
 
 

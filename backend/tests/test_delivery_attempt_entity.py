@@ -20,11 +20,12 @@ import pytest
 
 from tiber.domain.entities import DeliveryAttempt
 from tiber.domain.enums import DeliveryAttemptStatus
+from tiber.domain.exceptions import InvalidEntityAttributeError
 
 
 def test_succeeded_attempt_requires_recipient_address():
     """A success contacted a real address: the snapshot cannot be missing."""
-    with pytest.raises(ValueError, match="recipient_address"):
+    with pytest.raises(InvalidEntityAttributeError, match="recipient_address"):
         DeliveryAttempt.create(
             notification_id=uuid4(),
             status=DeliveryAttemptStatus.SUCCESS,

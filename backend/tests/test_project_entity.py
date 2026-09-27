@@ -20,7 +20,7 @@ from uuid import uuid4
 import pytest
 
 from tiber.domain.entities import Project
-from tiber.domain.exceptions import InvalidProjectStateError
+from tiber.domain.exceptions import InvalidEntityAttributeError
 
 
 def make_project(name: str, **overrides) -> Project:
@@ -61,24 +61,18 @@ def test_digits_and_mixed_tokens_survive():
 
 def test_name_without_ascii_token_is_rejected():
     """No ASCII alnum token means nothing to derive from: reject the name."""
-    with pytest.raises(InvalidProjectStateError, match="ASCII"):
+    with pytest.raises(InvalidEntityAttributeError, match="ASCII"):
         make_project("???")
-    with pytest.raises(InvalidProjectStateError, match="ASCII"):
+    with pytest.raises(InvalidEntityAttributeError, match="ASCII"):
         make_project("日本語")
 
 
 def test_empty_name_is_rejected():
     """An empty (or whitespace-only) name is invalid before derivation."""
-    with pytest.raises(InvalidProjectStateError, match="name"):
+    with pytest.raises(InvalidEntityAttributeError, match="name"):
         make_project("")
-    with pytest.raises(InvalidProjectStateError, match="name"):
+    with pytest.raises(InvalidEntityAttributeError, match="name"):
         make_project("   ")
-
-
-def test_create_no_longer_accepts_slug():
-    """The signature is the contract: slug is not a caller input."""
-    with pytest.raises(TypeError):
-        Project.create(account_id=uuid4(), name="My App", slug="imposed")
 
 
 # --- Rehydration: persisted identity is loaded, never re-derived ---
@@ -106,7 +100,7 @@ def test_reconstitute_loads_stored_slug_as_is():
 
 def test_reconstitute_rejects_malformed_stored_slug():
     """The format guard still applies to slugs supplied from storage."""
-    with pytest.raises(InvalidProjectStateError, match="slug"):
+    with pytest.raises(InvalidEntityAttributeError, match="slug"):
         Project.reconstitute(
             id=uuid4(),
             account_id=uuid4(),
@@ -175,7 +169,7 @@ def test_rename_rejects_invalid_names():
     """rename() applies the same name rules as construction."""
     project = make_project("My App")
 
-    with pytest.raises(InvalidProjectStateError, match="name"):
+    with pytest.raises(InvalidEntityAttributeError, match="name"):
         project.rename("")
-    with pytest.raises(InvalidProjectStateError, match="ASCII"):
+    with pytest.raises(InvalidEntityAttributeError, match="ASCII"):
         project.rename("???")

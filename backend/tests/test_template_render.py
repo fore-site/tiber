@@ -14,8 +14,8 @@ from tiber.application.services import NotificationTemplateResolver
 from tiber.domain.entities import Notification, Template
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import (
+    EntityNotFoundError,
     TemplateChannelMismatchError,
-    TemplateNotFoundError,
 )
 from tiber.domain.services import TemplateRenderer
 from tiber.domain.value_objects import NotificationContent
@@ -178,12 +178,12 @@ async def test_resolver_renders_template_content():
 
 
 async def test_resolver_raises_when_template_missing():
-    """A referenced template that does not exist raises TemplateNotFoundError."""
+    """A referenced template that does not exist raises EntityNotFoundError."""
     project_id = uuid4()
     resolver = NotificationTemplateResolver(FakeTemplateRepository())
     notification = make_notification(project_id=project_id, template_id=uuid4())
 
-    with pytest.raises(TemplateNotFoundError):
+    with pytest.raises(EntityNotFoundError):
         await resolver.resolve_content(notification)
 
 
@@ -198,7 +198,7 @@ async def test_resolver_rejects_cross_project_template():
         template_id=template.id,
     )
 
-    with pytest.raises(TemplateNotFoundError):
+    with pytest.raises(EntityNotFoundError):
         await resolver.resolve_content(notification)
 
 

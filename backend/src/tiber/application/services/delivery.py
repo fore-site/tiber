@@ -7,16 +7,13 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from tiber.application.ports.channel_provider import ChannelProvider, ProviderResult
-from tiber.domain.entities import DeliveryAttempt, Notification
+from tiber.domain.entities import DeliveryAttempt, Notification, Recipient
 from tiber.domain.enums import (
     DeliveryAttemptStatus,
     NotificationStatus,
     PolicyConsequence,
 )
-from tiber.domain.exceptions import (
-    NotificationNotFoundError,
-    RecipientNotFoundError,
-)
+from tiber.domain.exceptions import EntityNotFoundError
 from tiber.domain.repositories import (
     DeliveryAttemptRepository,
     DeliveryConstraintRepository,
@@ -84,7 +81,7 @@ class NotificationDeliveryProcessor:
         """
         notification = await self._notifications.get_by_id(notification_id, project_id)
         if notification is None:
-            raise NotificationNotFoundError(str(notification_id))
+            raise EntityNotFoundError(Notification, str(notification_id))
 
         now = datetime.now(UTC)
 
@@ -111,7 +108,7 @@ class NotificationDeliveryProcessor:
             # and a cross-project mismatch. Lookup failures raise so the
             # task-level permanent-error path classifies them; they never
             # reached a provider, so no delivery attempt is recorded.
-            raise RecipientNotFoundError(str(notification.recipient_id))
+            raise EntityNotFoundError(Recipient, str(notification.recipient_id))
 
         # Worker-time policy re-check while still deliverable. The decision's
         # consequence decides the outcome: quiet-hours violations are

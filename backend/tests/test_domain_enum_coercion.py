@@ -25,7 +25,7 @@ from tiber.domain.enums import (
     DeliveryChannel,
     NotificationCategory,
 )
-from tiber.domain.exceptions import InvalidNotificationStateError
+from tiber.domain.exceptions import InvalidEntityAttributeError
 from tiber.domain.value_objects import (
     NotificationContent,
     QuietHours,
@@ -52,7 +52,7 @@ def test_template_coercion_precedes_channel_title_check():
     A raw 'email' without a title must be rejected by the same check
     that rejects the member — proving coercion ran before the check.
     """
-    with pytest.raises(InvalidNotificationStateError, match="Title"):
+    with pytest.raises(InvalidEntityAttributeError, match="Title"):
         Template.create(
             project_id=uuid4(),
             name="welcome",
@@ -63,7 +63,7 @@ def test_template_coercion_precedes_channel_title_check():
 
 def test_template_cross_enum_impostor_raises():
     """A member of another enum is rejected: 'promotional' is not a channel."""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidEntityAttributeError):
         Template.create(
             project_id=uuid4(),
             name="welcome",
@@ -101,7 +101,7 @@ def test_event_raw_webhook_strings_are_coerced():
 
 def test_event_unknown_event_type_raises():
     """A typo'd webhook event type is rejected, not stored as garbage."""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidEntityAttributeError):
         make_event(event_type="clicked")  # the member is 'click'
 
 
@@ -121,7 +121,7 @@ def test_topic_raw_category_string_is_coerced():
 
 def test_topic_unknown_category_value_raises():
     """A string that is not a category value raises."""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidEntityAttributeError):
         NotificationTopic.create(
             project_id=uuid4(),
             category="urgent",
@@ -155,7 +155,7 @@ def test_attempt_raw_strings_are_coerced():
 
 def test_attempt_unknown_status_value_raises():
     """A string that is not an attempt status raises."""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidEntityAttributeError):
         make_attempt(status="delivered")  # the value is 'success'
 
 

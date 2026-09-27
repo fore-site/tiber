@@ -26,6 +26,7 @@ import pytest
 
 from tiber.domain.entities import Recipient
 from tiber.domain.enums import DeliveryChannel
+from tiber.domain.exceptions import InvalidEntityAttributeError
 from tiber.domain.value_objects import RecipientPreferences
 
 
@@ -64,13 +65,13 @@ def test_create_with_valid_facts():
 
 def test_create_rejects_unknown_timezone():
     """A non-IANA zone raises the same error shape as DeliveryConstraint."""
-    with pytest.raises(ValueError, match="Invalid timezone"):
+    with pytest.raises(InvalidEntityAttributeError, match="Invalid timezone"):
         make_recipient(timezone="Mars/Olympus_Mons")
 
 
 def test_create_rejects_malformed_language():
     """Free text is not a language tag."""
-    with pytest.raises(ValueError, match="language"):
+    with pytest.raises(InvalidEntityAttributeError, match="language"):
         make_recipient(language="not a language!")
 
 
@@ -79,7 +80,7 @@ def test_create_rejects_malformed_language():
 
 def test_reconstitute_validates_timezone():
     """Bad stored facts cannot rehydrate — rehydration validates, not trusts."""
-    with pytest.raises(ValueError, match="Invalid timezone"):
+    with pytest.raises(InvalidEntityAttributeError, match="Invalid timezone"):
         Recipient.reconstitute(
             id=uuid4(),
             project_id=uuid4(),
@@ -125,7 +126,7 @@ def test_set_profile_facts_rejects_invalid_fact():
     """Validation runs on the mutation path too; failure leaves no trace."""
     recipient = make_recipient(timezone="Europe/Lisbon")
 
-    with pytest.raises(ValueError, match="Invalid timezone"):
+    with pytest.raises(InvalidEntityAttributeError, match="Invalid timezone"):
         recipient.set_profile_facts(timezone="Bogus/Zone", language="en")
 
     # The original survives untouched — frozen entity, invalid copy rejected.

@@ -10,10 +10,10 @@ pass through unchanged — the "direct content fallback" path.
 
 from __future__ import annotations
 
-from tiber.domain.entities import Notification
+from tiber.domain.entities import Notification, Template
 from tiber.domain.exceptions import (
+    EntityNotFoundError,
     TemplateChannelMismatchError,
-    TemplateNotFoundError,
 )
 from tiber.domain.repositories import TemplateRepository
 from tiber.domain.services import TemplateRenderer
@@ -44,7 +44,7 @@ class NotificationTemplateResolver:
             notification.template_id, notification.project_id
         )
         if template is None:
-            raise TemplateNotFoundError(str(notification.template_id))
+            raise EntityNotFoundError(Template, str(notification.template_id))
 
         if template.channel != notification.channel:
             raise TemplateChannelMismatchError(

@@ -7,10 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ..core.logging import get_correlation_id, get_logger
-from ..domain.exceptions import (
-    RateLimitExceededError,
-    TiberError,
-)
+from ..domain.exceptions import TiberError
 from .schemas.error import (
     ErrorResponse,
     ValidationErrorDetail,
@@ -18,6 +15,22 @@ from .schemas.error import (
 )
 
 logger = get_logger(__name__)
+
+# The domain layer defines error conditions and their ``error_code`` strings;
+# it never knows about HTTP. This table is the API layer's translation of
+# domain error codes to HTTP statuses, per the domain exceptions module
+# docstring. Unmapped codes fall through to 500.
+_TIBER_ERROR_STATUS: dict[str, int] = {
+    "not_found_error": 404,
+    "invalid_entity_attribute": 422,
+    "invalid_state_transition": 409,
+    "idempotency_key_conflict": 409,
+    "project_name_conflict": 409,
+    "project_scope_violated": 403,
+    "template_channel_mismatch": 422,
+    "delivery_failed": 502,
+    "provider_unavailable": 503,
+}
 
 
 def error_response(
@@ -62,7 +75,7 @@ def validation_error_response(
 async def tiber_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle TiberError and HTTPException errors."""
     if isinstance(exc, TiberError):
-        status_code = exc.status_code
+        status_code = _TIBER_ERROR_STATUS.get(exc.error_code, 500)
         error_code = exc.error_code
         message = str(exc)
 
@@ -101,16 +114,11 @@ async def tiber_exception_handler(request: Request, exc: Exception) -> JSONRespo
             detail=str(exc),
         )
 
-    response = error_response(
+    return error_response(
         error=error_code,
         message=message,
         status=status_code,
     )
-
-    if isinstance(exc, RateLimitExceededError) and exc.retry_after is not None:
-        response.headers["Retry-After"] = str(exc.retry_after)
-
-    return response
 
 
 async def validation_exception_handler(

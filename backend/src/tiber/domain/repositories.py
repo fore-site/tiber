@@ -33,9 +33,7 @@ class AccountRepository(Protocol):
     """Contract for account data access.
 
     Accounts are the id-only domain representation of platform accounts:
-    ownership roots, not authentication state. Credentials, emails, and
-    roles live in infrastructure storage and are accessed through
-    application-layer ports, never through this domain repository.
+    ownership roots, not authentication state.
     """
 
     async def save(self, account: Account) -> Account:
@@ -112,7 +110,9 @@ class APIKeyRepository(Protocol):
         """Revoke an API key."""
         ...
 
-    async def list_by_project(self, project_id: UUID) -> list[APIKey]:
+    async def list_by_project(
+        self, project_id: UUID, limit: int, offset: int
+    ) -> list[APIKey]:
         """List all API keys for a project."""
         ...
 
@@ -129,7 +129,9 @@ class TemplateRepository(Protocol):
         """Get a template by its ID."""
         ...
 
-    async def list_by_project(self, project_id: UUID) -> list[Template]:
+    async def list_by_project(
+        self, project_id: UUID, limit: int, offset: int
+    ) -> list[Template]:
         """List all templates for a project."""
         ...
 
@@ -181,7 +183,7 @@ class DeliveryAttemptRepository(Protocol):
         ...
 
     async def list_by_notification(
-        self, notification_id: UUID
+        self, notification_id: UUID, limit: int, offset: int
     ) -> list[DeliveryAttempt]:
         """List all delivery attempts for a notification."""
         ...
@@ -206,12 +208,14 @@ class NotificationTopicRepository(Protocol):
         ...
 
     async def list_by_category(
-        self, project_id: UUID, category: NotificationCategory
+        self, project_id: UUID, category: NotificationCategory, limit: int, offset: int
     ) -> list[NotificationTopic]:
         """List all notification topics under a category."""
         ...
 
-    async def list_by_project(self, project_id: UUID) -> list[NotificationTopic]:
+    async def list_by_project(
+        self, project_id: UUID, limit: int, offset: int
+    ) -> list[NotificationTopic]:
         """List all notification topics for a project."""
         ...
 
@@ -233,7 +237,7 @@ class WebhookEndpointRepository(Protocol):
         ...
 
     async def list_by_event(
-        self, project_id: UUID, event_type: str
+        self, project_id: UUID, event_type: str, limit: int, offset: int
     ) -> list[WebhookEndpoint]:
         """List all webhook endpoints by event type for a project."""
         ...
@@ -271,13 +275,13 @@ class EngagementEventRepository(Protocol):
         ...
 
     async def list_by_notification(
-        self, notification_id: UUID
+        self, notification_id: UUID, limit: int, offset: int
     ) -> list[EngagementEvent]:
         """List all engagement events for a notification."""
         ...
 
     async def list_by_recipient(
-        self, recipient_id: UUID, limit: int
+        self, recipient_id: UUID, limit: int, offset: int
     ) -> list[EngagementEvent]:
         """List all engagement events for a recipient."""
         ...

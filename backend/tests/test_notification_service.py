@@ -16,13 +16,9 @@ from tiber.application.services import (
     NotificationService,
     NotificationTemplateResolver,
 )
-from tiber.domain.entities import Recipient, Template
+from tiber.domain.entities import Notification, Recipient, Template
 from tiber.domain.enums import DeliveryChannel, NotificationStatus
-from tiber.domain.exceptions import (
-    RecipientNotFoundError,
-    TemplateChannelMismatchError,
-    TemplateNotFoundError,
-)
+from tiber.domain.exceptions import EntityNotFoundError, TemplateChannelMismatchError
 from tiber.domain.policies import PolicyResolver
 from tiber.domain.value_objects import NotificationContent, RecipientPreferences
 
@@ -58,7 +54,7 @@ class FakeRepository:
         """Initialize an empty in-memory store."""
         self._store: dict[UUID, object] = {}
 
-    async def save(self, notification) -> object:
+    async def save(self, notification) -> Notification:
         """Persist a notification."""
         self._store[notification.id] = notification
         return notification
@@ -237,14 +233,14 @@ async def test_email_without_title_rejected(service, recipient):
 
 async def test_get_and_list_are_scoped_to_project(service, recipient):
     """Get raises not-found when the project does not own the notification."""
-    from tiber.domain.exceptions import NotificationNotFoundError
+    from tiber.domain.exceptions import EntityNotFoundError
 
     n_a = await service.create_notification(**build_kwargs(recipient, key="ka"))
 
     got = await service.get_notification(recipient.project_id, n_a.id)
     assert got.id == n_a.id
 
-    with pytest.raises(NotificationNotFoundError):
+    with pytest.raises(EntityNotFoundError):
         await service.get_notification(uuid4(), n_a.id)
 
     listed = await service._repository.list_by_project(recipient.project_id, 10, 0)
@@ -267,7 +263,7 @@ async def test_missing_recipient_raises_not_found(recipient):
         policy_resolver=PolicyResolver(),
     )
 
-    with pytest.raises(RecipientNotFoundError):
+    with pytest.raises(EntityNotFoundError):
         await svc.create_notification(**build_kwargs(recipient))
 
 
@@ -275,7 +271,7 @@ async def test_recipient_from_other_project_reads_as_missing(recipient):
     """A cross-project recipient id is invisible, not a foreign row.
 
     The scoped lookup returns None for a project mismatch, so the service
-    raises RecipientNotFoundError - fail-safe, no cross-tenant signal.
+    raises EntityNotFoundError - fail-safe, no cross-tenant signal.
     """
     svc = NotificationService(
         idempotency_guard=FakeIdempotency(),
@@ -286,7 +282,7 @@ async def test_recipient_from_other_project_reads_as_missing(recipient):
         policy_resolver=PolicyResolver(),
     )
 
-    with pytest.raises(RecipientNotFoundError):
+    with pytest.raises(EntityNotFoundError):
         await svc.create_notification(
             **build_kwargs(recipient, key="recip", project_id=uuid4())
         )
@@ -353,7 +349,7 @@ async def test_cross_project_template_rejected():
         policy_resolver=PolicyResolver(),
     )
 
-    with pytest.raises(TemplateNotFoundError):
+    with pytest.raises(EntityNotFoundError):
         await svc.create_notification(
             **build_kwargs(recipient, key="tpl-xp", template_id=template.id)
         )

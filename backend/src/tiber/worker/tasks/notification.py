@@ -19,11 +19,11 @@ from ...core.database import AsyncSessionFactory
 from ...domain.entities import Notification
 from ...domain.enums import NotificationStatus
 from ...domain.exceptions import (
-    InvalidNotificationStateError,
+    EntityNotFoundError,
+    InvalidEntityAttributeError,
+    InvalidStateTransitionError,
     ProjectScopeViolationError,
-    RecipientNotFoundError,
     TemplateChannelMismatchError,
-    TemplateNotFoundError,
 )
 from ...domain.policies import PolicyResolver
 from ...events.job_payload import NotificationJobPayload
@@ -51,11 +51,11 @@ logger = get_task_logger(__name__)
 SETTINGS = get_settings()
 
 PERMANENT_DELIVERY_ERRORS = (
-    InvalidNotificationStateError,
+    EntityNotFoundError,
+    InvalidEntityAttributeError,
+    InvalidStateTransitionError,
     ProjectScopeViolationError,
-    RecipientNotFoundError,
     TemplateChannelMismatchError,
-    TemplateNotFoundError,
 )
 
 
