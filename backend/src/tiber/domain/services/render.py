@@ -3,12 +3,9 @@
 Rendering is intentionally framework-free: given a ``Template`` and a flat
 mapping of template variables, it substitutes ``{{variable}}`` placeholders
 in the template content's title and body, returning a new
-``NotificationContent``. It owns no I/O and no business rules beyond the
-string substitution itself, so it lives in the domain layer and can be
-tested in isolation.
+``NotificationContent``.
 
-Missing variables are substituted with the empty string rather than raising,
-mirroring the "graceful degradation" principle used elsewhere in the pipeline.
+Missing variables are substituted with the empty string rather than raising.
 
 """
 
