@@ -92,7 +92,13 @@ class FailingProvider:
         return DeliveryChannel.EMAIL
 
     async def send(
-        self, recipient_address, title, body, metadata=None
+        self,
+        recipient_address,
+        title,
+        body,
+        action_url=None,
+        image_url=None,
+        metadata=None,
     ) -> ProviderResult:
         """Return a failed result."""
         return ProviderResult(success=False, error_message="provider down")
@@ -235,10 +241,10 @@ class SpyingProvider(MockProvider):
         super().__init__(DeliveryChannel.EMAIL)
         self.send_count = 0
 
-    async def send(self, recipient_address, title, body, metadata=None):
+    async def send(self, recipient_address, title, body, **kwargs):
         """Count the call, then delegate to the mock provider."""
         self.send_count += 1
-        return await super().send(recipient_address, title, body, metadata=metadata)
+        return await super().send(recipient_address, title, body, **kwargs)
 
 
 def make_scheduled_notification(scheduled_at: datetime) -> Notification:

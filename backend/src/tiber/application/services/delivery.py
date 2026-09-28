@@ -167,6 +167,8 @@ class NotificationDeliveryProcessor:
             recipient_address=address,
             title=content.title,
             body=content.body,
+            action_url=content.action_url,
+            image_url=content.image_url,
             metadata={
                 "notification_id": str(notification.id),
                 "correlation_id": str(notification.correlation_id),
@@ -222,6 +224,16 @@ class NotificationDeliveryProcessor:
             error=None,
             recipient_address=recipient_address,
         )
+        # Decision: provider acceptance currently ends in DELIVERED.
+        # Acceptance is not delivery - a bounce can still arrive later via
+        # the provider webhook, and DELIVERED -> BOUNCED is not a legal
+        # transition. When the inbound webhook pipeline lands, this flips
+        # to staying PROCESSING so the verdict is asynchronous: delivered
+        # and bounced webhooks transition the row, a polling fallback
+        # catches delayed/missing webhooks, and a 24h reaper marks
+        # anything still unverified as failed. Do not flip this without
+        # those consumers existing, or every notification strands in
+        # PROCESSING permanently.
         updated = notification.mark_delivered()
         await self._notifications.save(updated)
         return updated

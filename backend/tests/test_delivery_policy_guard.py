@@ -115,7 +115,13 @@ class RecordingProvider:
         self.sent: list[tuple] = []
 
     async def send(
-        self, recipient_address, title, body, metadata=None
+        self,
+        recipient_address,
+        title,
+        body,
+        action_url=None,
+        image_url=None,
+        metadata=None,
     ) -> ProviderResult:
         """Record and succeed."""
         self.sent.append((recipient_address, title, body))

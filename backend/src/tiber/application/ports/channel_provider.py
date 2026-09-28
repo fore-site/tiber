@@ -47,6 +47,8 @@ class ChannelProvider(Protocol):
         recipient_address: str,
         title: str | None,
         body: str,
+        action_url: str | None = None,
+        image_url: str | None = None,
         metadata: dict | None = None,
     ) -> ProviderResult:
         """Send a message to the specified recipient address.
@@ -56,6 +58,8 @@ class ChannelProvider(Protocol):
             title (str | None): The message title (None where the channel
                 has no title concept or the client omitted it).
             body (str): The body of the message.
+            action_url (str | None): The URL for the action button (None if not applicable).
+            image_url (str | None): The URL for the image (None if not applicable).
             metadata (dict | None): Optional metadata for the message.
 
         Returns:

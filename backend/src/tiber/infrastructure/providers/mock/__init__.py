@@ -36,6 +36,8 @@ class MockProvider:
         recipient_address: str,
         title: str | None,
         body: str,
+        action_url: str | None = None,
+        image_url: str | None = None,
         metadata: dict | None = None,
     ) -> ProviderResult:
         """Simulate a delivery attempt."""
