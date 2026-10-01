@@ -3,11 +3,7 @@ from urllib.parse import urlparse
 
 
 def _validate_url(url: str, what: str) -> None:
-    """Validate that ``url`` is an absolute http(s) URL.
-
-    Value-object validation raises ValueError by the project convention:
-    invalid content is bad input, not a broken entity invariant.
-    """
+    """Validate that ``url`` is an absolute http(s) URL."""
     result = urlparse(url.strip())
     if not all([result.scheme in ("http", "https"), result.netloc.strip()]):
         raise ValueError(f"Invalid {what} URL: {url!r}")
