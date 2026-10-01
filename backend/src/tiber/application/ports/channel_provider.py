@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from ...domain.enums import DeliveryChannel
+
+if TYPE_CHECKING:
+    from ...domain.value_objects import ContentAction, ContentImage
 
 
 @dataclass(frozen=True)
@@ -47,8 +50,8 @@ class ChannelProvider(Protocol):
         recipient_address: str,
         title: str | None,
         body: str,
-        action_url: str | None = None,
-        image_url: str | None = None,
+        actions: tuple[ContentAction, ...] = (),
+        images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
     ) -> ProviderResult:
         """Send a message to the specified recipient address.
@@ -58,8 +61,11 @@ class ChannelProvider(Protocol):
             title (str | None): The message title (None where the channel
                 has no title concept or the client omitted it).
             body (str): The body of the message.
-            action_url (str | None): The URL for the action button (None if not applicable).
-            image_url (str | None): The URL for the image (None if not applicable).
+            actions (tuple[ContentAction, ...]): Ordered recipient actions
+                (buttons/links); the adapter interprets them per channel
+                (empty where the channel has none).
+            images (tuple[ContentImage, ...]): Embedded images, interpreted
+                per channel (empty where the channel has none).
             metadata (dict | None): Optional metadata for the message.
 
         Returns:
