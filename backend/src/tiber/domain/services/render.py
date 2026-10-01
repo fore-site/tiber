@@ -33,7 +33,8 @@ class TemplateRenderer:
 
         Every ``{{key}}`` placeholder is replaced with ``str(variables[key])``
         when the key is present, and with an empty string otherwise. The
-        template's ``action_url`` / ``image_url`` pass through untouched.
+        template's ``actions`` / ``images`` pass through untouched: they are
+        opaque references (labels + URLs), not free text to interpolate.
         """
         mapping = variables or {}
 
@@ -46,6 +47,6 @@ class TemplateRenderer:
         return NotificationContent(
             title=title,
             body=body,
-            action_url=template_content.action_url,
-            image_url=template_content.image_url,
+            actions=template_content.actions,
+            images=template_content.images,
         )
