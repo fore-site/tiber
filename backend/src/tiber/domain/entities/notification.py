@@ -9,7 +9,7 @@ from ..enums import (
     SendTimeBasis,
 )
 from ..exceptions import InvalidEntityAttributeError, InvalidStateTransitionError
-from ..services import set_enum_attribute, validate_content
+from ..services import set_enum_attribute
 from ..value_objects import NotificationContent
 
 
@@ -21,12 +21,12 @@ class Notification:
     project_id: UUID
     recipient_id: UUID
     correlation_id: UUID
-    channel: DeliveryChannel
+    channels: frozenset[DeliveryChannel]
     category: NotificationCategory
-    content: NotificationContent
 
     # Optional / nullable fields
 
+    content: NotificationContent | None = None
     status: NotificationStatus = NotificationStatus.PENDING
     topic_id: UUID | None = None
     template_id: UUID | None = None
@@ -44,16 +44,16 @@ class Notification:
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""
-        set_enum_attribute(self, "channel", DeliveryChannel, self.channel)
+        channels = frozenset(
+            DeliveryChannel(channel.lower()) for channel in self.channels
+        )
+        object.__setattr__(self, "channel", channels)
         set_enum_attribute(self, "category", NotificationCategory, self.category)
         set_enum_attribute(self, "status", NotificationStatus, self.status)
         if self.send_time_basis is not None:
             set_enum_attribute(
                 self, "send_time_basis", SendTimeBasis, self.send_time_basis
             )
-
-        # validate notification content for the channel
-        validate_content(self.channel, self.content)
 
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise InvalidEntityAttributeError(
@@ -169,9 +169,10 @@ class Notification:
         project_id: UUID,
         recipient_id: UUID,
         correlation_id: UUID,
-        channel: DeliveryChannel,
+        channels: list[DeliveryChannel],
         category: NotificationCategory,
-        content: NotificationContent,
+        topic_id: UUID | None = None,
+        content: NotificationContent | None = None,
         template_id: UUID | None = None,
         template_variables: dict[str, str] | None = None,
         group_key: str | None = None,
@@ -189,8 +190,9 @@ class Notification:
             project_id=project_id,
             recipient_id=recipient_id,
             correlation_id=correlation_id,
-            channel=channel,
+            channels=frozenset(channels),
             category=category,
+            topic_id=topic_id,
             content=content,
             template_id=template_id,
             template_variables=template_variables,
@@ -207,9 +209,10 @@ class Notification:
         project_id: UUID,
         recipient_id: UUID,
         correlation_id: UUID,
-        channel: DeliveryChannel,
+        channels: list[DeliveryChannel],
         category: NotificationCategory,
-        content: NotificationContent,
+        topic_id: UUID | None,
+        content: NotificationContent | None,
         status: NotificationStatus,
         created_at: datetime,
         updated_at: datetime,
@@ -235,8 +238,9 @@ class Notification:
             project_id=project_id,
             recipient_id=recipient_id,
             correlation_id=correlation_id,
-            channel=channel,
+            channels=frozenset(channels),
             category=category,
+            topic_id=topic_id,
             content=content,
             status=status,
             created_at=created_at,
