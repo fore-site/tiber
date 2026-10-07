@@ -36,14 +36,12 @@ class TemplateChannelMismatchError(TiberError):
 
     error_code = "template_channel_mismatch"
 
-    def __init__(self, template_id: str, template_channel: str, channel: str) -> None:
+    def __init__(self, template: str, channel: str) -> None:
         """Initialize a TemplateChannelMismatchError."""
-        self.template_id = template_id
-        self.template_channel = template_channel
+        self.template = template
         self.channel = channel
         super().__init__(
-            f"Template '{self.template_id}' is for channel '{self.template_channel}', "
-            f"not '{self.channel}'"
+            f"Template '{self.template}' is not configured for channel '{self.channel}', "
         )
 
 
