@@ -1,4 +1,4 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from ..enums import DeliveryChannel
 from ..services import set_enum_attribute, validate_content
@@ -21,7 +21,3 @@ class TemplateVariant:
         set_enum_attribute(self, "channel", DeliveryChannel, self.channel)
 
         validate_content(self.channel, self.content)
-
-    def update_content(self, new_content: NotificationContent) -> TemplateVariant:
-        """Return a new Template instance with updated content."""
-        return replace(self, content=new_content)
