@@ -13,12 +13,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from ..value_objects import NotificationContent
-
-if TYPE_CHECKING:
-    from ..entities import Template
+from ..value_objects import NotificationContent, TemplateVariant
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
 
@@ -27,7 +24,7 @@ class TemplateRenderer:
     """Renders ``{{variable}}`` placeholders in a template's content."""
 
     def render(
-        self, template: Template, variables: Mapping[str, Any] | None
+        self, template: TemplateVariant, variables: Mapping[str, Any] | None
     ) -> NotificationContent:
         """Render a template's content with the given variables.
 
