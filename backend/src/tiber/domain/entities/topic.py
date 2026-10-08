@@ -4,7 +4,6 @@ from uuid import UUID, uuid4
 
 from ..enums import NotificationCategory
 from ..exceptions import InvalidEntityAttributeError
-from ..services import set_enum_attribute
 from ..services.slug import SLUG_RE, derive_slug, require_derivable_name
 
 
@@ -22,8 +21,6 @@ class NotificationTopic:
 
     def __post_init__(self) -> None:
         """Validate the topic's state after initialization."""
-        set_enum_attribute(self, "category", NotificationCategory, self.category)
-
         if not self.title or not self.title.strip():
             raise InvalidEntityAttributeError("Topic title must not be empty")
 
@@ -83,5 +80,4 @@ class NotificationTopic:
 
     def update_category(self, category: NotificationCategory) -> NotificationTopic:
         """Change the category of a topic."""
-        validated_category = NotificationCategory(category)
-        return replace(self, category=validated_category, updated_at=datetime.now(UTC))
+        return replace(self, category=category, updated_at=datetime.now(UTC))

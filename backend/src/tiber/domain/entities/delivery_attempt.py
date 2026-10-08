@@ -4,7 +4,6 @@ from uuid import UUID, uuid4
 
 from ..enums import DeliveryAttemptStatus, DeliveryChannel
 from ..exceptions import InvalidEntityAttributeError
-from ..services import set_enum_attribute
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,9 +26,6 @@ class DeliveryAttempt:
 
     def __post_init__(self) -> None:
         """Validate the delivery attempt's state after initialization."""
-        set_enum_attribute(self, "status", DeliveryAttemptStatus, self.status)
-        set_enum_attribute(self, "channel", DeliveryChannel, self.channel)
-
         if not self.provider or not self.provider.strip():
             raise InvalidEntityAttributeError(
                 "DeliveryAttempt provider must not be empty"

@@ -9,7 +9,6 @@ from ..enums import (
     SendTimeBasis,
 )
 from ..exceptions import InvalidEntityAttributeError, InvalidStateTransitionError
-from ..services import set_enum_attribute
 from ..value_objects import NotificationContent
 
 
@@ -44,17 +43,6 @@ class Notification:
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""
-        channels = frozenset(
-            DeliveryChannel(channel.lower()) for channel in self.channels
-        )
-        object.__setattr__(self, "channel", channels)
-        set_enum_attribute(self, "category", NotificationCategory, self.category)
-        set_enum_attribute(self, "status", NotificationStatus, self.status)
-        if self.send_time_basis is not None:
-            set_enum_attribute(
-                self, "send_time_basis", SendTimeBasis, self.send_time_basis
-            )
-
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise InvalidEntityAttributeError(
                 "`send_at` must not be set for CRITICAL notifications. They are sent immediately."

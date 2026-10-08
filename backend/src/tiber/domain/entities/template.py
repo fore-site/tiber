@@ -78,9 +78,8 @@ class Template:
 
     def remove_variant(self, channel: DeliveryChannel) -> Template:
         """Remove a template variant."""
-        validated_channel = DeliveryChannel(channel)
         variants_copy = self.variants.copy()
-        variants_copy.pop(validated_channel, None)
+        variants_copy.pop(channel, None)
         return replace(self, variants=variants_copy, updated_at=datetime.now(UTC))
 
     def rename(self, name: str) -> Template:

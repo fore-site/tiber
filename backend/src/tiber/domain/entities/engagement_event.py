@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel, EngagementEventType
-from ..services import set_enum_attribute
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -21,11 +20,6 @@ class EngagementEvent:
     metadata: dict | None = None
     is_synthetic: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-    def __post_init__(self) -> None:
-        """Validate the engagement event's state after initialization."""
-        set_enum_attribute(self, "event_type", EngagementEventType, self.event_type)
-        set_enum_attribute(self, "channel", DeliveryChannel, self.channel)
 
     @classmethod
     def create(
