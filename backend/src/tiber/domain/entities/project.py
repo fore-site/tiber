@@ -1,9 +1,31 @@
+import re
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from typing import Final
 from uuid import UUID, uuid4
 
 from ..exceptions import InvalidEntityAttributeError
-from ..services.slug import SLUG_RE, derive_slug, require_derivable_name
+
+_SLUG_RE: Final = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+_SLUG_TOKEN_RE: Final = re.compile(r"[a-z0-9]+")
+
+
+def _derive_slug(name: str) -> str:
+    """Derive a URL-safe slug from a project name.
+
+    Lowercase ASCII letters and digits are kept as tokens and joined with
+    single hyphens. All other characters are treated as token separators and discarded.
+    """
+    return "-".join(_SLUG_TOKEN_RE.findall(name.lower()))
+
+
+def _require_derivable_name(name: str) -> None:
+    """Raise unless the name can produce a non-empty slug."""
+    if not _derive_slug(name):
+        raise InvalidEntityAttributeError(
+            "Project name must contain at least one ASCII letter or "
+            f"digit for slug derivation (got: {name!r})"
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -25,10 +47,10 @@ class Project:
             raise InvalidEntityAttributeError("Project name must not be empty")
 
         if self.slug is None:
-            require_derivable_name(self.name)
-            object.__setattr__(self, "slug", derive_slug(self.name))
+            _require_derivable_name(self.name)
+            object.__setattr__(self, "slug", _derive_slug(self.name))
 
-        if self.slug and not SLUG_RE.fullmatch(self.slug):
+        if self.slug and not _SLUG_RE.fullmatch(self.slug):
             raise InvalidEntityAttributeError(
                 "Project slug must be lowercase letters and digits separated "
                 "by single hyphens, with no leading or trailing hyphen "
@@ -75,11 +97,11 @@ class Project:
         """Rename the project; the slug follows the name."""
         if not name or not name.strip():
             raise InvalidEntityAttributeError("Project name must not be empty")
-        require_derivable_name(name)
+        _require_derivable_name(name)
 
         return replace(
             self,
             name=name,
-            slug=derive_slug(name),
+            slug=_derive_slug(name),
             updated_at=datetime.now(UTC),
         )
