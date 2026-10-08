@@ -20,8 +20,6 @@ class QuietHours:
 
     def __post_init__(self):
         """Validate the value object's invariants after initialization."""
-        object.__setattr__(self, "channel", DeliveryChannel(self.channel.lower()))
-
         if self.window_start == self.window_end:
             raise ValueError(
                 f"Single-instant restriction is not allowed. window_start ({self.window_start}) cannot be equal to window_end ({self.window_end})"

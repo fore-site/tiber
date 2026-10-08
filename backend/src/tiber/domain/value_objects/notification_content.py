@@ -56,19 +56,6 @@ class NotificationContent:
         if not self.body or not self.body.strip():
             raise ValueError("Notification content body must not be empty")
 
-        # Accept lists from wire/adapter code, normalize to tuples so the
-        # frozen VO stays hashable and genuinely immutable.
-        if isinstance(self.actions, list):
-            object.__setattr__(self, "actions", tuple(self.actions))
-        if isinstance(self.images, list):
-            object.__setattr__(self, "images", tuple(self.images))
-        for action in self.actions:
-            if not isinstance(action, ContentAction):
-                raise ValueError("actions must contain ContentAction values")
-        for image in self.images:
-            if not isinstance(image, ContentImage):
-                raise ValueError("images must contain ContentImage values")
-
     def to_dict(self) -> dict:
         """Serialize to a plain JSON-shaped dict.
 
@@ -85,13 +72,7 @@ class NotificationContent:
 
     @classmethod
     def from_dict(cls, data: dict) -> NotificationContent:
-        """Rebuild content from its JSON-shaped dict form.
-
-        Raises ValueError (not KeyError) on malformed data so corrupt stored
-        rows surface as invalid content, not as crashes with unclear origin.
-        """
-        if not isinstance(data, dict):
-            raise ValueError("content must be a JSON object")
+        """Rebuild content from its JSON-shaped dict form."""
         try:
             body = data["body"]
         except KeyError:

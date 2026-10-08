@@ -26,26 +26,11 @@ class RecipientPreferences:
 
     def __post_init__(self) -> None:
         """Normalize inputs and enforce a CRITICAL-unstorable invariant."""
-        channels = frozenset(
-            DeliveryChannel(channel.lower()) for channel in self.opted_out_channels
-        )
-
-        categories = frozenset(
-            NotificationCategory(category.lower())
-            for category in self.unsubscribed_categories
-        )
-
-        topics = frozenset(self.unsubscribed_topics)
-
-        if NotificationCategory.CRITICAL in categories:
+        if NotificationCategory.CRITICAL in self.unsubscribed_categories:
             raise ValueError(
                 "CRITICAL notifications are always deliverable and cannot "
                 "be unsubscribed from"
             )
-
-        object.__setattr__(self, "opted_out_channels", channels)
-        object.__setattr__(self, "unsubscribed_categories", categories)
-        object.__setattr__(self, "unsubscribed_topics", topics)
 
     def is_subscribed(self, category: NotificationCategory) -> bool:
         """Return whether the recipient receives this notification category.
