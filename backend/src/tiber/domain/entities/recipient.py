@@ -126,6 +126,41 @@ class Recipient:
             archived_at=archived_at,
         )
 
+    def claim(
+        self, external_id: str, addresses: dict[DeliveryChannel, str]
+    ) -> Recipient:
+        """Attach a human identity and its addresses.
+
+        Merges the incoming addresses over the existing ones (incoming wins
+        on key collision) and stamps ``external_id``. Preconditions:
+
+        - ``external_id`` must be non-empty.
+        - The recipient must be ownerless: a claimed recipient cannot be
+          re-claimed. Uniqueness of ``(project_id, external_id)`` across
+          recipients is a database guarantee; this only enforces the
+          single-recipient invariant.
+        - The merged state must stay valid (post_init): every opted-out
+          channel must retain an address after the merge.
+
+        Registration with an address owned by a *different registered*
+        recipient is a caller-visible conflict; the domain
+        cannot detect it - the caller queries first, and the database
+        constraint backs the race.
+        """
+        if not external_id or not external_id.strip():
+            raise ValueError("external_id must be a non-empty string")
+        if self.external_id is not None:
+            raise ValueError("Recipient is already claimed and cannot be re-claimed")
+
+        # Merge is never empty: self.addresses is non-empty by invariant.
+        merged = {**self.addresses, **addresses}
+        return replace(
+            self,
+            external_id=external_id.strip(),
+            addresses=merged,
+            updated_at=datetime.now(UTC),
+        )
+
     def update_addresses(self, addresses: dict[DeliveryChannel, str]) -> Recipient:
         """Return a copy with the given addresses replacing the old set.
 
