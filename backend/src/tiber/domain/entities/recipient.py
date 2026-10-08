@@ -37,19 +37,8 @@ class Recipient:
         if not self.addresses:
             raise InvalidEntityAttributeError("Recipient addresses must not be empty")
 
-        try:
-            # Validate address keys
-            normalized_addresses = {
-                DeliveryChannel(key.lower()): value
-                for key, value in self.addresses.items()
-            }
-        except ValueError as e:
-            raise InvalidEntityAttributeError(
-                "Invalid key provided in field 'addresses'"
-            ) from e
-
         opted_out_channels = self.preferences.opted_out_channels
-        unavailable_channels = set(opted_out_channels) - set(normalized_addresses)
+        unavailable_channels = set(opted_out_channels) - set(self.addresses)
         if unavailable_channels:
             raise ValueError(
                 "Recipient opted-out channels must have configured destination addresses: "
@@ -70,15 +59,13 @@ class Recipient:
                 f"'pt-BR' (got: {self.language!r})"
             )
 
-        object.__setattr__(self, "addresses", normalized_addresses)
-
     @classmethod
     def create(
         cls,
         *,
         project_id: UUID,
         addresses: dict[DeliveryChannel, str],
-        preferences: RecipientPreferences,
+        preferences: RecipientPreferences | None = None,
         external_id: str | None = None,
         timezone: str | None = None,
         language: str | None = None,
@@ -87,7 +74,7 @@ class Recipient:
         return cls(
             project_id=project_id,
             addresses=addresses,
-            preferences=preferences,
+            preferences=preferences or RecipientPreferences(),
             external_id=external_id,
             timezone=timezone,
             language=language,
