@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel
 from ..exceptions import InvalidEntityAttributeError
+from ..services.slug import SLUG_RE, derive_slug, require_derivable_name
 from ..value_objects import TemplateVariant
 
 
@@ -14,6 +15,7 @@ class Template:
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     name: str
+    template_slug: str | None = None
     variants: dict[DeliveryChannel, TemplateVariant] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -22,6 +24,17 @@ class Template:
         """Validate the template's state after initialization."""
         if not self.name or not self.name.strip():
             raise InvalidEntityAttributeError("Template name must not be empty")
+
+        if self.template_slug is None:
+            require_derivable_name(self.name)
+            object.__setattr__(self, "template_slug", derive_slug(self.name))
+
+        if self.template_slug and not SLUG_RE.fullmatch(self.template_slug):
+            raise InvalidEntityAttributeError(
+                "Template slug must be lowercase letters and digits separated "
+                "by single hyphens, with no leading or trailing hyphen "
+                f"(got: {self.template_slug!r})"
+            )
 
     @classmethod
     def create(
@@ -70,6 +83,15 @@ class Template:
         variants_copy.pop(validated_channel, None)
         return replace(self, variants=variants_copy, updated_at=datetime.now(UTC))
 
-    def update_name(self, new_name: str) -> Template:
-        """Return a new Template aggregate instance with updated name."""
-        return replace(self, name=new_name, updated_at=datetime.now(UTC))
+    def rename(self, name: str) -> Template:
+        """Rename the template; the slug follows the name."""
+        if not name or not name.strip():
+            raise InvalidEntityAttributeError("Template name must not be empty")
+        require_derivable_name(name)
+
+        return replace(
+            self,
+            name=name,
+            template_slug=derive_slug(name),
+            updated_at=datetime.now(UTC),
+        )
