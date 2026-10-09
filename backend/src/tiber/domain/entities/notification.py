@@ -23,6 +23,7 @@ class Notification:
     channel: DeliveryChannel
     category: NotificationCategory
     content: NotificationContent
+    send_time_basis: SendTimeBasis
 
     # Optional / nullable fields
 
@@ -33,7 +34,6 @@ class Notification:
     group_key: str | None = None
     idempotency_key: str | None = None
     send_at: datetime | None = None
-    send_time_basis: SendTimeBasis | None = None
     suppression_reason: str | None = None
     cancellation_reason: str | None = None
     failure_reason: str | None = None
@@ -52,17 +52,6 @@ class Notification:
             raise InvalidEntityAttributeError(
                 "`send_at` must be timezone-aware (UTC or other)"
             )
-
-        # Intake-time classification: runs only when the caller did not
-        # supply a basis. This is a one-time decision at creation, NOT a
-        # standing invariant.
-        if self.send_time_basis is None:
-            if self.send_at is not None:
-                object.__setattr__(self, "send_time_basis", SendTimeBasis.EXPLICIT)
-            elif self.category is NotificationCategory.CRITICAL:
-                object.__setattr__(self, "send_time_basis", SendTimeBasis.IMMEDIATE)
-            else:
-                object.__setattr__(self, "send_time_basis", SendTimeBasis.ML_PREDICTED)
 
         # Invariants coupling the stored basis to the rest of the state..
         if self.send_time_basis is SendTimeBasis.EXPLICIT and self.send_at is None:
@@ -166,6 +155,7 @@ class Notification:
         group_key: str | None = None,
         idempotency_key: str | None = None,
         send_at: datetime | None = None,
+        send_time_basis: SendTimeBasis,
     ) -> Notification:
         """Create a new pending notification with system-generated identity.
 
@@ -187,6 +177,7 @@ class Notification:
             group_key=group_key,
             idempotency_key=idempotency_key,
             send_at=send_at,
+            send_time_basis=send_time_basis,
         )
 
     @classmethod
