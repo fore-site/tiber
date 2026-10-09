@@ -20,12 +20,12 @@ class Notification:
     project_id: UUID
     recipient_id: UUID
     correlation_id: UUID
-    channels: frozenset[DeliveryChannel]
+    channel: DeliveryChannel
     category: NotificationCategory
+    content: NotificationContent
 
     # Optional / nullable fields
 
-    content: NotificationContent | None = None
     status: NotificationStatus = NotificationStatus.PENDING
     topic_id: UUID | None = None
     template_id: UUID | None = None
@@ -157,10 +157,10 @@ class Notification:
         project_id: UUID,
         recipient_id: UUID,
         correlation_id: UUID,
-        channels: list[DeliveryChannel],
+        channel: DeliveryChannel,
         category: NotificationCategory,
         topic_id: UUID | None = None,
-        content: NotificationContent | None = None,
+        content: NotificationContent,
         template_id: UUID | None = None,
         template_variables: dict[str, str] | None = None,
         group_key: str | None = None,
@@ -178,7 +178,7 @@ class Notification:
             project_id=project_id,
             recipient_id=recipient_id,
             correlation_id=correlation_id,
-            channels=frozenset(channels),
+            channel=channel,
             category=category,
             topic_id=topic_id,
             content=content,
@@ -197,10 +197,10 @@ class Notification:
         project_id: UUID,
         recipient_id: UUID,
         correlation_id: UUID,
-        channels: list[DeliveryChannel],
+        channel: DeliveryChannel,
         category: NotificationCategory,
         topic_id: UUID | None,
-        content: NotificationContent | None,
+        content: NotificationContent,
         status: NotificationStatus,
         created_at: datetime,
         updated_at: datetime,
@@ -226,7 +226,7 @@ class Notification:
             project_id=project_id,
             recipient_id=recipient_id,
             correlation_id=correlation_id,
-            channels=frozenset(channels),
+            channel=channel,
             category=category,
             topic_id=topic_id,
             content=content,
