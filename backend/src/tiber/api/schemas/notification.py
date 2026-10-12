@@ -239,6 +239,13 @@ class NotificationCreateRequest(BaseModel):
         if self.send_at is not None and self.send_at.tzinfo is None:
             raise ValueError("`send_at` must be timezone-aware (UTC or other)")
 
+        # Group_key
+        if self.group_key is not None:
+            if not isinstance(self.group_key, str) or not self.group_key.strip():
+                raise ValueError("`group_key` must be a non-empty string when provided")
+            if len(self.group_key) > 255:
+                raise ValueError("`group_key` must be at most 255 characters")
+
         return self
 
 
