@@ -8,25 +8,14 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from ...domain.entities import Notification
+from ...domain.enums import DeliveryChannel, NotificationCategory, NotificationStatus
 from ...domain.value_objects import (
     ContentAction,
     ContentImage,
     NotificationContent,
 )
 
-ChannelName = Literal["email", "sms", "push", "in_app"]
 _ADDRESS_FIELDS = ("email", "sms", "push", "in_app")
-Category = Literal["critical", "informational", "social", "promotional"]
-NotificationStatus = Literal[
-    "pending",
-    "processing",
-    "delivered",
-    "failed",  # Internal, network, or provider outages
-    "bounced",  # Recipient-side rejection
-    "suppressed",  # System-level intentional drops
-    "postponed",
-    "cancelled",
-]
 
 
 def _client_key(stored: str | None, channel: str) -> str | None:
@@ -143,7 +132,7 @@ class NotificationCreateRequest(BaseModel):
         description="Client's own recipient identifier for the selected channel.",
     )
 
-    channels: list[ChannelName] | None = Field(
+    channels: list[DeliveryChannel] | None = Field(
         default=None,
         description=(
             "Restrict delivery to these channels. Only valid with ``recipient_id``. "
@@ -158,7 +147,7 @@ class NotificationCreateRequest(BaseModel):
     push: str | None = Field(default=None, min_length=1)
     in_app: str | None = Field(default=None, min_length=1)
 
-    category: Category | None = Field(
+    category: NotificationCategory | None = Field(
         default=None,
         description="Delivery category; drives policy treatment (e.g. CRITICAL bypasses quiet hours).",
     )
@@ -194,10 +183,12 @@ class NotificationCreateRequest(BaseModel):
         """Get a set of client-provided addresses."""
         return {c for c in _ADDRESS_FIELDS if getattr(self, c) is not None}
 
-    def address_map(self) -> dict[ChannelName, str]:
+    def address_map(self) -> dict[DeliveryChannel, str]:
         """Supplied addresses keyed by channel name (route maps to DeliveryChannel)."""
         return {
-            c: getattr(self, c) for c in _ADDRESS_FIELDS if getattr(self, c) is not None
+            DeliveryChannel(c): getattr(self, c)
+            for c in _ADDRESS_FIELDS
+            if getattr(self, c) is not None
         }
 
     @model_validator(mode="after")
@@ -261,14 +252,14 @@ class NotificationResponse(BaseModel):
     )
 
     recipient_id: str | None = None
-    channel: ChannelName
+    channel: DeliveryChannel
 
     address: str | None = Field(
         default=None,
         description="Masked destination. Only returned for requests that supplied addresses.",
     )
 
-    category: Category
+    category: NotificationCategory
     template_slug: str | None = None
     topic_slug: str | None = None
     group_key: str | None = None
@@ -308,18 +299,16 @@ class NotificationResponse(BaseModel):
             project_id=n.project_id,
             correlation_id=n.correlation_id,
             recipient_id=recipient_id,
-            channel=n.channel.value,
+            channel=n.channel,
             address=mask_address(n.channel.value, address),
-            category=n.category.value,
+            category=n.category,
             template_slug=template_slug,
             topic_slug=topic_slug,
             group_key=n.group_key,
             content=NotificationContentModel(**n.content.to_dict()),
-            status=n.status.value,
+            status=n.status,
             send_at=n.send_at,
-            send_time_basis=n.send_time_basis.value
-            if n.send_time_basis
-            else "immediate",
+            send_time_basis=n.send_time_basis.value,
             delivered_at=n.delivered_at,
             idempotency_key=_client_key(n.idempotency_key, n.channel),
             suppression_reason=n.suppression_reason,
@@ -331,7 +320,7 @@ class NotificationResponse(BaseModel):
 
 
 class NotificationBatchResponse(BaseModel):
-    """Result of a create request: one notification per resolved channel."""
+    """Fetch batch notification linked by correlation_id: one notification per resolved channel."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -366,4 +355,21 @@ class NotificationBatchResponse(BaseModel):
                 )
                 for n in notifications
             ],
+        )
+
+
+class NotificationCreateResponse(BaseModel):
+    """Response of a notification send request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: UUID
+    correlation_id: UUID
+
+    @classmethod
+    def from_input(cls, project_id: UUID, correlation_id: UUID):
+        """DTO response from input."""
+        return cls(
+            project_id=project_id,
+            correlation_id=correlation_id,
         )
