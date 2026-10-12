@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from ...application.services import NotificationService
+from ...core.logging import get_correlation_id
 from ...infrastructure.models import ProjectModel
 from ...infrastructure.rate_limit.ingestion_rate_limiter import IngestionRateLimiter
 from ..dependencies import (
@@ -15,6 +16,7 @@ from ..dependencies import (
 )
 from ..schemas.notification import (
     NotificationCreateRequest,
+    NotificationCreateResponse,
     NotificationResponse,
 )
 
@@ -24,7 +26,7 @@ router = APIRouter()
 @router.post(
     "/projects/{project_id}/notifications",
     response_model=NotificationResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def create_notification(
     payload: NotificationCreateRequest,
@@ -46,9 +48,9 @@ async def create_notification(
     ],
     correlation_id: Annotated[
         str | None,
-        Header(alias="X-Correlation-ID"),
-    ] = None,
-) -> NotificationResponse:
+        Depends(get_correlation_id),
+    ],
+) -> NotificationCreateResponse:
     """Create a notification.
 
     Requires an ``Idempotency-Key`` header. A repeated submission with the
@@ -62,19 +64,23 @@ async def create_notification(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Ingestion rate limit exceeded.",
         )
-    notification = await service.create_notification(
+    cid = UUID(correlation_id) if correlation_id else uuid4()
+    await service.create_notification(
         project_id=project.id,
         recipient_id=payload.recipient_id,
-        channel=payload.channel,
-        subject=payload.subject,
-        body=payload.body,
-        template_id=payload.template_id,
+        category=payload.category,
+        topic_slug=payload.topic_slug,
+        channels=payload.channels,
+        addresses=payload.address_map(),
+        content=payload.content.to_domain() if payload.content is not None else None,
+        template_slug=payload.template_slug,
         template_variables=payload.template_variables,
         idempotency_key=idempotency_key,
-        correlation_id=UUID(correlation_id) if correlation_id else uuid4(),
-        scheduled_at=payload.scheduled_at,
+        group_key=payload.group_key,
+        correlation_id=cid,
+        send_at=payload.send_at,
     )
-    return NotificationResponse.from_entity(notification)
+    return NotificationCreateResponse.from_input(project.id, cid)
 
 
 @router.get(
