@@ -43,48 +43,7 @@ class Notification:
 
     def __post_init__(self) -> None:
         """Validate the notification entity's state after initialization."""
-        if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
-            raise InvalidEntityAttributeError(
-                "`send_at` must not be set for CRITICAL notifications. They are sent immediately."
-            )
-
-        if self.send_at is not None and self.send_at.tzinfo is None:
-            raise InvalidEntityAttributeError(
-                "`send_at` must be timezone-aware (UTC or other)"
-            )
-
-        # Invariants coupling the stored basis to the rest of the state..
-        if self.send_time_basis is SendTimeBasis.EXPLICIT and self.send_at is None:
-            raise InvalidEntityAttributeError(
-                "`send_at` is required when send_time_basis is EXPLICIT"
-            )
-        if (
-            self.send_time_basis is SendTimeBasis.IMMEDIATE
-            and self.category is not NotificationCategory.CRITICAL
-        ):
-            raise InvalidEntityAttributeError(
-                "send_time_basis IMMEDIATE is only valid for CRITICAL notifications"
-            )
-        if (
-            self.category is NotificationCategory.CRITICAL
-            and self.send_time_basis is not SendTimeBasis.IMMEDIATE
-        ):
-            raise InvalidEntityAttributeError(
-                "CRITICAL notifications must have send_time_basis IMMEDIATE"
-            )
-
-        # 1b. group_key: opaque client-supplied identity, never parsed.
-        if self.group_key is not None:
-            if not isinstance(self.group_key, str) or not self.group_key.strip():
-                raise InvalidEntityAttributeError(
-                    "`group_key` must be a non-empty string when provided"
-                )
-            if len(self.group_key) > 255:
-                raise InvalidEntityAttributeError(
-                    "`group_key` must be at most 255 characters"
-                )
-
-        # 2. suppressed to reason consistency
+        # suppressed to reason consistency
         if self.status is NotificationStatus.SUPPRESSED:
             if self.suppression_reason is None:
                 raise InvalidEntityAttributeError(
@@ -96,7 +55,7 @@ class Notification:
                     "`suppression_reason` must only be set when status is SUPPRESSED"
                 )
 
-        # 2c. cancellation reason is optional (clients cancel freely),
+        # cancellation reason is optional (clients cancel freely),
         # but it is only representable on a cancelled notification.
         if (
             self.status is not NotificationStatus.CANCELLED
@@ -106,7 +65,7 @@ class Notification:
                 "`cancellation_reason` must only be set when status is CANCELLED"
             )
 
-        # 2b. failed/bounced to reason consistency
+        # failed/bounced to reason consistency
         if (
             self.status is NotificationStatus.FAILED
             or self.status is NotificationStatus.BOUNCED
@@ -121,7 +80,7 @@ class Notification:
                     "`failure_reason` must only be set when status is FAILED or BOUNCED."
                 )
 
-        # 3. delivered status ↔ delivered_at consistency
+        # delivered status ↔ delivered_at consistency
         if self.status is NotificationStatus.DELIVERED:
             if self.delivered_at is None:
                 raise InvalidEntityAttributeError(
@@ -133,7 +92,7 @@ class Notification:
                     "`delivered_at` must only be set when status is DELIVERED"
                 )
 
-        # 4. postponed status ↔ resume time consistency.
+        # postponed status ↔ resume time consistency.
         if self.status is NotificationStatus.POSTPONED and self.send_at is None:
             raise InvalidEntityAttributeError(
                 "`send_at` is required when status is POSTPONED (the resume time)"
