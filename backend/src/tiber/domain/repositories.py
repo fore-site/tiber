@@ -10,6 +10,7 @@ One repository per persisted domain entity, mirroring the domain model.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Protocol
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from .entities import (
     DeliveryConstraint,
     EngagementEvent,
     Notification,
+    NotificationIntake,
     NotificationTopic,
     Project,
     Recipient,
@@ -88,6 +90,12 @@ class NotificationRepository(Protocol):
         self, project_id: UUID, limit: int, offset: int
     ) -> list[Notification]:
         """List all notifications for a project with pagination."""
+        ...
+
+    async def list_by_correlation_id(
+        self, correlation_id: UUID, project_id: UUID
+    ) -> list[Notification]:
+        """All notifications created by one request, oldest first."""
         ...
 
 
@@ -167,6 +175,12 @@ class RecipientRepository(Protocol):
         """
         ...
 
+    async def find_by_addresses(
+        self, project_id: UUID, addresses: Mapping[DeliveryChannel, str]
+    ) -> list[Recipient]:
+        """Return distinct, NON-ARCHIVED recipients holding any of the ``(channel, address)`` pairs."""
+        ...
+
     async def list_by_project(
         self, project_id: UUID, limit: int, offset: int
     ) -> list[Recipient]:
@@ -199,6 +213,12 @@ class NotificationTopicRepository(Protocol):
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> NotificationTopic | None:
         """Get a notification topic by its ID."""
+        ...
+
+    async def get_by_slug(
+        self, slug: str, project_id: UUID
+    ) -> NotificationTopic | None:
+        """Get a notification topic by its slug."""
         ...
 
     async def get_by_title(
@@ -284,4 +304,39 @@ class EngagementEventRepository(Protocol):
         self, recipient_id: UUID, limit: int, offset: int
     ) -> list[EngagementEvent]:
         """List all engagement events for a recipient."""
+        ...
+
+
+class NotificationIntakeRepository(Protocol):
+    """Contract for notification intake data access."""
+
+    async def add(self, intake: NotificationIntake) -> None:
+        """Insert NotificationIntake.
+
+        Raises ``IntakeAlreadyExistsError`` when ``(project_id, idempotency_key)`` is taken.
+        Use a savepoint or ON CONFLICT DO NOTHING so the surrounding transaction stays usable and
+        the caller can re-read the winner.
+        """
+        ...
+
+    async def get_by_correlation_id(
+        self, correlation_id: UUID, project_id: UUID
+    ) -> NotificationIntake | None:
+        """Get a notification made from a request."""
+        ...
+
+    async def get_by_idempotency_key(
+        self, project_id: UUID, idempotency_key: str
+    ) -> NotificationIntake | None:
+        """Get notification by idempotency key."""
+        ...
+
+    async def get_for_update(self, intake_id: UUID) -> NotificationIntake | None:
+        """SELECT ... FOR UPDATE SKIP LOCKED.
+
+        Returns None if the row is missing or locked by another worker.
+        """
+
+    async def save(self, intake: NotificationIntake) -> None:
+        """Save NotificationIntake."""
         ...
