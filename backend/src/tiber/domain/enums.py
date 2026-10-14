@@ -112,3 +112,19 @@ class WebhookEventType(StrEnum):
     NOTIFICATION_BOUNCED = "notification.bounced"
     NOTIFICATION_CANCELLED = "notification.cancelled"
     NOTIFICATION_SUPPRESSED = "notification.suppressed"
+
+
+class IntakeStatus(StrEnum):
+    """Lifecycle of a notification intake (the accepted, not-yet-expanded request).
+
+    RECEIVED   -> accepted and queued; no worker has touched it
+    PROCESSING -> claimed by a worker (a lease; a stale lease can be reclaimed)
+    COMPLETED  -> children created and dispatch messages queued
+    FAILED     -> deterministic failure. Constraints are meant to make this
+                  unreachable, so a FAILED intake means a bug or exhausted retries.
+    """
+
+    RECEIVED = "received"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
