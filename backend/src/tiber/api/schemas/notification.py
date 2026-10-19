@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
-from typing import Any, Literal, Self
+from typing import Any, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from ...domain.entities import Notification
-from ...domain.enums import DeliveryChannel, NotificationCategory, NotificationStatus
+from ...domain.enums import (
+    DeliveryChannel,
+    NotificationCategory,
+    NotificationStatus,
+    SendTimeBasis,
+)
 from ...domain.value_objects import (
     ContentAction,
     ContentImage,
@@ -17,13 +22,9 @@ from ...domain.value_objects import (
 
 _ADDRESS_FIELDS = ("email", "sms", "push", "in_app")
 
-
-def _client_key(stored: str | None, channel: str) -> str | None:
-    """Strip the per-channel suffix so clients see the key they sent."""
-    if stored is None:
-        return None
-    suffix = f":{channel}"
-    return stored.removesuffix(suffix)
+# E.164. Recipient matching compares address strings, so '0803...' and
+# '+234803...' must not both be accepted or they become two recipients.
+_E164_PATTERN = r"^\+[1-9]\d{6,14}$"
 
 
 def mask_address(channel: str, address: str | None) -> str | None:
@@ -129,7 +130,10 @@ class NotificationCreateRequest(BaseModel):
 
     recipient_id: str | None = Field(
         default=None,
-        description="Client's own recipient identifier for the selected channel.",
+        description=(
+            "Client's own identifier for a registered recipient. "
+            "Omit it when supplying channel addresses instead."
+        ),
     )
 
     channels: list[DeliveryChannel] | None = Field(
@@ -138,18 +142,29 @@ class NotificationCreateRequest(BaseModel):
             "Restrict delivery to these channels. Only valid with ``recipient_id``. "
             "Omit to let the ML ranker choose among the recipient's registered channels. "
             "Every listed channel must have a registered address. "
-            "All listed channels are delivered in parallel; list order carries no priority. "
+            "All listed channels are delivered in parallel; list order carries no priority."
         ),
     )
 
+    # Address-based delivery: every address provided is delivered to. To skip a
+    # channel, omit its address.
     email: EmailStr | None = None
-    sms: str | None = Field(default=None, min_length=1)
+    sms: str | None = Field(
+        default=None,
+        pattern=_E164_PATTERN,
+        description="Phone number in international E.164 format, e.g. +2348031234567.",
+    )
     push: str | None = Field(default=None, min_length=1)
     in_app: str | None = Field(default=None, min_length=1)
 
     category: NotificationCategory | None = Field(
         default=None,
-        description="Delivery category; drives policy treatment (e.g. CRITICAL bypasses quiet hours).",
+        description=(
+            "Omit only for non-urgent notifications. "
+            "If omitted, the category is inferred and the notification is never "
+            "treated as critical, so it may be delayed by quiet hours or "
+            "send-time optimization."
+        ),
     )
 
     group_key: str | None = None
@@ -176,7 +191,14 @@ class NotificationCreateRequest(BaseModel):
         ),
     )
 
-    idempotency_key: str | None = None
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Client-supplied key making retries safe. Reusing a key with a "
+            "different request body is rejected."
+        ),
+    )
 
     @property
     def adhoc_channels(self) -> set[str]:
@@ -221,7 +243,7 @@ class NotificationCreateRequest(BaseModel):
             raise ValueError("`template_variables` requires `template_slug`.")
 
         # Category
-        if self.category == "critical" and self.send_at is not None:
+        if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise ValueError(
                 "`send_at` must not be set for CRITICAL notifications. They are sent immediately."
             )
@@ -269,7 +291,7 @@ class NotificationResponse(BaseModel):
 
     status: NotificationStatus
     send_at: datetime | None = None
-    send_time_basis: Literal["immediate", "explicit", "ml_predicted"]
+    send_time_basis: SendTimeBasis
     delivered_at: datetime | None = None
 
     idempotency_key: str | None = Field(
@@ -308,9 +330,10 @@ class NotificationResponse(BaseModel):
             content=NotificationContentModel(**n.content.to_dict()),
             status=n.status,
             send_at=n.send_at,
-            send_time_basis=n.send_time_basis.value,
+            send_time_basis=n.send_time_basis,
             delivered_at=n.delivered_at,
-            idempotency_key=_client_key(n.idempotency_key, n.channel),
+            # Stored unchanged: children of one request share the client's key.
+            idempotency_key=n.idempotency_key,
             suppression_reason=n.suppression_reason,
             cancellation_reason=n.cancellation_reason,
             failure_reason=n.failure_reason,
@@ -333,18 +356,22 @@ class NotificationBatchResponse(BaseModel):
         correlation_id: UUID,
         notifications: Sequence[Notification],
         *,
-        address: str | None,
+        addresses: Mapping[DeliveryChannel, str] | None,
         recipient_id: str | None,
         template_slugs: Mapping[UUID, str],
         topic_slugs: Mapping[UUID, str],
     ) -> NotificationBatchResponse:
-        """Build response from domain entity."""
+        """Build response from domain entities.
+
+        ``addresses`` maps each channel to its destination, so every child shows
+        its own channel's address. Pass ``None`` for registered recipients.
+        """
         return cls(
             correlation_id=correlation_id,
             notifications=[
                 NotificationResponse.from_entity(
                     n,
-                    address=address,
+                    address=addresses.get(n.channel) if addresses else None,
                     recipient_id=recipient_id,
                     template_slug=template_slugs.get(n.template_id)
                     if n.template_id is not None
@@ -367,7 +394,9 @@ class NotificationCreateResponse(BaseModel):
     correlation_id: UUID
 
     @classmethod
-    def from_input(cls, project_id: UUID, correlation_id: UUID):
+    def from_input(
+        cls, project_id: UUID, correlation_id: UUID
+    ) -> NotificationCreateResponse:
         """DTO response from input."""
         return cls(
             project_id=project_id,

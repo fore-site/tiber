@@ -4,6 +4,7 @@ from .delivery_attempt import DeliveryAttempt
 from .delivery_constraint import DeliveryConstraint
 from .engagement_event import EngagementEvent
 from .notification import Notification
+from .notification_intake import NotificationIntake
 from .project import Project
 from .recipient import Recipient
 from .template import Template
@@ -17,6 +18,7 @@ __all__ = [
     "DeliveryConstraint",
     "EngagementEvent",
     "Notification",
+    "NotificationIntake",
     "NotificationTopic",
     "Project",
     "Recipient",

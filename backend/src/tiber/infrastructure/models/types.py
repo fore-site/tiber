@@ -7,6 +7,7 @@ from ...domain.enums import (
     MLModelStatus,
     MLModelType,
     MLPriority,
+    NotificationCategory,
     NotificationStatus,
     SendTimeBasis,
     TrainingRunStatus,
@@ -21,6 +22,11 @@ def _pg_enum(enum_cls, *, name: str) -> postgresql.ENUM:
     # types, which use lowercase values. Deliberately not bound to the Python
     # enum class: a StrEnum member assigned to a column is a str subclass
     # equal to its value, so it validates/persists as that lowercase value.
+    #
+    # Consequence for readers: a value LOADED from such a column is a plain
+    # ``str``, not an enum member. Repositories must convert it back
+    # (``SendTimeBasis(model.send_time_basis)``) because the domain compares
+    # members with ``is``.
     values = [member.value for member in enum_cls]
     return postgresql.ENUM(*values, name=name, create_type=False)
 
@@ -30,6 +36,8 @@ def _pg_enum(enum_cls, *, name: str) -> postgresql.ENUM:
 DeliveryChannelType = _pg_enum(DeliveryChannel, name="delivery_channel")
 
 NotificationStatusType = _pg_enum(NotificationStatus, name="notification_status")
+
+NotificationCategoryType = _pg_enum(NotificationCategory, name="notification_category")
 
 DeliveryAttemptStatusType = _pg_enum(
     DeliveryAttemptStatus, name="delivery_attempt_status"

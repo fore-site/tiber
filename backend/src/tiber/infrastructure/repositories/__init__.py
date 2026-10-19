@@ -4,6 +4,9 @@ from .sqlalchemy_delivery_constraint_repository import (
     SQLAlchemyDeliveryConstraintRepository,
 )
 from .sqlalchemy_notification_repository import SQLAlchemyNotificationRepository
+from .sqlalchemy_notification_topic_repository import (
+    SQLAlchemyNotificationTopicRepository,
+)
 from .sqlalchemy_recipient_repository import SQLAlchemyRecipientRepository
 from .sqlalchemy_template_repository import SQLAlchemyTemplateRepository
 
@@ -12,6 +15,7 @@ __all__ = [
     "SQLAlchemyDeliveryAttemptRepository",
     "SQLAlchemyDeliveryConstraintRepository",
     "SQLAlchemyNotificationRepository",
+    "SQLAlchemyNotificationTopicRepository",
     "SQLAlchemyRecipientRepository",
     "SQLAlchemyTemplateRepository",
 ]

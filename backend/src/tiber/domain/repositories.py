@@ -134,7 +134,15 @@ class TemplateRepository(Protocol):
         ...
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> Template | None:
-        """Get a template by its ID."""
+        """Get a template by its ID within a project's scope."""
+        ...
+
+    async def get_by_slug(self, slug: str, project_id: UUID) -> Template | None:
+        """Get a template by its slug within a project's scope.
+
+        The accept path resolves the client's slug once and stores the
+        template's id, so a later rename cannot retarget accepted work.
+        """
         ...
 
     async def list_by_project(

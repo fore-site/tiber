@@ -7,9 +7,11 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -19,6 +21,8 @@ from .base import Base
 from .types import (
     DeliveryChannel,
     DeliveryChannelType,
+    NotificationCategory,
+    NotificationCategoryType,
     NotificationStatus,
     NotificationStatusType,
     SendTimeBasis,
@@ -27,22 +31,40 @@ from .types import (
 
 
 class NotificationModel(Base):
-    """Immutable notification accepted by Tiber."""
+    """A single-channel notification.
+
+    One request fans out into one row per channel; the rows share a
+    ``correlation_id`` and the client's ``idempotency_key``.
+    """
 
     __tablename__ = "notifications"
 
     __table_args__ = (
+        # One notification per channel per request. Replaces the former
+        # (project_id, idempotency_key) uniqueness: children of one request all
+        # carry the client's key, and the intake table now owns idempotency.
+        # Its leading columns also serve the batch lookup by correlation_id.
         UniqueConstraint(
             "project_id",
-            "idempotency_key",
-            name="notifications_project_idempotency_key_unique",
+            "correlation_id",
+            "channel",
+            name="notifications_project_correlation_channel_unique",
         ),
+        Index("ix_notifications_project_created", "project_id", "created_at"),
         CheckConstraint(
             """
             template_variables IS NULL
             OR jsonb_typeof(template_variables) = 'object'
             """,
             name="notifications_template_variables_check",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(actions) = 'array'",
+            name="notifications_actions_check",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(images) = 'array'",
+            name="notifications_images_check",
         ),
         CheckConstraint(
             """
@@ -125,8 +147,19 @@ class NotificationModel(Base):
         nullable=True,
     )
 
+    topic_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("topics.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     channel: Mapped[DeliveryChannel] = mapped_column(
         DeliveryChannelType,
+        nullable=False,
+    )
+
+    category: Mapped[NotificationCategory] = mapped_column(
+        NotificationCategoryType,
         nullable=False,
     )
 
@@ -136,6 +169,8 @@ class NotificationModel(Base):
         server_default="pending",
     )
 
+    # The client's key, shared by every notification of one request. Not unique
+    # here; uniqueness is (project_id, correlation_id, channel) above.
     idempotency_key: Mapped[str | None] = mapped_column(
         nullable=True,
     )
@@ -154,6 +189,8 @@ class NotificationModel(Base):
         nullable=False,
     )
 
+    # ``NotificationContent.title``. Kept under the email-specific column name
+    # because the check constraint above ties it to the email channel.
     subject: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
@@ -162,6 +199,21 @@ class NotificationModel(Base):
     body: Mapped[str] = mapped_column(
         Text,
         nullable=False,
+    )
+
+    # ``NotificationContent.actions`` / ``.images`` as JSON arrays of
+    # {"label", "url"} and {"url", "alt"}. Never NULL: an empty array is stored
+    # (asyncpg would write an explicit Python None as JSON null, not SQL NULL).
+    actions: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+
+    images: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
     )
 
     template_variables: Mapped[dict | None] = mapped_column(

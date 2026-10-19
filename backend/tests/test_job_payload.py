@@ -33,6 +33,13 @@ def make_notification(
             body="Hello",
         ),
         send_at=send_at,
+        send_time_basis=(
+            SendTimeBasis.EXPLICIT
+            if send_at is not None
+            else SendTimeBasis.IMMEDIATE
+            if category is NotificationCategory.CRITICAL
+            else SendTimeBasis.ML_PREDICTED
+        ),
     )
 
 

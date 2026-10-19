@@ -221,3 +221,9 @@ docs/release_guide.md
 docs/architecture/codebase_structure.md
 docs/validation-strategy.md
 docker-compose.override.yml
+
+AGENTS.md
+LEARNING.md
+skills/
+teaching_workspace/
+backend_from_first_principles_full.pdf

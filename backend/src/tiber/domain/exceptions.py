@@ -45,6 +45,63 @@ class TemplateChannelMismatchError(TiberError):
         )
 
 
+class TemplateRenderError(TiberError):
+    """A template placeholder has no value in the variables supplied for it.
+
+    Raised instead of rendering the placeholder as empty text: silently sending
+    a message with a hole in it is worse than failing the request, and the usual
+    cause is that the template was edited after the request was accepted.
+    """
+
+    error_code = "template_render_failed"
+
+    def __init__(self, missing: tuple[str, ...]) -> None:
+        """Initialize a TemplateRenderError."""
+        self.missing = missing
+        super().__init__(
+            "No value supplied for template placeholder(s): " + ", ".join(missing)
+        )
+
+
+class ChannelNotAvailableError(TiberError):
+    """A requested (or ranked) channel has no usable address on the recipient."""
+
+    error_code = "channel_not_available"
+
+
+class AmbiguousRecipientError(TiberError):
+    """Supplied addresses belong to more than one distinct recipient."""
+
+    error_code = "ambiguous_recipient"
+
+
+class AddressConflictError(TiberError):
+    """A supplied address differs from the one already stored for that channel."""
+
+    error_code = "address_conflict"
+
+
+class RecipientAddressTakenError(TiberError):
+    """Raised by the repository when the unique address constraint fires."""
+
+    error_code = "recipient_address_taken"
+
+
+class RecipientMergeNotAllowedError(TiberError):
+    """The requested recipient merge violates a merge rule."""
+
+    error_code = "recipient_merge_not_allowed"
+
+
+class IntakeAlreadyExistsError(TiberError):
+    """Raised by the intake repository when (project_id, idempotency_key) is taken.
+
+    Internal: the accept service catches it and replays the winning intake.
+    """
+
+    error_code = "intake_already_exists"
+
+
 # Policy & access
 
 

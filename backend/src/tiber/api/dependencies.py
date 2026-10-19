@@ -8,25 +8,26 @@ from fastapi import Depends, Header, HTTPException, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..application.ports.idempotency import IdempotencyGuard
-from ..application.ports.message_publisher import MessagePublisher
-from ..application.services import (
-    NotificationService,
-    NotificationTemplateResolver,
-)
+from ..application.ports.intake import Outbox
+from ..application.ports.unit_of_work import UnitOfWork
+from ..application.services.notification_intake import NotificationIntakeService
+from ..application.services.notification_query import NotificationQueryService
+from ..application.services.recipient_resolution import RecipientResolutionService
 from ..core.config import get_settings
 from ..core.database import AsyncSessionFactory
 from ..core.redis import get_redis_client
-from ..domain.policies import PolicyResolver
-from ..infrastructure.cache.idempotency import IdempotencyStore
-from ..infrastructure.messaging.celery_publisher import CeleryPublisher
+from ..domain.repositories import NotificationIntakeRepository
+from ..infrastructure.messaging.sqlalchemy_outbox import SQLAlchemyOutbox
 from ..infrastructure.models import ProjectModel
 from ..infrastructure.rate_limit.ingestion_rate_limiter import IngestionRateLimiter
-from ..infrastructure.repositories.sqlalchemy_delivery_constraint_repository import (
-    SQLAlchemyDeliveryConstraintRepository,
+from ..infrastructure.repositories.sqlalchemy_notification_intake_repository import (
+    SQLAlchemyNotificationIntakeRepository,
 )
 from ..infrastructure.repositories.sqlalchemy_notification_repository import (
     SQLAlchemyNotificationRepository,
+)
+from ..infrastructure.repositories.sqlalchemy_notification_topic_repository import (
+    SQLAlchemyNotificationTopicRepository,
 )
 from ..infrastructure.repositories.sqlalchemy_recipient_repository import (
     SQLAlchemyRecipientRepository,
@@ -35,18 +36,25 @@ from ..infrastructure.repositories.sqlalchemy_template_repository import (
     SQLAlchemyTemplateRepository,
 )
 
+# Written below as stubs of names; these modules do not exist yet.
+from ..infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+
 settings = get_settings()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
-    """Yield an AsyncSession per request, roll back on error, always close.
+    """Yield one AsyncSession per request; always close it.
+
+    This does NOT commit. Commits belong to the UnitOfWork, so a write that
+    happens outside ``async with uow:`` is rolled back on close instead of being
+    committed silently. Every repository and the UnitOfWork resolve this same
+    session, because FastAPI caches a dependency per request.
 
     Use as: db: AsyncSession = Depends(get_db).
     """
     async with AsyncSessionFactory() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
@@ -101,11 +109,14 @@ async def get_authenticated_project(
     return project
 
 
-def get_idempotency_guard(
-    redis: Annotated[Redis, Depends(get_redis)],
-) -> IdempotencyGuard:
-    """Provide the Redis-backed idempotency guard."""
-    return IdempotencyStore(redis)
+# Infrastructure bound to the request session
+
+
+def get_unit_of_work(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UnitOfWork:
+    """Provide the unit of work over the request session."""
+    return SqlAlchemyUnitOfWork(db)
 
 
 def get_notification_repository(
@@ -113,11 +124,6 @@ def get_notification_repository(
 ) -> SQLAlchemyNotificationRepository:
     """Provide the SQLAlchemy notification repository bound to the request session."""
     return SQLAlchemyNotificationRepository(db)
-
-
-def get_message_publisher() -> MessagePublisher:
-    """Provide the Celery message publisher."""
-    return CeleryPublisher()
 
 
 def get_recipient_repository(
@@ -134,25 +140,25 @@ def get_template_repository(
     return SQLAlchemyTemplateRepository(db)
 
 
-def get_delivery_constraint_repository(
+def get_intake_repository(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> SQLAlchemyDeliveryConstraintRepository:
-    """Provide the SQLAlchemy delivery constraint repository bound to the request session."""
-    return SQLAlchemyDeliveryConstraintRepository(db)
+) -> NotificationIntakeRepository:
+    """Provide the SQLAlchemy intake repository bound to the request session."""
+    return SQLAlchemyNotificationIntakeRepository(db)
 
 
-def get_template_resolver(
-    template_repository: Annotated[
-        SQLAlchemyTemplateRepository, Depends(get_template_repository)
-    ],
-) -> NotificationTemplateResolver:
-    """Provide the intake-time template resolver (validates + renders)."""
-    return NotificationTemplateResolver(template_repository=template_repository)
+def get_outbox(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Outbox:
+    """Provide the transactional outbox (writes in the request transaction)."""
+    return SQLAlchemyOutbox(db)
 
 
-def get_policy_resolver() -> PolicyResolver:
-    """Provide the intake-time delivery policy resolver (permissive default)."""
-    return PolicyResolver()
+def get_topic_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemyNotificationTopicRepository:
+    """Provide the SQLAlchemy topic repository bound to the request session."""
+    return SQLAlchemyNotificationTopicRepository(db)
 
 
 def get_ingestion_rate_limiter(
@@ -166,31 +172,66 @@ def get_ingestion_rate_limiter(
     )
 
 
-def get_notification_service(
-    idempotency_guard: Annotated[IdempotencyGuard, Depends(get_idempotency_guard)],
-    repository: Annotated[
-        SQLAlchemyNotificationRepository, Depends(get_notification_repository)
-    ],
-    publisher: Annotated[MessagePublisher, Depends(get_message_publisher)],
+# --------------------------------------------------------------------------- #
+# Application services
+# --------------------------------------------------------------------------- #
+
+
+def get_recipient_resolution_service(
     recipient_repository: Annotated[
         SQLAlchemyRecipientRepository, Depends(get_recipient_repository)
     ],
-    template_resolver: Annotated[
-        NotificationTemplateResolver, Depends(get_template_resolver)
+) -> RecipientResolutionService:
+    """Provide registered-recipient lookup and ad-hoc recipient matching."""
+    return RecipientResolutionService(recipient_repository=recipient_repository)
+
+
+def get_notification_intake_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+    intake_repository: Annotated[
+        NotificationIntakeRepository, Depends(get_intake_repository)
     ],
-    policy_resolver: Annotated[PolicyResolver, Depends(get_policy_resolver)],
-    constraint_repository: Annotated[
-        SQLAlchemyDeliveryConstraintRepository,
-        Depends(get_delivery_constraint_repository),
+    outbox: Annotated[Outbox, Depends(get_outbox)],
+    recipient_resolution: Annotated[
+        RecipientResolutionService, Depends(get_recipient_resolution_service)
     ],
-) -> NotificationService:
-    """Provide the notification application service."""
-    return NotificationService(
-        idempotency_guard=idempotency_guard,
-        repository=repository,
-        publisher=publisher,
-        recipient_repository=recipient_repository,
-        template_resolver=template_resolver,
-        policy_resolver=policy_resolver,
-        constraint_repository=constraint_repository,
+    template_repository: Annotated[
+        SQLAlchemyTemplateRepository, Depends(get_template_repository)
+    ],
+    topic_repository: Annotated[
+        SQLAlchemyNotificationTopicRepository, Depends(get_topic_repository)
+    ],
+) -> NotificationIntakeService:
+    """Provide the synchronous accept path (validate, persist intake, enqueue)."""
+    return NotificationIntakeService(
+        unit_of_work=unit_of_work,
+        intake_repository=intake_repository,
+        outbox=outbox,
+        recipient_resolution=recipient_resolution,
+        template_repository=template_repository,
+        topic_repository=topic_repository,
     )
+
+
+def get_notification_query_service(
+    notification_repository: Annotated[
+        SQLAlchemyNotificationRepository, Depends(get_notification_repository)
+    ],
+    intake_repository: Annotated[
+        NotificationIntakeRepository, Depends(get_intake_repository)
+    ],
+    recipient_repository: Annotated[
+        SQLAlchemyRecipientRepository, Depends(get_recipient_repository)
+    ],
+) -> NotificationQueryService:
+    """Provide the read side of notifications."""
+    return NotificationQueryService(
+        notification_repository=notification_repository,
+        intake_repository=intake_repository,
+        recipient_repository=recipient_repository,
+    )
+
+
+# Moved out of the API process (they now belong to the worker's IntakeProcessor
+# wiring): idempotency guard, message publisher, template resolver, policy
+# resolver, channel ranker/resolver, delivery constraint repository.

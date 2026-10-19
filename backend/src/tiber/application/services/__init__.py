@@ -1,11 +1,11 @@
+from .channel_resolver import ChannelResolver
 from .delivery import NotificationDeliveryProcessor as NotificationDeliveryProcessor
-from .notification import NotificationService as NotificationService
 from .policy import DeliveryPolicyGuard as DeliveryPolicyGuard
 from .template import NotificationTemplateResolver as NotificationTemplateResolver
 
 __all__ = [
+    "ChannelResolver",
     "DeliveryPolicyGuard",
     "NotificationDeliveryProcessor",
-    "NotificationService",
     "NotificationTemplateResolver",
 ]

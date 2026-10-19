@@ -26,7 +26,7 @@ from uuid import uuid4
 import pytest
 
 from tiber.domain.entities import DeliveryConstraint, Notification, Recipient
-from tiber.domain.enums import DeliveryChannel, NotificationCategory
+from tiber.domain.enums import DeliveryChannel, NotificationCategory, SendTimeBasis
 from tiber.domain.policies import PolicyContext, PolicyResolver
 from tiber.domain.policies.rules import ProjectBlackoutPeriodRule, ProjectQuietHoursRule
 from tiber.domain.value_objects import (
@@ -57,6 +57,14 @@ def make_ctx(
             body="Hello",
         ),
         send_at=send_at,
+        # Same classification the intake applies: explicit time, critical, else predicted.
+        send_time_basis=(
+            SendTimeBasis.EXPLICIT
+            if send_at is not None
+            else SendTimeBasis.IMMEDIATE
+            if category is NotificationCategory.CRITICAL
+            else SendTimeBasis.ML_PREDICTED
+        ),
     )
     recipient = Recipient.reconstitute(
         id=uuid4(),

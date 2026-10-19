@@ -26,6 +26,16 @@ class RecipientPreferences:
 
     def __post_init__(self) -> None:
         """Normalize inputs and enforce a CRITICAL-unstorable invariant."""
+        # Callers may pass lists (JSON, tests); the field contract is a frozenset,
+        # so normalize here rather than letting equality and hashing depend on
+        # whatever sequence the caller happened to use.
+        for name in (
+            "opted_out_channels",
+            "unsubscribed_categories",
+            "unsubscribed_topics",
+        ):
+            object.__setattr__(self, name, frozenset(getattr(self, name)))
+
         if NotificationCategory.CRITICAL in self.unsubscribed_categories:
             raise ValueError(
                 "CRITICAL notifications are always deliverable and cannot "

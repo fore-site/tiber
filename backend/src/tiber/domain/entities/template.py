@@ -56,6 +56,7 @@ class Template:
         variants: list[TemplateVariant],
         created_at: datetime,
         updated_at: datetime,
+        template_slug: str | None = None,
     ) -> Template:
         """Rebuild an existing Template aggregate from persisted state."""
         template_variants = {}
@@ -65,6 +66,7 @@ class Template:
             id=id,
             project_id=project_id,
             name=name,
+            template_slug=template_slug,
             variants=template_variants,
             created_at=created_at,
             updated_at=updated_at,

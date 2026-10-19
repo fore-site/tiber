@@ -24,11 +24,9 @@ class NotificationTopic:
         if not self.title or not self.title.strip():
             raise InvalidEntityAttributeError("Topic title must not be empty")
 
-        object.__setattr__(self, "value", self.title.lower().strip())
-
         if self.topic_slug is None:
             require_derivable_name(self.title)
-            object.__setattr__(self, "template_slug", derive_slug(self.title))
+            object.__setattr__(self, "topic_slug", derive_slug(self.title))
 
         if self.topic_slug and not SLUG_RE.fullmatch(self.topic_slug):
             raise InvalidEntityAttributeError(
@@ -54,6 +52,7 @@ class NotificationTopic:
         title: str,
         created_at: datetime,
         updated_at: datetime,
+        topic_slug: str | None = None,
     ) -> NotificationTopic:
         """Rebuild an existing notification topic from persisted state."""
         return cls(
@@ -61,6 +60,7 @@ class NotificationTopic:
             project_id=project_id,
             category=category,
             title=title,
+            topic_slug=topic_slug,
             created_at=created_at,
             updated_at=updated_at,
         )

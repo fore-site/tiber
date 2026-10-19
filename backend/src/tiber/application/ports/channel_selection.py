@@ -5,14 +5,14 @@ from tiber.domain.enums import DeliveryChannel, NotificationCategory
 
 
 class ChannelSelection(Protocol):
-    """The ML layer. Returns deliverable channel for a notification."""
+    """The ML layer. Returns deliverable channel(s) for a notification."""
 
-    async def rank(
+    async def select(
         self,
         *,
         recipient: Recipient,
         available: frozenset[DeliveryChannel],
         category: NotificationCategory,
-    ) -> DeliveryChannel:
-        """Determine the appropriate channel a notification should be sent through."""
+    ) -> list[DeliveryChannel]:
+        """Determine the appropriate channel(s) a notification should be sent through."""
         ...

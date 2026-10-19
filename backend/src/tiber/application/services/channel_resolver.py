@@ -58,7 +58,8 @@ class ChannelResolver:
             return list(dict.fromkeys(requested))
 
         selected = [
-            await self._select.select(
+            ch
+            for ch in await self._select.select(
                 recipient=recipient, available=available, category=category
             )
         ]

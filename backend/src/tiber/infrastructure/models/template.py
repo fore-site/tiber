@@ -8,19 +8,24 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     String,
-    Text,
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
-from .types import DeliveryChannel, DeliveryChannelType
 
 
 class TemplateModel(Base):
-    """Reusable notification content templates with {{variable}} interpolation."""
+    """Reusable notification content, one variant per delivery channel.
+
+    ``variants`` maps a channel value to its content object (the same shape as
+    ``NotificationContent.to_dict``). A template is always loaded and written
+    as a whole, so the variants live in one JSONB column instead of a second
+    table: there is no query that needs to address a single variant row.
+    """
 
     __tablename__ = "templates"
 
@@ -30,10 +35,14 @@ class TemplateModel(Base):
             "name",
             name="templates_name_unique",
         ),
+        UniqueConstraint(
+            "project_id",
+            "template_slug",
+            name="templates_project_slug_unique",
+        ),
         CheckConstraint(
-            "(channel = 'email' AND subject IS NOT NULL) "
-            "OR (channel <> 'email' AND subject IS NULL)",
-            name="templates_subject_check",
+            "jsonb_typeof(variants) = 'object'",
+            name="templates_variants_check",
         ),
     )
 
@@ -54,18 +63,13 @@ class TemplateModel(Base):
         nullable=False,
     )
 
-    channel: Mapped[DeliveryChannel] = mapped_column(
-        DeliveryChannelType,
+    template_slug: Mapped[str] = mapped_column(
+        String(100),
         nullable=False,
     )
 
-    subject: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    body: Mapped[str] = mapped_column(
-        Text,
+    variants: Mapped[dict] = mapped_column(
+        JSONB,
         nullable=False,
     )
 
