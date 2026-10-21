@@ -191,15 +191,6 @@ class NotificationCreateRequest(BaseModel):
         ),
     )
 
-    idempotency_key: str | None = Field(
-        default=None,
-        min_length=1,
-        description=(
-            "Client-supplied key making retries safe. Reusing a key with a "
-            "different request body is rejected."
-        ),
-    )
-
     @property
     def adhoc_channels(self) -> set[str]:
         """Get a set of client-provided addresses."""
@@ -294,11 +285,6 @@ class NotificationResponse(BaseModel):
     send_time_basis: SendTimeBasis
     delivered_at: datetime | None = None
 
-    idempotency_key: str | None = Field(
-        default=None,
-        description="The key supplied in the request, shared by all notifications in the batch.",
-    )
-
     suppression_reason: str | None = None
     cancellation_reason: str | None = None
     failure_reason: str | None = None
@@ -332,8 +318,6 @@ class NotificationResponse(BaseModel):
             send_at=n.send_at,
             send_time_basis=n.send_time_basis,
             delivered_at=n.delivered_at,
-            # Stored unchanged: children of one request share the client's key.
-            idempotency_key=n.idempotency_key,
             suppression_reason=n.suppression_reason,
             cancellation_reason=n.cancellation_reason,
             failure_reason=n.failure_reason,

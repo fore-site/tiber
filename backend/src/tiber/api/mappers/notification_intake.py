@@ -1,11 +1,4 @@
-"""Maps the validated HTTP request onto the application command.
-
-Framework-agnostic: call it from the route handler with the project id from
-auth and, if you accept one, the ``Idempotency-Key`` header.
-
-``NotificationCreateRequest`` already uses the domain enums and converts its own
-content and addresses, so this mapper only has to pass them through.
-"""
+"""Maps the validated HTTP request onto the application command."""
 
 from __future__ import annotations
 
@@ -31,9 +24,8 @@ def to_accept_command(
         topic_slug=request.topic_slug,  # None is meaningful: the ML infers it
         template_slug=request.template_slug,
         template_variables=request.template_variables,
-        # to_domain() carries title, body, actions and images.
         content=request.content.to_domain() if request.content is not None else None,
         group_key=request.group_key,
         send_at=request.send_at,
-        idempotency_key=idempotency_key or request.idempotency_key,
+        idempotency_key=idempotency_key,
     )
