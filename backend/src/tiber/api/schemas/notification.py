@@ -45,16 +45,12 @@ class ContentActionModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
+        str_min_length=1,
     )
 
-    label: str = Field(
-        min_length=1,
-        description="Button/link text; escaped as text on render.",
-    )
+    label: str = Field(description="Button/link text; escaped as text on render.")
 
-    url: str = Field(
-        description="Absolute http(s) URL the action points to.",
-    )
+    url: str = Field(description="Absolute http(s) URL the action points to.")
 
 
 class ContentImageModel(BaseModel):
@@ -63,11 +59,10 @@ class ContentImageModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
+        str_min_length=1,
     )
 
-    url: str = Field(
-        description="Absolute http(s) URL of the image.",
-    )
+    url: str = Field(description="Absolute http(s) URL of the image.")
 
     alt: str | None = Field(
         default=None,
@@ -85,6 +80,7 @@ class NotificationContentModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
+        str_min_length=1,
     )
 
     title: str | None = Field(
@@ -93,10 +89,7 @@ class NotificationContentModel(BaseModel):
         description="Message title; used by channels that support one (e.g. email subject).",
     )
 
-    body: str = Field(
-        min_length=1,
-        description="Message body text.",
-    )
+    body: str = Field(description="Message body text.")
 
     actions: list[ContentActionModel] = Field(
         default_factory=list,
@@ -126,6 +119,7 @@ class NotificationCreateRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
+        str_min_length=1,
     )
 
     recipient_id: str | None = Field(
@@ -154,8 +148,8 @@ class NotificationCreateRequest(BaseModel):
         pattern=_E164_PATTERN,
         description="Phone number in international E.164 format, e.g. +2348031234567.",
     )
-    push: str | None = Field(default=None, min_length=1)
-    in_app: str | None = Field(default=None, min_length=1)
+    push: str | None = Field(default=None)
+    in_app: str | None = Field(default=None)
 
     category: NotificationCategory | None = Field(
         default=None,
@@ -167,7 +161,7 @@ class NotificationCreateRequest(BaseModel):
         ),
     )
 
-    group_key: str | None = None
+    group_key: str | None = Field(default=None, max_length=255)
 
     topic_slug: str | None = None
 
@@ -242,13 +236,6 @@ class NotificationCreateRequest(BaseModel):
         # Send_at
         if self.send_at is not None and self.send_at.tzinfo is None:
             raise ValueError("`send_at` must be timezone-aware (UTC or other)")
-
-        # Group_key
-        if self.group_key is not None:
-            if not isinstance(self.group_key, str) or not self.group_key.strip():
-                raise ValueError("`group_key` must be a non-empty string when provided")
-            if len(self.group_key) > 255:
-                raise ValueError("`group_key` must be at most 255 characters")
 
         return self
 
