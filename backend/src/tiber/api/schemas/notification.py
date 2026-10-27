@@ -5,7 +5,15 @@ from datetime import datetime
 from typing import Any, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
+from pydantic_core.core_schema import FieldValidationInfo
 
 from ...domain.entities import Notification
 from ...domain.enums import (
@@ -138,6 +146,7 @@ class NotificationCreateRequest(BaseModel):
             "Every listed channel must have a registered address. "
             "All listed channels are delivered in parallel; list order carries no priority."
         ),
+        min_length=1,
     )
 
     # Address-based delivery: every address provided is delivered to. To skip a
@@ -198,6 +207,29 @@ class NotificationCreateRequest(BaseModel):
             if getattr(self, c) is not None
         }
 
+    # Channel selection (registered recipients only)
+    @field_validator("channels")
+    @classmethod
+    def _validate_channels(
+        cls, v: list[DeliveryChannel] | None, info: FieldValidationInfo
+    ):
+        if v is not None:
+            if "recipient_id" in info.data and info.data["recipient_id"] is None:
+                raise ValueError(
+                    "`channels` can only be used with `recipient_id`. "
+                    "For channel addresses, omit the ones you don't want delivered to."
+                )
+            if len(set(v)) != len(v):
+                raise ValueError("`channels` must not contain duplicates.")
+        return v
+
+    @field_validator("send_at")
+    @classmethod
+    def _send_at_is_tzaware(cls, v: datetime | None):
+        if v is not None and v.tzinfo is None:
+            raise ValueError("`send_at` must be timezone-aware (UTC or other)")
+        return v
+
     @model_validator(mode="after")
     def _validate_request(self) -> Self:
         adhoc = self.adhoc_channels
@@ -208,18 +240,6 @@ class NotificationCreateRequest(BaseModel):
             )
         if not self.recipient_id and not adhoc:
             raise ValueError("Provide `recipient_id` or at least one channel address.")
-
-        # Channel selection (registered recipients only)
-        if self.channels is not None:
-            if not self.recipient_id:
-                raise ValueError(
-                    "`channels` can only be used with `recipient_id`. "
-                    "For channel addresses, omit the ones you don't want delivered to."
-                )
-            if not self.channels:
-                raise ValueError("`channels` cannot be empty; omit it instead.")
-            if len(set(self.channels)) != len(self.channels):
-                raise ValueError("`channels` must not contain duplicates.")
 
         # Content
         if self.template_slug is None and self.content is None:
@@ -232,10 +252,6 @@ class NotificationCreateRequest(BaseModel):
             raise ValueError(
                 "`send_at` must not be set for CRITICAL notifications. They are sent immediately."
             )
-
-        # Send_at
-        if self.send_at is not None and self.send_at.tzinfo is None:
-            raise ValueError("`send_at` must be timezone-aware (UTC or other)")
 
         return self
 
