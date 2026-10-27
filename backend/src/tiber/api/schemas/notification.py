@@ -10,10 +10,10 @@ from pydantic import (
     ConfigDict,
     EmailStr,
     Field,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
-from pydantic_core.core_schema import FieldValidationInfo
 
 from ...domain.entities import Notification
 from ...domain.enums import (
@@ -210,11 +210,9 @@ class NotificationCreateRequest(BaseModel):
     # Channel selection (registered recipients only)
     @field_validator("channels")
     @classmethod
-    def _validate_channels(
-        cls, v: list[DeliveryChannel] | None, info: FieldValidationInfo
-    ):
+    def _validate_channels(cls, v: list[DeliveryChannel] | None, info: ValidationInfo):
         if v is not None:
-            if "recipient_id" in info.data and info.data["recipient_id"] is None:
+            if info.data["recipient_id"] is None:
                 raise ValueError(
                     "`channels` can only be used with `recipient_id`. "
                     "For channel addresses, omit the ones you don't want delivered to."
