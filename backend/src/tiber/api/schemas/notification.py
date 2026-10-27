@@ -381,7 +381,7 @@ class NotificationCreateResponse(BaseModel):
     def from_input(
         cls, project_id: UUID, transaction_id: UUID
     ) -> NotificationCreateResponse:
-        """DTO response from input."""
+        """Build response from input."""
         return cls(
             project_id=project_id,
             transaction_id=transaction_id,
