@@ -19,7 +19,7 @@ class Notification:
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     recipient_id: UUID
-    correlation_id: UUID
+    transaction_id: UUID
     channel: DeliveryChannel
     category: NotificationCategory
     content: NotificationContent
@@ -104,7 +104,7 @@ class Notification:
         *,
         project_id: UUID,
         recipient_id: UUID,
-        correlation_id: UUID,
+        transaction_id: UUID,
         channel: DeliveryChannel,
         category: NotificationCategory,
         topic_id: UUID | None = None,
@@ -126,7 +126,7 @@ class Notification:
         return cls(
             project_id=project_id,
             recipient_id=recipient_id,
-            correlation_id=correlation_id,
+            transaction_id=transaction_id,
             channel=channel,
             category=category,
             topic_id=topic_id,
@@ -146,7 +146,7 @@ class Notification:
         id: UUID,
         project_id: UUID,
         recipient_id: UUID,
-        correlation_id: UUID,
+        transaction_id: UUID,
         channel: DeliveryChannel,
         category: NotificationCategory,
         topic_id: UUID | None,
@@ -175,7 +175,7 @@ class Notification:
             id=id,
             project_id=project_id,
             recipient_id=recipient_id,
-            correlation_id=correlation_id,
+            transaction_id=transaction_id,
             channel=channel,
             category=category,
             topic_id=topic_id,

@@ -17,7 +17,6 @@ from ...domain.enums import IntakeStatus, NotificationCategory
 from ...domain.value_objects.intake import ChannelSource, DecisionSource
 from .notification import NotificationResponse
 
-# Internal failure detail (exception text) is never returned to clients.
 _PUBLIC_FAILURE_MESSAGE = "Processing failed. Contact support with the correlation_id."
 
 
@@ -39,7 +38,7 @@ class IntakeStatusResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    correlation_id: UUID
+    transaction_id: UUID
     project_id: UUID
     status: IntakeStatus
     failure_reason: str | None = Field(
@@ -68,11 +67,11 @@ class IntakeStatusResponse(BaseModel):
         topic = (plan.topic if plan is not None else None) or payload.topic
 
         # Addresses are echoed (masked by ``NotificationResponse``) only for requests
-        # that supplied them. Registered recipients already know their own addresses.
+        # that supplied them.
         expose_addresses = intake.constraints.channel_mode == "addresses"
 
         return cls(
-            correlation_id=intake.correlation_id,
+            transaction_id=intake.transaction_id,
             project_id=intake.project_id,
             status=intake.status,
             failure_reason=intake.failure_reason,

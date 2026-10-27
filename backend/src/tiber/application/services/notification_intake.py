@@ -23,7 +23,9 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from tiber.application.ports.intake import Outbox
+from tiber.application.ports.intake import (
+    Outbox,
+)
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.application.services.recipient_resolution import RecipientResolutionService
 from tiber.domain.entities import NotificationTopic, Template
@@ -33,7 +35,6 @@ from tiber.domain.exceptions import (
     EntityNotFoundError,
     IdempotencyKeyConflictError,
     IntakeAlreadyExistsError,
-    InvalidEntityAttributeError,
 )
 from tiber.domain.repositories import (
     NotificationIntakeRepository,
@@ -43,12 +44,12 @@ from tiber.domain.repositories import (
 from tiber.domain.services.addresses import normalize_address
 from tiber.domain.services.decision_constraints import compute_constraints
 from tiber.domain.value_objects import NotificationContent
-from tiber.domain.value_objects.intake import IntakePayload, ResolvedTopic, TemplateInfo
+from tiber.domain.value_objects.intake import IntakePayload, ResolvedTopic
 
 
 @dataclass(frozen=True)
 class AcceptNotificationCommand:
-    """Command to accept a notification from the api."""
+    """A request to create a notification intake."""
 
     project_id: UUID
     recipient_id: str | None
@@ -66,15 +67,15 @@ class AcceptNotificationCommand:
 
 @dataclass(frozen=True)
 class AcceptedIntake:
-    """Unique identifiers for an accepted notification intake."""
+    """The result of a successful intake acceptance."""
 
-    correlation_id: UUID
+    transaction_id: UUID
     project_id: UUID
     replayed: bool = False
 
 
 class NotificationIntakeService:
-    """Accept and Process notification at the api layer."""
+    """Application service for accepting notification intakes."""
 
     def __init__(
         self,
@@ -86,7 +87,7 @@ class NotificationIntakeService:
         template_repository: TemplateRepository,
         topic_repository: NotificationTopicRepository,
     ) -> None:
-        """Initialize variables."""
+        """Initialize the service with its dependencies."""
         self._uow = unit_of_work
         self._intakes = intake_repository
         self._outbox = outbox
@@ -95,7 +96,7 @@ class NotificationIntakeService:
         self._topics = topic_repository
 
     async def accept(self, cmd: AcceptNotificationCommand) -> AcceptedIntake:
-        """Accept the notification intake."""
+        """Accept a notification intake request."""
         fingerprint = request_fingerprint(cmd)
 
         async with self._uow:
@@ -136,7 +137,7 @@ class NotificationIntakeService:
                 channels=tuple(cmd.channels) if cmd.channels else None,
                 adhoc_channels=frozenset(cmd.addresses) if adhoc else None,
                 template_id=template.id if template else None,
-                template_slug=template.slug if template else None,
+                template_slug=template.template_slug if template else None,
                 template_variables=cmd.template_variables,
                 content=cmd.content,
                 group_key=cmd.group_key,
@@ -169,7 +170,7 @@ class NotificationIntakeService:
             )
 
         # Reached only after the transaction committed.
-        return AcceptedIntake(intake.correlation_id, intake.project_id)
+        return AcceptedIntake(intake.transaction_id, intake.project_id)
 
     async def _replay(
         self, cmd: AcceptNotificationCommand, fingerprint: str
@@ -184,7 +185,7 @@ class NotificationIntakeService:
         if existing.request_fingerprint != fingerprint:
             raise IdempotencyKeyConflictError()
         return AcceptedIntake(
-            existing.correlation_id, existing.project_id, replayed=True
+            existing.transaction_id, existing.project_id, replayed=True
         )
 
     async def _require_topic(
@@ -195,30 +196,25 @@ class NotificationIntakeService:
         topic = await self._topics.get_by_slug(cmd.topic_slug, cmd.project_id)
         if topic is None:
             raise EntityNotFoundError(NotificationTopic, cmd.topic_slug)
-        if topic.topic_slug is None:
-            raise InvalidEntityAttributeError("Topic has no slug")
-        # The payload stores id + slug, never the entity: the accept path only
-        # needs something to reference at fan-out time.
-        return ResolvedTopic(id=topic.id, slug=topic.topic_slug)
+        return ResolvedTopic(
+            id=topic.id, slug=topic.topic_slug, category=topic.category
+        )
 
     async def _require_template(
         self, cmd: AcceptNotificationCommand
-    ) -> TemplateInfo | None:
+    ) -> Template | None:
         if cmd.template_slug is None:
             return None
         template = await self._templates.get_by_slug(cmd.template_slug, cmd.project_id)
         if template is None:
             raise EntityNotFoundError(Template, cmd.template_slug)
-        # Project the aggregate onto the fields constraints need. The intake
-        # stores the id, so later renames cannot retarget accepted work.
-        return TemplateInfo.from_template(template)
+        return template
 
 
 def request_fingerprint(cmd: AcceptNotificationCommand) -> str:
     """Stable hash of the request.
 
     A reused idempotency key with a different payload is rejected instead of silently returning the old result.
-
     Addresses are normalized and channel order is ignored (it carries no meaning).
     """
     document = {

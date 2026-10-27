@@ -60,18 +60,18 @@ class NotificationQueryService:
         return await self._notifications.list_by_project(project_id, limit, offset)
 
     async def get_request_status(
-        self, project_id: UUID, correlation_id: UUID
+        self, project_id: UUID, transaction_id: UUID
     ) -> NotificationRequestView:
         """Status of one accepted request, scoped to the project."""
-        intake = await self._intakes.get_by_correlation_id(correlation_id, project_id)
+        intake = await self._intakes.get_by_transaction_id(transaction_id, project_id)
         if intake is None:
-            raise EntityNotFoundError(NotificationIntake, str(correlation_id))
+            raise EntityNotFoundError(NotificationIntake, str(transaction_id))
 
         recipient = await self._recipients.get_by_id(intake.recipient_id, project_id)
         if recipient is None:
             raise EntityNotFoundError(Recipient, str(intake.recipient_id))
 
-        notifications = await self._notifications.list_by_correlation_id(
-            correlation_id, project_id
+        notifications = await self._notifications.list_by_transaction_id(
+            transaction_id, project_id
         )
         return NotificationRequestView(intake, notifications, recipient)

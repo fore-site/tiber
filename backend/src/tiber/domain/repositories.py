@@ -1,16 +1,13 @@
 """Repository interfaces - DDD ports for data access.
 
 These are abstract contracts the domain defines.
-Concrete implementations live in infrastructure/persistence/repositories/.
-Use cases in application/ depend only on these interfaces,
-never on the SQLAlchemy implementations directly.
 
 One repository per persisted domain entity, mirroring the domain model.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -92,10 +89,23 @@ class NotificationRepository(Protocol):
         """List all notifications for a project with pagination."""
         ...
 
-    async def list_by_correlation_id(
-        self, correlation_id: UUID, project_id: UUID
+    async def list_by_transaction_id(
+        self, transaction_id: UUID, project_id: UUID
     ) -> list[Notification]:
         """All notifications created by one request, oldest first."""
+        ...
+
+    async def reassign_recipient(
+        self,
+        *,
+        project_id: UUID,
+        from_recipient_id: UUID,
+        to_recipient_id: UUID,
+    ) -> int:
+        """UPDATE notifications SET recipient_id = :to WHERE project_id = :p AND recipient_id = :from.
+
+        Returns rows moved.
+        """
         ...
 
 
@@ -156,6 +166,10 @@ class TemplateRepository(Protocol):
 class RecipientRepository(Protocol):
     """Contract for recipient data access."""
 
+    async def add(self, recipient: Recipient) -> None:
+        """Insert a recipient into the repository."""
+        ...
+
     async def save(self, recipient: Recipient) -> Recipient:
         """Save a recipient to the repository."""
         ...
@@ -193,6 +207,16 @@ class RecipientRepository(Protocol):
         self, project_id: UUID, limit: int, offset: int
     ) -> list[Recipient]:
         """List all recipients for a project with pagination."""
+        ...
+
+    async def get_many_for_update(
+        self, project_id: UUID, ids: Sequence[UUID]
+    ) -> list[Recipient]:
+        """SELECT ... WHERE project_id = :p AND id = ANY(:ids) ORDER BY id FOR UPDATE.
+
+        Used by the recipient merge service;
+        callers pass ``ids`` pre-sorted so concurrent merges lock in the same order.
+        """
         ...
 
 
@@ -327,8 +351,8 @@ class NotificationIntakeRepository(Protocol):
         """
         ...
 
-    async def get_by_correlation_id(
-        self, correlation_id: UUID, project_id: UUID
+    async def get_by_transaction_id(
+        self, transaction_id: UUID, project_id: UUID
     ) -> NotificationIntake | None:
         """Get a notification made from a request."""
         ...

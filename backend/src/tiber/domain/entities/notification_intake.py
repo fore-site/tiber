@@ -28,7 +28,7 @@ class NotificationIntake:
 
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
-    correlation_id: UUID = field(default_factory=uuid4)
+    transaction_id: UUID = field(default_factory=uuid4)
     recipient_id: (
         UUID  # internal id of the resolved (registered, matched or new) recipient
     )
@@ -103,7 +103,7 @@ class NotificationIntake:
         payload: IntakePayload,
         constraints: DecisionConstraints,
         request_fingerprint: str,
-        correlation_id: UUID | None = None,
+        transaction_id: UUID | None = None,
         idempotency_key: str | None = None,
     ) -> NotificationIntake:
         """Create a RECEIVED intake with a system-generated identity.
@@ -113,7 +113,7 @@ class NotificationIntake:
         """
         return cls(
             project_id=project_id,
-            correlation_id=correlation_id or uuid4(),
+            transaction_id=transaction_id or uuid4(),
             recipient_id=recipient_id,
             payload=payload,
             constraints=constraints,
@@ -127,7 +127,7 @@ class NotificationIntake:
         *,
         id: UUID,
         project_id: UUID,
-        correlation_id: UUID,
+        transaction_id: UUID,
         recipient_id: UUID,
         payload: IntakePayload,
         constraints: DecisionConstraints,
@@ -146,7 +146,7 @@ class NotificationIntake:
         return cls(
             id=id,
             project_id=project_id,
-            correlation_id=correlation_id,
+            transaction_id=transaction_id,
             recipient_id=recipient_id,
             payload=payload,
             constraints=constraints,

@@ -260,7 +260,7 @@ class NotificationResponse(BaseModel):
 
     id: UUID
     project_id: UUID
-    correlation_id: UUID = Field(
+    transaction_id: UUID = Field(
         description="Shared by every notification created from the same request.",
     )
 
@@ -305,7 +305,7 @@ class NotificationResponse(BaseModel):
         return cls(
             id=n.id,
             project_id=n.project_id,
-            correlation_id=n.correlation_id,
+            transaction_id=n.transaction_id,
             recipient_id=recipient_id,
             channel=n.channel,
             address=mask_address(n.channel.value, address),
@@ -331,13 +331,13 @@ class NotificationBatchResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    correlation_id: UUID
+    transaction_id: UUID
     notifications: list[NotificationResponse]
 
     @classmethod
     def from_entities(
         cls,
-        correlation_id: UUID,
+        transaction_id: UUID,
         notifications: Sequence[Notification],
         *,
         addresses: Mapping[DeliveryChannel, str] | None,
@@ -351,7 +351,7 @@ class NotificationBatchResponse(BaseModel):
         its own channel's address. Pass ``None`` for registered recipients.
         """
         return cls(
-            correlation_id=correlation_id,
+            transaction_id=transaction_id,
             notifications=[
                 NotificationResponse.from_entity(
                     n,
@@ -375,14 +375,14 @@ class NotificationCreateResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     project_id: UUID
-    correlation_id: UUID
+    transaction_id: UUID
 
     @classmethod
     def from_input(
-        cls, project_id: UUID, correlation_id: UUID
+        cls, project_id: UUID, transaction_id: UUID
     ) -> NotificationCreateResponse:
         """DTO response from input."""
         return cls(
             project_id=project_id,
-            correlation_id=correlation_id,
+            transaction_id=transaction_id,
         )

@@ -83,9 +83,6 @@ async def create_notification(
             detail="Ingestion rate limit exceeded.",
         )
 
-    # The batch handle (``correlation_id``) is generated server-side by the
-    # intake. It is deliberately NOT the X-Correlation-ID tracing header, which
-    # clients may reuse across requests or send in a non-UUID form.
     accepted = await service.accept(
         to_accept_command(
             payload,
@@ -98,19 +95,19 @@ async def create_notification(
         request.app.url_path_for(
             "get_notification_request",
             project_id=accepted.project_id,
-            correlation_id=accepted.correlation_id,
+            transaction_id=accepted.transaction_id,
         )
     )
     if accepted.replayed:
         response.headers["Idempotent-Replayed"] = "true"
 
     return NotificationCreateResponse.from_input(
-        accepted.project_id, accepted.correlation_id
+        accepted.project_id, accepted.transaction_id
     )
 
 
 @router.get(
-    "/projects/{project_id}/notification-requests/{correlation_id}",
+    "/projects/{project_id}/notification-requests/{transaction_id}",
     name="get_notification_request",
     response_model=IntakeStatusResponse,
     status_code=status.HTTP_200_OK,
@@ -120,7 +117,7 @@ async def get_notification_request(
         ProjectModel,
         Depends(get_authenticated_project),
     ],
-    correlation_id: UUID,
+    transaction_id: UUID,
     service: Annotated[
         NotificationQueryService,
         Depends(get_notification_query_service),
@@ -132,7 +129,7 @@ async def get_notification_request(
     expanded (``notifications`` is empty), ``completed`` once every channel has
     its notification, and ``failed`` if processing could not finish.
     """
-    view = await service.get_request_status(project.id, correlation_id)
+    view = await service.get_request_status(project.id, transaction_id)
     return IntakeStatusResponse.from_intake(
         view.intake, view.notifications, view.recipient
     )
