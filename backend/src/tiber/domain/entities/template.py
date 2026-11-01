@@ -38,7 +38,7 @@ class Template:
 
     @classmethod
     def create(
-        cls, *, project_id: UUID, name, variants: list[TemplateVariant]
+        cls, *, project_id: UUID, name: str, variants: list[TemplateVariant]
     ) -> Template:
         """Create a new Template aggregate with a system-generated id and timestamps."""
         template_variants = {}
@@ -56,7 +56,6 @@ class Template:
         variants: list[TemplateVariant],
         created_at: datetime,
         updated_at: datetime,
-        template_slug: str | None = None,
     ) -> Template:
         """Rebuild an existing Template aggregate from persisted state."""
         template_variants = {}
@@ -66,11 +65,30 @@ class Template:
             id=id,
             project_id=project_id,
             name=name,
-            template_slug=template_slug,
             variants=template_variants,
             created_at=created_at,
             updated_at=updated_at,
         )
+
+    # Variables
+    @property
+    def required_variables(self) -> frozenset[str]:
+        """Every variable any variant uses, each name once.
+
+        Good for showing developers what a template needs. Do NOT use it to
+        validate a send: a send to one channel only needs that variant's
+        variables. Use ``variables_for`` for that.
+        """
+        return frozenset().union(*(v.variables for v in self.variants.values()))
+
+    def variables_for(self, channel: DeliveryChannel) -> frozenset[str]:
+        """Variables the given channel's variant needs to render."""
+        variant = self.variants.get(channel)
+        if variant is None:
+            raise InvalidEntityAttributeError(
+                f"Template has no variant for channel {channel.value!r}"
+            )
+        return variant.variables
 
     def add_or_update_variants(self, variant: TemplateVariant) -> Template:
         """Add a template variant or update existing one."""
