@@ -4,11 +4,6 @@ A unit of work marks one atomic piece of work against the database: everything
 done inside ``async with uow:`` is committed together when the block exits
 normally, and rolled back together when it raises.
 
-    async with self._uow:
-        await self._intakes.add(intake)
-        await self._outbox.enqueue_intake(intake, priority="normal")
-    # <- committed here, and only here
-
 Contract the services rely on
 -----------------------------
 * Clean exit commits; any exception (including cancellation) rolls back and is
