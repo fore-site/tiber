@@ -15,7 +15,7 @@ class NotificationTopic:
     project_id: UUID
     category: NotificationCategory
     title: str
-    topic_slug: str | None = None
+    topic_slug: str
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -23,10 +23,6 @@ class NotificationTopic:
         """Validate the topic's state after initialization."""
         if not self.title or not self.title.strip():
             raise InvalidEntityAttributeError("Topic title must not be empty")
-
-        if self.topic_slug is None:
-            require_derivable_name(self.title)
-            object.__setattr__(self, "topic_slug", derive_slug(self.title))
 
         if self.topic_slug and not SLUG_RE.fullmatch(self.topic_slug):
             raise InvalidEntityAttributeError(
@@ -40,7 +36,13 @@ class NotificationTopic:
         cls, *, project_id: UUID, category: NotificationCategory, title: str
     ) -> NotificationTopic:
         """Create a new notification topic with a system-generated id and timestamps."""
-        return cls(project_id=project_id, category=category, title=title)
+        require_derivable_name(title)
+        return cls(
+            project_id=project_id,
+            category=category,
+            title=title,
+            topic_slug=derive_slug(title),
+        )
 
     @classmethod
     def reconstitute(
@@ -52,7 +54,7 @@ class NotificationTopic:
         title: str,
         created_at: datetime,
         updated_at: datetime,
-        topic_slug: str | None = None,
+        topic_slug: str,
     ) -> NotificationTopic:
         """Rebuild an existing notification topic from persisted state."""
         return cls(
