@@ -1389,6 +1389,24 @@ wheels = [
 ]
 
 [[package]]
+name = "pycurb"
+version = "0.2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/24/49/0edf4be2f468624c9ec93c80bb68ea58926182ebe1740ae1be43510893f5/pycurb-0.2.3.tar.gz", hash = "sha256:62101aa8b788a4e5fc965bfcff67454ce46d680fc287b10d0cffafa99eb75a89", size = 33354, upload-time = "2026-10-01T01:03:17.85Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/f5/338cfa4779a8962e879cd730afdc6bba2af495a2f875aa3911c4b5b94a37/pycurb-0.2.3-py3-none-any.whl", hash = "sha256:9b896d00a061aa4260beda8da2675e0dfe631e9a10db796a7dba500853226f08", size = 48330, upload-time = "2026-10-01T01:03:15.584Z" },
+]
+
+[package.optional-dependencies]
+fastapi = [
+    { name = "fastapi" },
+    { name = "starlette" },
+]
+
+[[package]]
 name = "pydantic"
 version = "2.13.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1856,6 +1874,7 @@ dependencies = [
     { name = "passlib", extra = ["argon2"] },
     { name = "prometheus-client" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "pycurb", extra = ["fastapi"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-jose", extra = ["cryptography"] },
@@ -1903,6 +1922,7 @@ requires-dist = [
     { name = "passlib", extras = ["argon2"], specifier = ">=1.7.4" },
     { name = "prometheus-client", specifier = ">=0.25.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
+    { name = "pycurb", extras = ["fastapi"], specifier = ">=0.2.3" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
