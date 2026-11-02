@@ -2,8 +2,8 @@
 
 The payload is the contract between the API service (publisher) and the worker.
 It is self-contained, JSON-serializable metadata describing one delivery job:
-identity (``notification_id``/``project_id``/``recipient_id``), tracing
-(``correlation_id``), scheduling metadata (``send_at``/``send_time_basis``),
+identity (``notification_id``/``project_id``/``recipient_id``), transaction
+context (``transaction_id``), scheduling metadata (``send_at``/``send_time_basis``),
 the ``schema_version`` guarding message-body migrations, and bounded ``retry``
 state. The worker re-reads authoritative state from the database and uses the
 payload for routing, tracing, and retry bookkeeping.
@@ -58,7 +58,7 @@ class NotificationJobPayload(BaseModel):
     notification_id: UUID
     project_id: UUID
     recipient_id: UUID
-    correlation_id: UUID
+    transaction_id: UUID
     channel: DeliveryChannel
     send_at: datetime | None = None
     send_time_basis: SendTimeBasis = SendTimeBasis.IMMEDIATE
@@ -71,7 +71,7 @@ class NotificationJobPayload(BaseModel):
             notification_id=notification.id,
             project_id=notification.project_id,
             recipient_id=notification.recipient_id,
-            correlation_id=notification.correlation_id,
+            transaction_id=notification.transaction_id,
             channel=notification.channel,
             send_at=notification.send_at,
             send_time_basis=notification.send_time_basis,

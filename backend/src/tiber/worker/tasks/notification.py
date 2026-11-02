@@ -145,9 +145,9 @@ def process_notification(self, job) -> None:
     """
     payload = _coerce_payload(job)
     logger.info(
-        "Received job notification_id=%s correlation_id=%s channel=%s",
+        "Received job notification_id=%s transaction_id=%s channel=%s",
         payload.notification_id,
-        payload.correlation_id,
+        payload.transaction_id,
         payload.channel.value,
     )
 

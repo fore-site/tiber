@@ -25,7 +25,7 @@ def make_notification(
     return Notification.create(
         project_id=uuid4(),
         recipient_id=uuid4(),
-        correlation_id=uuid4(),
+        transaction_id=uuid4(),
         channel=channel,
         category=category,
         content=NotificationContent(
@@ -52,7 +52,7 @@ def test_from_entity_carries_stable_metadata():
     assert payload.notification_id == n.id
     assert payload.project_id == n.project_id
     assert payload.recipient_id == n.recipient_id
-    assert payload.correlation_id == n.correlation_id
+    assert payload.transaction_id == n.transaction_id
     assert payload.channel == n.channel
     assert payload.send_at == n.send_at
     assert payload.send_time_basis == SendTimeBasis.EXPLICIT

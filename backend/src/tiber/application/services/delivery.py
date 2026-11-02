@@ -171,7 +171,7 @@ class NotificationDeliveryProcessor:
             image_url=content.image_url,
             metadata={
                 "notification_id": str(notification.id),
-                "correlation_id": str(notification.correlation_id),
+                "transaction_id": str(notification.transaction_id),
             },
         )
 

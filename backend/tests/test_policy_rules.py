@@ -49,7 +49,7 @@ def make_ctx(
     notification = Notification.create(
         project_id=uuid4(),
         recipient_id=uuid4(),
-        correlation_id=uuid4(),
+        transaction_id=uuid4(),
         channel=channel,
         category=category,
         content=NotificationContent(

@@ -81,14 +81,14 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         models = result.scalars().all()
         return [self._to_entity(model) for model in models]
 
-    async def list_by_correlation_id(
-        self, correlation_id: UUID, project_id: UUID
+    async def list_by_transaction_id(
+        self, transaction_id: UUID, project_id: UUID
     ) -> list[Notification]:
         """All notifications created by one request, oldest first."""
         result = await self._session.execute(
             select(NotificationModel)
             .where(NotificationModel.project_id == project_id)
-            .where(NotificationModel.correlation_id == correlation_id)
+            .where(NotificationModel.transaction_id == transaction_id)
             .order_by(NotificationModel.created_at, NotificationModel.id)
         )
         return [self._to_entity(model) for model in result.scalars().all()]
@@ -130,7 +130,7 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             "recipient_id": entity.recipient_id,
             "template_id": entity.template_id,
             "topic_id": entity.topic_id,
-            "correlation_id": entity.correlation_id,
+            "transaction_id": entity.transaction_id,
             "channel": entity.channel,
             "category": entity.category,
             "status": entity.status,
@@ -159,7 +159,7 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             id=model.id,
             project_id=model.project_id,
             recipient_id=model.recipient_id,
-            correlation_id=model.correlation_id,
+            transaction_id=model.transaction_id,
             topic_id=model.topic_id,
             template_id=model.template_id,
             template_variables=model.template_variables,

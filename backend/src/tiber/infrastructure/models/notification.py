@@ -34,7 +34,7 @@ class NotificationModel(Base):
     """A single-channel notification.
 
     One request fans out into one row per channel; the rows share a
-    ``correlation_id`` and the client's ``idempotency_key``.
+    ``transaction_id`` and the client's ``idempotency_key``.
     """
 
     __tablename__ = "notifications"
@@ -43,12 +43,12 @@ class NotificationModel(Base):
         # One notification per channel per request. Replaces the former
         # (project_id, idempotency_key) uniqueness: children of one request all
         # carry the client's key, and the intake table now owns idempotency.
-        # Its leading columns also serve the batch lookup by correlation_id.
+        # Its leading columns also serve the batch lookup by transaction_id.
         UniqueConstraint(
             "project_id",
-            "correlation_id",
+            "transaction_id",
             "channel",
-            name="notifications_project_correlation_channel_unique",
+            name="notifications_project_transaction_channel_unique",
         ),
         Index("ix_notifications_project_created", "project_id", "created_at"),
         CheckConstraint(
@@ -170,7 +170,7 @@ class NotificationModel(Base):
     )
 
     # The client's key, shared by every notification of one request. Not unique
-    # here; uniqueness is (project_id, correlation_id, channel) above.
+    # here; uniqueness is (project_id, transaction_id, channel) above.
     idempotency_key: Mapped[str | None] = mapped_column(
         nullable=True,
     )
@@ -184,7 +184,7 @@ class NotificationModel(Base):
         nullable=True,
     )
 
-    correlation_id: Mapped[UUID] = mapped_column(
+    transaction_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         nullable=False,
     )

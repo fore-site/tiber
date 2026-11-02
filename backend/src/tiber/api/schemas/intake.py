@@ -1,7 +1,7 @@
 """Response schemas for reading an intake back.
 
 POST /notifications                      -> 202 ``NotificationCreateResponse`` (notification.py)
-GET  /notifications?correlation_id=...   -> ``IntakeStatusResponse``
+GET  /notifications?transaction_id=...   -> ``IntakeStatusResponse``
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from ...domain.enums import IntakeStatus, NotificationCategory
 from ...domain.value_objects.intake import ChannelSource, DecisionSource
 from .notification import NotificationResponse
 
-_PUBLIC_FAILURE_MESSAGE = "Processing failed. Contact support with the correlation_id."
+_PUBLIC_FAILURE_MESSAGE = "Processing failed. Contact support with the transaction_id."
 
 
 class DecisionSummary(BaseModel):
@@ -43,7 +43,7 @@ class IntakeStatusResponse(BaseModel):
     status: IntakeStatus
     failure_reason: str | None = Field(
         default=None,
-        description="Set only when processing failed. Quote the correlation_id to support.",
+        description="Set only when processing failed. Quote the transaction_id to support.",
     )
     decisions: DecisionSummary | None = Field(
         default=None,

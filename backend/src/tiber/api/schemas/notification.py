@@ -328,7 +328,7 @@ class NotificationResponse(BaseModel):
 
 
 class NotificationBatchResponse(BaseModel):
-    """Fetch batch notification linked by correlation_id: one notification per resolved channel."""
+    """Fetch notifications linked by transaction_id: one per resolved channel."""
 
     model_config = ConfigDict(extra="forbid")
 
