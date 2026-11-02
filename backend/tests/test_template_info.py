@@ -1,8 +1,10 @@
-"""TemplateInfo is the accept-time projection of the Template aggregate.
+"""Template variables: how a template declares them versus how they are used.
 
-Accepting a notification needs channel feasibility and required variables,
-never the template bodies. These tests pin the projection to the entity so the
-two cannot drift, and confirm the renderer reads placeholders the same way.
+A template declares its variables implicitly, as ``{{name}}`` placeholders in
+its content. Accept time asks "can this channel render, and which variables does
+it need?"; render time substitutes exactly those placeholders. These tests pin
+the two together, and pin the accept path's repository call to ``(slug,
+project_id)`` so the scoping arguments cannot silently swap.
 """
 
 from __future__ import annotations
@@ -17,10 +19,15 @@ from tiber.application.services.notification_intake import (
 )
 from tiber.domain.entities import Template
 from tiber.domain.enums import DeliveryChannel
-from tiber.domain.exceptions import EntityNotFoundError, TemplateRenderError
+from tiber.domain.exceptions import (
+    ChannelNotAvailableError,
+    EntityNotFoundError,
+    InvalidEntityAttributeError,
+    TemplateRenderError,
+)
 from tiber.domain.services import TemplateRenderer
+from tiber.domain.services.decision_constraints import compute_constraints
 from tiber.domain.value_objects import NotificationContent, TemplateVariant
-from tiber.domain.value_objects.intake import TemplateInfo
 from tiber.domain.value_objects.placeholders import extract_placeholders
 
 
@@ -72,68 +79,80 @@ def test_extract_placeholders_ignores_malformed_braces():
     assert extract_placeholders("{ not a var } and {{ }}") == frozenset()
 
 
-# --- TemplateInfo.from_template ---
+# --- Variables are derived from the variants ---
 
 
-def test_from_template_reports_every_channel_with_a_variant():
-    """Report exactly the set of channels that have a variant."""
-    template = make_template(email_variant("Hi", "Body"), sms_variant("Body"))
-
-    info = TemplateInfo.from_template(template)
-
-    assert info.id == template.id
-    assert info.slug == "order-update"
-    assert info.channels == frozenset({DeliveryChannel.EMAIL, DeliveryChannel.SMS})
+def test_variant_reports_only_its_own_placeholders():
+    """Variables are per variant, not per template."""
+    assert sms_variant("Code: {{code}}").variables == frozenset({"code"})
 
 
-def test_from_template_computes_required_variables_per_channel():
-    """Variables are per channel: email and SMS can need different ones."""
+def test_variant_without_placeholders_requires_nothing():
+    """Static content needs no variables at all."""
+    assert sms_variant("Maintenance tonight").variables == frozenset()
+
+
+def test_template_variables_are_per_channel():
+    """Email and SMS can need different variables for the same template."""
     template = make_template(
         email_variant("Hi {{first_name}}", "Order {{order_id}} for {{first_name}}"),
         sms_variant("Code: {{code}}"),
     )
 
-    info = TemplateInfo.from_template(template)
-
-    assert info.required_variables[DeliveryChannel.EMAIL] == frozenset(
+    assert template.variables_for(DeliveryChannel.EMAIL) == frozenset(
         {"first_name", "order_id"}
     )
-    assert info.required_variables[DeliveryChannel.SMS] == frozenset({"code"})
+    assert template.variables_for(DeliveryChannel.SMS) == frozenset({"code"})
 
 
-def test_from_template_reports_no_variables_for_static_content():
-    """A template with no placeholders requires nothing."""
-    info = TemplateInfo.from_template(make_template(sms_variant("Maintenance tonight")))
+def test_required_variables_is_the_union_across_variants():
+    """The template-wide union is a superset of any single channel's needs."""
+    template = make_template(
+        email_variant("Hi {{first_name}}", "Body"),
+        sms_variant("Code: {{code}}"),
+    )
 
-    assert info.required_variables[DeliveryChannel.SMS] == frozenset()
-    assert info.channels == frozenset({DeliveryChannel.SMS})
-
-
-def test_from_template_without_variants_has_no_feasible_channels():
-    """An empty aggregate projects to an empty channel set, not an error."""
-    info = TemplateInfo.from_template(make_template())
-
-    assert info.channels == frozenset()
-    assert info.required_variables == {}
+    assert template.required_variables == frozenset({"first_name", "code"})
 
 
-def test_from_template_uses_the_persisted_slug():
-    """A slug created independently of the name survives projection."""
-    template = Template.create(
-        project_id=uuid4(),
-        name="Order Update",
-        variants=[sms_variant("Body")],
-    ).rename("Order Update v2")
+def test_required_variables_of_an_empty_template_is_empty():
+    """No variants means no variables, not an error."""
+    assert make_template().required_variables == frozenset()
 
-    info = TemplateInfo.from_template(template)
 
-    assert info.slug == "order-update-v2"
+def test_variables_for_an_absent_channel_raises():
+    """Asking a template for a channel it has no variant for is a bug, not a miss."""
+    template = make_template(sms_variant("Body"))
+
+    with pytest.raises(InvalidEntityAttributeError):
+        template.variables_for(DeliveryChannel.EMAIL)
+
+
+def test_variables_cannot_go_stale_after_a_variant_changes():
+    """Deriving variables on demand is why there is nothing to invalidate."""
+    template = make_template(sms_variant("Hi {{first_name}}"))
+    changed = template.add_or_update_variants(sms_variant("Hi {{nickname}}"))
+
+    assert changed.variables_for(DeliveryChannel.SMS) == frozenset({"nickname"})
+    assert template.variables_for(DeliveryChannel.SMS) == frozenset({"first_name"})
+
+
+def test_variables_disappear_with_the_variant():
+    """Removing a variant removes its variables from the union."""
+    template = make_template(
+        email_variant("Hi {{first_name}}", "Body"),
+        sms_variant("Code: {{code}}"),
+    )
+
+    assert template.remove_variant(DeliveryChannel.EMAIL).required_variables == (
+        frozenset({"code"})
+    )
 
 
 # --- The renderer reads placeholders the same way ---
 
 
-def test_renderer_substitutes_a_variable_the_projection_counted():
+def test_renderer_substitutes_a_variable_the_entity_counted():
     """Accept-time and render-time agree on the placeholder syntax."""
     variant = sms_variant("Hi {{ first_name }}")
 
@@ -142,15 +161,53 @@ def test_renderer_substitutes_a_variable_the_projection_counted():
     assert rendered.body == "Hi Ada"
 
 
-def test_renderer_rejects_a_missing_variable_the_projection_counted():
-    """A variable the projection required cannot silently render as empty."""
+def test_renderer_rejects_a_missing_variable_the_entity_counted():
+    """A variable the entity required cannot silently render as empty."""
     variant = sms_variant("Hi {{first_name}}")
 
     with pytest.raises(TemplateRenderError):
         TemplateRenderer().render(variant, {})
 
 
-# --- The accept path asks the repository by slug, then projects ---
+# --- Accept-time constraints use the same per-channel variables ---
+
+
+def test_constraints_accept_a_channel_whose_variables_are_provided():
+    """Feasibility is judged per channel, using only that variant's variables."""
+    constraints = compute_constraints(
+        available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.SMS}),
+        adhoc=False,
+        requested_channels=None,
+        opted_out=frozenset(),
+        client_category=None,
+        template=make_template(
+            email_variant("Hi {{first_name}}", "Body"),
+            sms_variant("Code: {{code}}"),
+        ),
+        # Only the variables SMS needs: email stays infeasible, SMS does not.
+        template_variables={"code": "1234"},
+        content=None,
+    )
+
+    assert constraints.feasible_channels == frozenset({DeliveryChannel.SMS})
+
+
+def test_constraints_reject_a_channel_the_template_has_no_variant_for():
+    """A client-named channel with no variant fails the whole request."""
+    with pytest.raises(ChannelNotAvailableError, match="no variant for this channel"):
+        compute_constraints(
+            available_channels=frozenset({DeliveryChannel.EMAIL}),
+            adhoc=False,
+            requested_channels=[DeliveryChannel.EMAIL],
+            opted_out=frozenset(),
+            client_category=None,
+            template=make_template(sms_variant("Body")),
+            template_variables=None,
+            content=None,
+        )
+
+
+# --- The accept path asks the repository by slug, then reads the entity ---
 
 
 class FakeTemplateRepository:
@@ -203,12 +260,11 @@ async def test_accept_lookup_uses_slug_then_project_scope():
     repository = FakeTemplateRepository(template)
     cmd = make_command()
 
-    info = await make_service(repository)._require_template(cmd)
+    loaded = await make_service(repository)._require_template(cmd)
 
     assert repository.calls == [(cmd.template_slug, cmd.project_id)]
-    assert info is not None
-    assert info.id == template.id
-    assert info.required_variables[DeliveryChannel.SMS] == frozenset({"first_name"})
+    assert loaded is template
+    assert loaded.variables_for(DeliveryChannel.SMS) == frozenset({"first_name"})
 
 
 async def test_accept_lookup_raises_for_an_unknown_slug():

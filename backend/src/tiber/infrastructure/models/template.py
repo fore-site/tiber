@@ -7,42 +7,30 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
-    String,
+    Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .types import DeliveryChannel, DeliveryChannelType
 
 
 class TemplateModel(Base):
-    """Reusable notification content, one variant per delivery channel.
-
-    ``variants`` maps a channel value to its content object (the same shape as
-    ``NotificationContent.to_dict``). A template is always loaded and written
-    as a whole, so the variants live in one JSONB column instead of a second
-    table: there is no query that needs to address a single variant row.
-    """
+    """A template: one row per template, one variant row per channel."""
 
     __tablename__ = "templates"
 
     __table_args__ = (
-        UniqueConstraint(
-            "project_id",
-            "name",
-            name="templates_name_unique",
-        ),
+        # Clients address templates by slug, so it is unique per project.
         UniqueConstraint(
             "project_id",
             "template_slug",
             name="templates_project_slug_unique",
-        ),
-        CheckConstraint(
-            "jsonb_typeof(variants) = 'object'",
-            name="templates_variants_check",
         ),
     )
 
@@ -54,24 +42,13 @@ class TemplateModel(Base):
 
     project_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("projects.id", ondelete="CASCADE"),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
-    name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
 
-    template_slug: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
-
-    variants: Mapped[dict] = mapped_column(
-        JSONB,
-        nullable=False,
-    )
+    template_slug: Mapped[str] = mapped_column(Text, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -85,3 +62,62 @@ class TemplateModel(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+    # Eager (selectin) so variants are always loaded with the template: async
+    # sessions cannot lazy-load, and the aggregate is never read without them.
+    variants: Mapped[list[TemplateVariantModel]] = relationship(
+        back_populates="template",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="TemplateVariantModel.channel",
+    )
+
+
+class TemplateVariantModel(Base):
+    """One channel's content for a template."""
+
+    __tablename__ = "template_variants"
+
+    __table_args__ = (
+        CheckConstraint(
+            "jsonb_typeof(actions) = 'array'",
+            name="template_variants_actions_check",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(images) = 'array'",
+            name="template_variants_images_check",
+        ),
+    )
+
+    template_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("templates.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    channel: Mapped[DeliveryChannel] = mapped_column(
+        DeliveryChannelType,
+        primary_key=True,
+    )
+
+    # ``NotificationContent.title``; the domain's ``validate_content`` decides
+    # which channels require or forbid one.
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # JSON arrays of {"label", "url"} and {"url", "alt"}. Never NULL: an empty
+    # array is stored (asyncpg writes an explicit Python None as JSON null).
+    actions: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+
+    images: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+
+    template: Mapped[TemplateModel] = relationship(back_populates="variants")

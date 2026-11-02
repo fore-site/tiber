@@ -21,7 +21,7 @@ because the client asked for that channel specifically.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import (
@@ -33,8 +33,10 @@ from tiber.domain.value_objects import NotificationContent
 from tiber.domain.value_objects.intake import (
     ChannelMode,
     DecisionConstraints,
-    TemplateInfo,
 )
+
+if TYPE_CHECKING:
+    from tiber.domain.entities import Template
 
 # Used when the client gives no category and the ML cannot (or does not) infer one.
 DEFAULT_CATEGORY = NotificationCategory.INFORMATIONAL
@@ -51,7 +53,7 @@ def compute_constraints(
     requested_channels: Sequence[DeliveryChannel] | None,
     opted_out: frozenset[DeliveryChannel],
     client_category: NotificationCategory | None,
-    template: TemplateInfo | None,
+    template: Template | None,
     template_variables: Mapping[str, Any] | None,
     content: NotificationContent | None,
 ) -> DecisionConstraints:
@@ -123,17 +125,17 @@ def compute_constraints(
 
 def _render_problem(
     channel: DeliveryChannel,
-    template: TemplateInfo | None,
+    template: Template | None,
     provided_variables: set[str],
     content: NotificationContent | None,
 ) -> str | None:
     """Why ``channel`` cannot deliver this notification, or ``None`` if it can."""
     if template is not None:
-        if channel not in template.channels:
-            return "no template exists for this channel"
-        missing = (
-            template.required_variables.get(channel, frozenset()) - provided_variables
-        )
+        if channel not in template.variants:
+            return "the template has no variant for this channel"
+        # Per channel, not the template-wide union: a send to one channel only
+        # needs that variant's variables.
+        missing = template.variables_for(channel) - provided_variables
         if missing:
             return f"missing template variables {sorted(missing)}"
         return None

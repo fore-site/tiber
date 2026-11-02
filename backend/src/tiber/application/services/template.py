@@ -2,10 +2,11 @@
 
 Resolves the final content of a notification at worker time: when the
 notification references a template, the template is loaded through the
-project-scoped lookup (ownership enforced by the repository contract) and
-its channel is validated, then it is rendered with the notification's
-variables. Notifications carrying direct content (``template_id`` is None)
-pass through unchanged — the "direct content fallback" path.
+project-scoped lookup (ownership enforced by the repository contract), the
+variant for the notification's channel is selected, and it is rendered with the
+notification's variables. Notifications carrying direct content
+(``template_id`` is None) pass through unchanged — the "direct content
+fallback" path.
 """
 
 from __future__ import annotations
@@ -46,12 +47,20 @@ class NotificationTemplateResolver:
         if template is None:
             raise EntityNotFoundError(Template, str(notification.template_id))
 
-        if template.channel != notification.channel:
+        # A template holds one variant per channel; the notification's channel
+        # must have one. Accept-time validation guarantees it for requests that
+        # came through intake, so this only fires if the template changed since.
+        variant = template.variants.get(notification.channel)
+        if variant is None:
+            available = (
+                ", ".join(sorted(ch.value for ch in template.variants)) or "none"
+            )
             raise TemplateChannelMismatchError(
                 str(notification.template_id),
-                str(template.channel.value),
+                available,
                 str(notification.channel.value),
             )
 
-        rendered = self._renderer.render(template, notification.template_variables)
-        return rendered
+        # ASSUMPTION: the renderer takes a TemplateVariant. Its old signature took
+        # the single-channel Template, so TemplateRenderer needs the same update.
+        return self._renderer.render(variant, notification.template_variables)

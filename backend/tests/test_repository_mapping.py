@@ -44,9 +44,14 @@ def test_template_model_round_trip_preserves_variants():
     restored = SQLAlchemyTemplateRepository._to_entity(model)
 
     assert restored == template
-    # JSONB keys are strings; the entity keys must be enum members again.
+    # Channels are stored as their string values; the entity keys must be enum
+    # members again.
     assert set(restored.variants) == {DeliveryChannel.EMAIL, DeliveryChannel.SMS}
-    assert model.variants["email"]["title"] == "Hi {{first_name}}"
+
+    # One variant row per channel, carrying that channel's content.
+    rows = {variant.channel: variant for variant in model.variants}
+    assert rows[DeliveryChannel.EMAIL.value].title == "Hi {{first_name}}"
+    assert rows[DeliveryChannel.SMS.value].title is None
 
 
 def test_template_model_stores_the_persisted_slug():

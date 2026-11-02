@@ -14,16 +14,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import InvalidEntityAttributeError
 from tiber.domain.value_objects import NotificationContent
-from tiber.domain.value_objects.placeholders import extract_placeholders
-
-if TYPE_CHECKING:
-    from tiber.domain.entities.template import Template
 
 # How the channel set was chosen. ("default" = the ML was unavailable or its
 # answer was unusable and the deterministic fallback was applied.)
@@ -45,52 +41,12 @@ Want = Literal["category", "topic", "channels", "send_time"]
 
 
 @dataclass(frozen=True)
-class TemplateInfo:
-    """Projection of ``Template``: only what accept-time validation needs.
-
-    Accepting a notification asks "can this channel be rendered, and which
-    variables does it need?" — never for the bodies. Keeping that question as
-    a narrow shape lets ``compute_constraints`` stay a pure function and keeps
-    the accept path from depending on the write-side aggregate.
-    """
-
-    id: UUID
-    slug: str
-    channels: frozenset[DeliveryChannel]  # channels that have a template body
-    required_variables: Mapping[DeliveryChannel, frozenset[str]]
-
-    @classmethod
-    def from_template(cls, template: Template) -> TemplateInfo:
-        """Derive the projection from a loaded ``Template`` aggregate.
-
-        This is the only conversion point between the aggregate and the
-        accept-time view, so the projection cannot drift from the entity.
-        """
-        slug = template.template_slug
-        if slug is None:
-            # ``Template.__post_init__`` derives a slug, so this only happens
-            # if the entity was built by bypassing its constructor.
-            raise InvalidEntityAttributeError("Template has no slug")
-
-        return cls(
-            id=template.id,
-            slug=slug,
-            channels=frozenset(template.variants),
-            required_variables={
-                channel: extract_placeholders(
-                    variant.content.title, variant.content.body
-                )
-                for channel, variant in template.variants.items()
-            },
-        )
-
-
-@dataclass(frozen=True)
 class ResolvedTopic:
-    """Topic id and slug, resolved from a client slug or an ML suggestion."""
+    """Snapshot of a topic taken at accept time."""
 
     id: UUID
     slug: str
+    category: NotificationCategory
 
 
 # Intake payload
@@ -100,8 +56,12 @@ class ResolvedTopic:
 class IntakePayload:
     """The validated client request, with slugs resolved."""
 
-    category: NotificationCategory | None = None  # None -> ML infers
-    topic: ResolvedTopic | None = None  # None -> ML infers
+    category: NotificationCategory | None = (
+        None  # None -> the topic's, else the ML infers
+    )
+    topic: ResolvedTopic | None = (
+        None  # the CLIENT's topic; None -> the ML may infer one
+    )
     channels: tuple[DeliveryChannel, ...] | None = None  # registered recipients only
     adhoc_channels: frozenset[DeliveryChannel] | None = None  # address-based requests
     template_id: UUID | None = None
@@ -129,13 +89,39 @@ class IntakePayload:
             raise InvalidEntityAttributeError(
                 "`template_variables` requires a template"
             )
+        if (
+            self.category is not None
+            and self.topic is not None
+            and self.category != self.topic.category
+        ):
+            raise InvalidEntityAttributeError(
+                f"`category` {self.category.value!r} conflicts with topic "
+                f"{self.topic.slug!r}, which belongs to category "
+                f"{self.topic.category.value!r}. Omit `category` to use the topic's, "
+                "or choose a topic in that category."
+            )
         if self.send_at is not None:
             if self.send_at.tzinfo is None:
                 raise InvalidEntityAttributeError("`send_at` must be timezone-aware")
-            if self.category is NotificationCategory.CRITICAL:
+            if self.declared_category is NotificationCategory.CRITICAL:
                 raise InvalidEntityAttributeError(
-                    "`send_at` must not be set for CRITICAL notifications"
+                    "`send_at` must not be set for CRITICAL notifications; "
+                    "they are sent immediately"
                 )
+
+    @property
+    def declared_category(self) -> NotificationCategory | None:
+        """The category the client has effectively declared.
+
+        The explicit ``category``, else the category of the client's topic. ``None``
+        when the client declared neither, which is the only case where the ML is
+        asked for a category.
+        """
+        if self.category is not None:
+            return self.category
+        if self.topic is not None:
+            return self.topic.category
+        return None
 
 
 # Constraints
