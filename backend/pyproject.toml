@@ -100,7 +100,7 @@ ignore = ["E501","D100","D104"]
 known-first-party = ["tiber"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
 python_files = ["test_*.py"]

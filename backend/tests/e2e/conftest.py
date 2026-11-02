@@ -170,6 +170,6 @@ def app(api_module, session: AsyncSession, project):
 @pytest.fixture
 async def client(app) -> AsyncIterator[AsyncClient]:
     """ASGI client; no lifespan, so the app's global engine is never touched."""
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://tiber.test") as http:
         yield http
