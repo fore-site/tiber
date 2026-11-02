@@ -180,8 +180,10 @@ class IntakeProcessor:
                 topic = await self._topics.get_by_slug(
                     suggestion.topic_slug, intake.project_id
                 )
-                if topic is not None and topic.topic_slug is not None:
-                    ml_topic = ResolvedTopic(id=topic.id, slug=topic.topic_slug)
+                if topic is not None:
+                    ml_topic = ResolvedTopic(
+                        id=topic.id, slug=topic.topic_slug, category=topic.category
+                    )
 
         plan = assemble_plan(
             payload=payload,
@@ -216,8 +218,8 @@ class IntakeProcessor:
 
         existing = {
             n.channel
-            for n in await self._notifications.list_by_correlation_id(
-                intake.correlation_id, intake.project_id
+            for n in await self._notifications.list_by_transaction_id(
+                intake.transaction_id, intake.project_id
             )
         }
         constraint = (
@@ -263,14 +265,14 @@ class IntakeProcessor:
         fields = dict(
             project_id=intake.project_id,
             recipient_id=intake.recipient_id,
-            correlation_id=intake.correlation_id,
+            transaction_id=intake.transaction_id,
             channel=channel,
             category=plan.category,
             topic_id=plan.topic.id if plan.topic else None,
             template_id=payload.template_id,
             template_variables=payload.template_variables,
             group_key=payload.group_key,
-            # The client's key is stored as-is: uniqueness is (correlation_id, channel).
+            # The client's key is stored as-is: uniqueness is (transaction_id, channel).
             idempotency_key=intake.idempotency_key,
             send_at=payload.send_at,
             send_time_basis=send_time_basis,

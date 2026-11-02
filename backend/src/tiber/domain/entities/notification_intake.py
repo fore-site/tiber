@@ -108,7 +108,7 @@ class NotificationIntake:
     ) -> NotificationIntake:
         """Create a RECEIVED intake with a system-generated identity.
 
-        ``correlation_id`` is generated here when the caller does not supply one;
+        ``transaction_id`` is generated here when the caller does not supply one;
         it is the batch handle every child notification shares.
         """
         return cls(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import cast
 
 from fastapi import HTTPException, Request
@@ -30,6 +31,7 @@ _TIBER_ERROR_STATUS: dict[str, int] = {
     "template_channel_mismatch": 422,
     "delivery_failed": 502,
     "provider_unavailable": 503,
+    "rate_limiter_unavailable": 503,
 }
 
 
@@ -38,6 +40,7 @@ def error_response(
     status: int,
     error: str,
     message: str,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     """Build standard API error response."""
     payload = ErrorResponse(
@@ -50,6 +53,7 @@ def error_response(
     return JSONResponse(
         status_code=status,
         content=payload.model_dump(mode="json"),
+        headers=headers,
     )
 
 
@@ -118,6 +122,7 @@ async def tiber_exception_handler(request: Request, exc: Exception) -> JSONRespo
         error=error_code,
         message=message,
         status=status_code,
+        headers=exc.headers if isinstance(exc, HTTPException) else None,
     )
 
 

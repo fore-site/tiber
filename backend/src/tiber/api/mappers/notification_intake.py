@@ -12,9 +12,9 @@ def to_accept_command(
     request: NotificationCreateRequest,
     *,
     project_id: UUID,
-    idempotency_key: str | None = None,
+    idempotency_key: str,
 ) -> AcceptNotificationCommand:
-    """``idempotency_key`` (e.g. from a header) wins over the body field."""
+    """Map from NotificationCreateRequest to AcceptNotificationCommand."""
     return AcceptNotificationCommand(
         project_id=project_id,
         recipient_id=request.recipient_id,

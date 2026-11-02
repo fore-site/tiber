@@ -7,20 +7,19 @@ from fastapi import (
     APIRouter,
     Depends,
     Header,
-    HTTPException,
     Query,
     Request,
     Response,
     status,
 )
+from pycurb.core import RateLimitResult
 
 from ...application.services.notification_intake import NotificationIntakeService
 from ...application.services.notification_query import NotificationQueryService
 from ...infrastructure.models import ProjectModel
-from ...infrastructure.rate_limit.ingestion_rate_limiter import IngestionRateLimiter
 from ..dependencies import (
+    enforce_ingestion_rate_limit,
     get_authenticated_project,
-    get_ingestion_rate_limiter,
     get_notification_intake_service,
     get_notification_query_service,
 )
@@ -50,10 +49,7 @@ async def create_notification(
         NotificationIntakeService,
         Depends(get_notification_intake_service),
     ],
-    limiter: Annotated[
-        IngestionRateLimiter,
-        Depends(get_ingestion_rate_limiter),
-    ],
+    _rate_limit: Annotated[RateLimitResult, Depends(enforce_ingestion_rate_limit)],
     request: Request,
     response: Response,
     idempotency_key: Annotated[
@@ -66,23 +62,17 @@ async def create_notification(
     Everything that can be acted on is validated before this returns, so a 202 means
     the request is valid and queued. The notifications themselves (one per
     channel) are created asynchronously; follow the ``Location`` header, or
-    ``GET /projects/{project_id}/notification-requests/{correlation_id}``, to
+    ``GET /projects/{project_id}/notification-requests/{transaction_id}``, to
     see them.
 
     Requires an ``Idempotency-Key`` header. Repeating a request with the same key
-    and the same body returns the same ``correlation_id`` (with an
+    and the same body returns the same ``transaction_id`` (with an
     ``Idempotent-Replayed: true`` header). Reusing a key with a different body
     is rejected with ``409``.
 
     Ingestion is rate-limited per project: once the project's windowed quota is
     exhausted the request is rejected with ``429 Too Many Requests``.
     """
-    if not await limiter.is_allowed(project.id):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Ingestion rate limit exceeded.",
-        )
-
     accepted = await service.accept(
         to_accept_command(
             payload,

@@ -29,6 +29,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pycurb.core import RateLimitResult
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import (
@@ -133,9 +134,25 @@ def app(api_module, session: AsyncSession, project):
     """Build the real app with only the documented stand-ins overridden."""
     from tiber.api import dependencies as deps
 
-    class _AllowAllLimiter:
-        async def is_allowed(self, project_id) -> bool:
-            return True
+    class _FakeCoreLimiter:
+        def __init__(self, result: RateLimitResult) -> None:
+            self._result = result
+
+        async def check(self, key: str, rule_name: str) -> RateLimitResult:
+            return self._result
+
+    class _FakeAdapterLimiter:
+        rule_name = "ingestion"
+
+        def __init__(self, result: RateLimitResult) -> None:
+            self.limiter = _FakeCoreLimiter(result)
+
+    allow_result = RateLimitResult(
+        allowed=True,
+        remaining=99,
+        reset_at=1_700_000_060,
+        limit=100,
+    )
 
     application = api_module.create_app()
 
@@ -145,7 +162,7 @@ def app(api_module, session: AsyncSession, project):
     application.dependency_overrides[deps.get_db] = _db
     application.dependency_overrides[deps.get_authenticated_project] = lambda: project
     application.dependency_overrides[deps.get_ingestion_rate_limiter] = lambda: (
-        _AllowAllLimiter()
+        _FakeAdapterLimiter(allow_result)
     )
     return application
 

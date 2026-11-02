@@ -1,24 +1,29 @@
-"""Redis-backed fixed-window rate limiter for notification ingestion."""
+"""Redis-backed rate limiter for notification ingestion, built on pycurb.
+
+Requires ``pip install "pycurb[redis]"``.
+
+pycurb owns the algorithm, the atomic Lua scripts and the key expiry; this module
+only supplies the ingestion rule and the failure policy.
+"""
 
 from __future__ import annotations
 
-from uuid import UUID
+from typing import Literal
 
+from pycurb.core import AsyncRateLimiter, LimitRule
+from pycurb.core.storage.redis_async import AsyncRedisStorage
 from redis.asyncio import Redis
 
-from ...core.redis import RedisKeys
+_RULE_NAME = "ingestion"
 
 
 class IngestionRateLimiter:
-    """Fixed-window ingestion limiter keyed per project.
+    """Configured ingestion limiter.
 
-    Each ingestion attempt atomically increments a per-project Redis counter;
-    the counter carries a window TTL set on the first increment of each window.
-    A request is allowed while the count is within ``limit``.
+    Allows ``limit`` requests per ``window_seconds`` for each adapter key.
 
-    Fails closed: a Redis error propagates to the caller (surfacing as a 503
-    via the exception handler) rather than silently permitting unbounded
-    ingestion.
+    Fails closed: if Redis is unavailable, PyCurb returns a decision marked as
+    storage-unavailable instead of silently permitting unbounded ingestion.
     """
 
     def __init__(
@@ -27,27 +32,39 @@ class IngestionRateLimiter:
         *,
         limit: int,
         window_seconds: int,
+        algorithm: Literal["fixed_window", "sliding_window"] = "fixed_window",
+        use_redis_time: bool = True,
     ) -> None:
-        """Initialize the limiter with a Redis client and fixed-window budget."""
-        self._redis = redis
-        self._limit = limit
-        self._window = window_seconds
+        """Initialize the limiter with a Redis client and a per-project budget.
 
-    async def is_allowed(self, project_id: UUID | str) -> bool:
-        """Record one ingestion attempt and report whether it stays within budget.
+        ``algorithm`` defaults to ``fixed_window``, matching the previous
+        behaviour. ``sliding_window`` avoids a project getting up to twice its
+        budget across a window boundary, at the cost of more memory per project.
 
-        Returns ``True`` if the request may proceed, ``False`` if the project has
-        exhausted its windowed quota.
+        ``use_redis_time`` makes Redis the single clock, so API instances with
+        drifting clocks agree on which window a request belongs to. It costs one
+        extra TIME call inside the Lua script (pycurb documents it as under
+        0.1 ms). Turn it off for a single-instance deployment.
         """
-        key = RedisKeys.ingestion_rate_limit(str(project_id))
-        count = await self._redis.incr(key)
-        if count == 1:  # First request in the window establishes its expiry.
-            await self._redis.expire(key, self._window)
-        return count <= self._limit
+        storage = AsyncRedisStorage(
+            redis,
+            use_redis_time=use_redis_time,
+            fail_open=False,  # deny, and surface the failure, when Redis is down
+        )
+        rule = LimitRule(
+            name=_RULE_NAME,
+            algorithm=algorithm,
+            limit=limit,
+            window=window_seconds,
+        )
+        self._limiter = AsyncRateLimiter(storage=storage, rules=[rule])
 
-    async def remaining(self, project_id: UUID | str) -> int:
-        """Return the number of requests still permitted in the current window."""
-        key = RedisKeys.ingestion_rate_limit(str(project_id))
-        count = await self._redis.get(key)
-        used = int(count) if count is not None else 0
-        return max(0, self._limit - used)
+    @property
+    def limiter(self) -> AsyncRateLimiter:
+        """Return the configured PyCurb limiter for framework adapters."""
+        return self._limiter
+
+    @property
+    def rule_name(self) -> str:
+        """Return the name of the ingestion rule."""
+        return _RULE_NAME

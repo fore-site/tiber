@@ -4,6 +4,7 @@ from ...domain.enums import (
     DeliveryAttemptStatus,
     DeliveryChannel,
     EngagementEventType,
+    IntakeStatus,
     MLModelStatus,
     MLModelType,
     MLPriority,
@@ -44,6 +45,8 @@ DeliveryAttemptStatusType = _pg_enum(
 )
 
 EngagementEventTypeType = _pg_enum(EngagementEventType, name="engagement_event_type")
+
+IntakeStatusType = _pg_enum(IntakeStatus, name="intake_status")
 
 SendTimeBasisType = _pg_enum(SendTimeBasis, name="send_time_basis")
 

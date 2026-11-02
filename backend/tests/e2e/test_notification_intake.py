@@ -50,9 +50,9 @@ async def test_accept_returns_202_with_a_batch_handle(client, project) -> None:
     assert response.status_code == 202
     body = response.json()
     assert body["project_id"] == str(project.id)
-    UUID(body["correlation_id"])
+    UUID(body["transaction_id"])
     assert response.headers["location"].endswith(
-        f"/projects/{project.id}/notification-requests/{body['correlation_id']}"
+        f"/projects/{project.id}/notification-requests/{body['transaction_id']}"
     )
 
 
@@ -70,7 +70,7 @@ async def test_same_key_and_body_replays_the_same_batch(client, project) -> None
     )
 
     assert first.status_code == second.status_code == 202
-    assert second.json()["correlation_id"] == first.json()["correlation_id"]
+    assert second.json()["transaction_id"] == first.json()["transaction_id"]
     assert second.headers.get("idempotent-replayed") == "true"
 
 
@@ -110,30 +110,44 @@ async def test_request_status_is_readable_before_fan_out(client, project) -> Non
         headers=headers("status-1"),
         json=request_body(),
     )
-    correlation_id = accepted.json()["correlation_id"]
+    transaction_id = accepted.json()["transaction_id"]
 
     response = await client.get(
-        f"/projects/{project.id}/notification-requests/{correlation_id}",
+        f"/projects/{project.id}/notification-requests/{transaction_id}",
         headers=AUTH,
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["correlation_id"] == correlation_id
+    assert body["transaction_id"] == transaction_id
     assert body["project_id"] == str(project.id)
     assert body["status"] in {"received", "processing"}
     assert body["notifications"] == []
 
 
 async def test_rate_limited_project_is_rejected(client, app, project) -> None:
-    """The router rejects the request before touching the intake when the limiter denies."""
+    """The adapter rejects the request and preserves its rate-limit headers."""
+    from pycurb.core import RateLimitResult
+
     from tiber.api.dependencies import get_ingestion_rate_limiter
 
-    class _DenyAllLimiter:
-        async def is_allowed(self, project_id) -> bool:
-            return False
+    class _DenyingCoreLimiter:
+        async def check(self, key: str, rule_name: str) -> RateLimitResult:
+            return RateLimitResult(
+                allowed=False,
+                remaining=0,
+                reset_at=1_700_000_060,
+                limit=100,
+                retry_after=60,
+            )
 
-    app.dependency_overrides[get_ingestion_rate_limiter] = lambda: _DenyAllLimiter()
+    class _DenyingAdapterLimiter:
+        limiter = _DenyingCoreLimiter()
+        rule_name = "ingestion"
+
+    app.dependency_overrides[get_ingestion_rate_limiter] = lambda: (
+        _DenyingAdapterLimiter()
+    )
 
     response = await client.post(
         f"/projects/{project.id}/notifications",
@@ -142,6 +156,9 @@ async def test_rate_limited_project_is_rejected(client, app, project) -> None:
     )
 
     assert response.status_code == 429
+    assert response.headers["x-ratelimit-limit"] == "100"
+    assert response.headers["x-ratelimit-remaining"] == "0"
+    assert response.headers["retry-after"] == "60"
 
 
 async def test_list_notifications_is_scoped_to_the_project(client, project) -> None:

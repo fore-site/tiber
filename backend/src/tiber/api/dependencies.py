@@ -4,7 +4,9 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, Response, status
+from pycurb.adapters.fastapi import rate_limiter
+from pycurb.core import RateLimitResult
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,9 +17,8 @@ from ..application.services.notification_query import NotificationQueryService
 from ..application.services.recipient_resolution import RecipientResolutionService
 from ..core.config import get_settings
 from ..core.database import AsyncSessionFactory
-from ..core.redis import get_redis_client
+from ..core.redis import RedisKeys, get_redis_client
 from ..domain.repositories import NotificationIntakeRepository
-from ..infrastructure.messaging.sqlalchemy_outbox import SQLAlchemyOutbox
 from ..infrastructure.models import ProjectModel
 from ..infrastructure.rate_limit.ingestion_rate_limiter import IngestionRateLimiter
 from ..infrastructure.repositories.sqlalchemy_notification_intake_repository import (
@@ -29,15 +30,14 @@ from ..infrastructure.repositories.sqlalchemy_notification_repository import (
 from ..infrastructure.repositories.sqlalchemy_notification_topic_repository import (
     SQLAlchemyNotificationTopicRepository,
 )
+from ..infrastructure.repositories.sqlalchemy_outbox import SQLAlchemyOutbox
 from ..infrastructure.repositories.sqlalchemy_recipient_repository import (
     SQLAlchemyRecipientRepository,
 )
 from ..infrastructure.repositories.sqlalchemy_template_repository import (
     SQLAlchemyTemplateRepository,
 )
-
-# Written below as stubs of names; these modules do not exist yet.
-from ..infrastructure.unit_of_work import SqlAlchemyUnitOfWork
+from ..infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
 
 settings = get_settings()
 
@@ -172,9 +172,31 @@ def get_ingestion_rate_limiter(
     )
 
 
-# --------------------------------------------------------------------------- #
+def _ingestion_rate_limit_key(request: Request) -> str:
+    """Build the per-project key consumed by the PyCurb FastAPI adapter."""
+    project_id = request.path_params.get("project_id")
+    if project_id is None:
+        raise RuntimeError(
+            "The ingestion rate limit requires a project_id path parameter."
+        )
+    return RedisKeys.ingestion_rate_limit(str(project_id))
+
+
+async def enforce_ingestion_rate_limit(
+    request: Request,
+    response: Response,
+    limiter: Annotated[IngestionRateLimiter, Depends(get_ingestion_rate_limiter)],
+) -> RateLimitResult:
+    """Enforce the project ingestion quota through PyCurb's FastAPI adapter."""
+    dependency = rate_limiter(
+        limiter=limiter.limiter,
+        rule_name=limiter.rule_name,
+        key_extractor=_ingestion_rate_limit_key,
+    )
+    return await dependency(request, response)
+
+
 # Application services
-# --------------------------------------------------------------------------- #
 
 
 def get_recipient_resolution_service(
@@ -230,8 +252,3 @@ def get_notification_query_service(
         intake_repository=intake_repository,
         recipient_repository=recipient_repository,
     )
-
-
-# Moved out of the API process (they now belong to the worker's IntakeProcessor
-# wiring): idempotency guard, message publisher, template resolver, policy
-# resolver, channel ranker/resolver, delivery constraint repository.
