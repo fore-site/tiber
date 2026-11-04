@@ -13,7 +13,7 @@ class Project:
     id: UUID = field(default_factory=uuid4)
     account_id: UUID
     name: str
-    slug: str | None = None
+    slug: str
     description: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -24,23 +24,18 @@ class Project:
         if not self.name or not self.name.strip():
             raise InvalidEntityAttributeError("Project name must not be empty")
 
-        if self.slug is None:
-            require_derivable_name(self.name)
-            object.__setattr__(self, "slug", derive_slug(self.name))
-
-        if self.slug and not SLUG_RE.fullmatch(self.slug):
-            raise InvalidEntityAttributeError(
-                "Project slug must be lowercase letters and digits separated "
-                "by single hyphens, with no leading or trailing hyphen "
-                f"(got: {self.slug!r})"
-            )
-
     @classmethod
     def create(
         cls, *, account_id: UUID, name: str, description: str | None = None
     ) -> Project:
         """Create a new project; the slug is derived from the name."""
-        return cls(account_id=account_id, name=name, description=description)
+        require_derivable_name(name)
+        return cls(
+            account_id=account_id,
+            name=name,
+            slug=derive_slug(name),
+            description=description,
+        )
 
     @classmethod
     def reconstitute(
@@ -60,6 +55,12 @@ class Project:
         The stored slug is required and loaded as-is: rehydration must
         reproduce the row exactly, never re-derive an identity.
         """
+        if not SLUG_RE.fullmatch(slug):
+            raise InvalidEntityAttributeError(
+                "Project slug must be lowercase letters and digits separated "
+                "by single hyphens, with no leading or trailing hyphen "
+                f"(got: {slug!r})"
+            )
         return cls(
             id=id,
             account_id=account_id,
