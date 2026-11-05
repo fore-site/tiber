@@ -66,8 +66,43 @@ class RedisKeys:
 
     @staticmethod
     def refresh_token(token: str) -> str:
-        """Generate a Redis key for a refresh token."""
+        """Generate a Redis key for a hash of a refresh token."""
         return f"auth:refresh:{token}"
+
+    @staticmethod
+    def auth_session(session_id: str) -> str:
+        """Generate a Redis key marking a revoked authentication session."""
+        return f"auth:session:revoked:{session_id}"
+
+    @staticmethod
+    def email_verification(account_id: UUID | str) -> str:
+        """Generate an account-scoped key for its active verification code."""
+        return f"auth:email-verification:account:{account_id}"
+
+    @staticmethod
+    def email_verification_attempts(account_id: UUID | str) -> str:
+        """Generate a key for failed email-verification code attempts."""
+        return f"auth:email-verification:attempts:{account_id}"
+
+    @staticmethod
+    def password_reset(account_id: UUID | str) -> str:
+        """Generate an account-scoped pointer to its active password token."""
+        return f"auth:password-reset:account:{account_id}"
+
+    @staticmethod
+    def password_reset_account_prefix() -> str:
+        """Return the account pointer prefix used by atomic token consumption."""
+        return "auth:password-reset:account:"
+
+    @staticmethod
+    def password_reset_token(token_hash: str) -> str:
+        """Generate a key for a one-time password-reset token hash."""
+        return f"auth:password-reset:token:{token_hash}"
+
+    @staticmethod
+    def github_oauth_state(state_hash: str) -> str:
+        """Generate a key for a one-time GitHub OAuth state hash."""
+        return f"auth:github:state:{state_hash}"
 
     @staticmethod
     def idempotency(project_id: UUID | str, idempotency_key: str) -> str:
@@ -75,9 +110,9 @@ class RedisKeys:
         return f"idempotency:{project_id}:{idempotency_key}"
 
     @staticmethod
-    def ingestion_rate_limit(project_id: UUID | str) -> str:
-        """Generate the Redis key for the per-project ingestion rate counter."""
-        return f"ratelimit:ingestion:{project_id}"
+    def rate_limit(policy: str, identity: str) -> str:
+        """Generate a counter key isolated by policy and authenticated identity."""
+        return f"ratelimit:{policy}:{identity}"
 
 
 class RedisTTL:
@@ -101,10 +136,6 @@ class RedisTTL:
     #: Idempotency entries remain valid for 24 hours, matching the API contract.
     IDEMPOTENCY = timedelta(hours=24)
 
-    #: Ingestion rate-limit window (matches the configured window; the counter
-    #: is given this TTL on its first increment of each window).
-    INGESTION_RATE_LIMIT = timedelta(seconds=60)
-
     #: Distributed lock duration.
     #: Prevents abandoned locks while giving workers enough time to complete.
     DISTRIBUTED_LOCK = timedelta(seconds=60)
@@ -115,3 +146,7 @@ class RedisTTL:
     API_KEY_ACTIVE = timedelta(minutes=5)
     API_KEY_REVOKED = timedelta(days=30)
     API_KEY_NOT_FOUND = timedelta(seconds=60)
+
+    EMAIL_VERIFICATION = timedelta(minutes=10)
+    PASSWORD_RESET = timedelta(minutes=30)
+    GITHUB_OAUTH_STATE = timedelta(minutes=10)

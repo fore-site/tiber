@@ -16,6 +16,8 @@ from .exception_handlers import (
     tiber_exception_handler,
     validation_exception_handler,
 )
+from .routers.api_keys import router as api_key_router
+from .routers.auth import router as auth_router
 from .routers.health import router as health_router
 from .routers.notification import router as notification_router
 
@@ -89,6 +91,8 @@ def create_app() -> FastAPI:
             reset_correlation_id(token)
 
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(api_key_router)
     app.include_router(notification_router)
     return app
 

@@ -67,6 +67,10 @@ def create_access_token(
     now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.access_token_expire_minutes)
 
+    reserved_claims = {"sub", "jti", "iat", "exp", "type"}
+    if extra and reserved_claims.intersection(extra):
+        raise ValueError("Additional JWT claims cannot replace reserved claims")
+
     payload = {
         "sub": subject,
         "jti": jti,
@@ -75,6 +79,9 @@ def create_access_token(
         "type": "access",
         **(extra or {}),
     }
+
+    if not settings.secret_key:
+        raise RuntimeError("SECRET_KEY must be configured before issuing JWTs")
 
     access_token = jwt.encode(
         payload, settings.secret_key, algorithm=settings.algorithm

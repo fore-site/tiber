@@ -74,11 +74,8 @@ class RedisApiKeyAuthCache:
             logger.warning("API key cache write failed", error=str(exc))
 
     async def invalidate(self, key_hash: str) -> None:
-        """Remove a cached authentication fact when invalidation is requested."""
-        try:
-            await self._redis.delete(RedisKeys.api_key(key_hash))
-        except RedisError as exc:
-            logger.warning("API key cache invalidation failed", error=str(exc))
+        """Remove cached key facts; callers must surface failure after revocation."""
+        await self._redis.delete(RedisKeys.api_key(key_hash))
 
     @staticmethod
     def _ttl(entry: CachedApiKey, now: datetime) -> timedelta:

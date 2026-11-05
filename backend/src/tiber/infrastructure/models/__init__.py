@@ -1,4 +1,5 @@
 from .account import AccountModel
+from .api_key import APIKeyModel
 from .delivery_attempt import DeliveryAttemptModel
 from .delivery_constraint import DeliveryConstraintModel
 from .notification import NotificationModel
@@ -10,6 +11,7 @@ from .template import TemplateModel, TemplateVariantModel
 from .topic import NotificationTopicModel
 
 __all__ = [
+    "APIKeyModel",
     "AccountModel",
     "DeliveryAttemptModel",
     "DeliveryConstraintModel",

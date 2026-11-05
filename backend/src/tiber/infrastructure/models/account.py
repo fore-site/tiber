@@ -14,13 +14,11 @@ from .types import AccountRoleType
 
 
 class AccountModel(Base):
-    """Platform accounts - the ownership roots the domain models by id.
+    """Dashboard accounts and their infrastructure-owned authentication state.
 
-    The domain's Account entity is id-only: Tiber is a notification-delivery
-    platform, not an authentication service, so the supporting auth capability
-    lives entirely in infrastructure. These columns (credentials, verification,
-    role) are the auth store; they are deliberately NOT mapped back into the
-    domain entity.
+    The domain's Account entity remains an id-only ownership root; credential
+    hashes, verification state, roles, and session-version state stay in this
+    infrastructure model.
     """
 
     __tablename__ = "accounts"
@@ -58,6 +56,17 @@ class AccountModel(Base):
         Boolean,
         nullable=False,
         server_default=sa.text("false"),
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=sa.text("true"),
+    )
+
+    auth_version: Mapped[int] = mapped_column(
+        nullable=False,
+        server_default=sa.text("0"),
     )
 
     pending_email: Mapped[str | None] = mapped_column(

@@ -2,6 +2,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlparse
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,10 +43,22 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
+    email_sender: str = ""
+    dashboard_url: str = "http://localhost:3000"
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+    github_oauth_redirect_uri: str = "http://localhost:8000/v1/auth/github/callback"
 
     # Rate limiting
+    rate_limit_algorithm: Literal["sliding_window", "token_bucket"] = "sliding_window"
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
+    rate_limit_auth_requests: int = 20
+    rate_limit_dashboard_requests: int = 100
+    rate_limit_api_requests: int = 100
+    rate_limit_auth_window_seconds: int = 60
+    rate_limit_dashboard_window_seconds: int = 60
+    rate_limit_api_window_seconds: int = 60
 
     # Idempotency
     idempotency_ttl_seconds: int = 86400
@@ -55,6 +68,14 @@ class Settings(BaseSettings):
     notification_retry_base_delay_seconds: int = 30
     notification_retry_backoff_factor: int = 2
     notification_retry_max_delay_seconds: int = 3600
+    notification_processing_lease_seconds: int = Field(default=300, ge=1)
+
+    # Transactional outbox relay
+    outbox_relay_interval_seconds: int = Field(default=1, ge=1)
+    outbox_relay_batch_size: int = Field(default=100, ge=1)
+    outbox_retry_max_attempts: int = Field(default=10, ge=1)
+    outbox_retry_base_delay_seconds: int = Field(default=1, ge=1)
+    outbox_retry_max_delay_seconds: int = Field(default=300, ge=1)
 
     # Object storage
     storage_endpoint: str = "localhost:9000"
@@ -80,6 +101,11 @@ class Settings(BaseSettings):
     fcm_project_id: str = ""
     fcm_private_key: str = ""
     fcm_client_email: str = ""
+
+    sms_provider: Literal["mock", "twilio"] = "mock"
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
 
     @property
     def celery_broker_url(self):

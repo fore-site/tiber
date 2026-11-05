@@ -8,6 +8,7 @@ decided by the caller from the principal it gets back.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -37,16 +38,35 @@ class ApiKeyPrincipal:
 AuthMethod = Literal["api_key", "jwt"]
 
 
+@dataclass
+class AuthAccount:
+    """Application view of account identity and authentication state."""
+
+    id: UUID
+    email: str
+    role: str
+    is_verified: bool
+    is_active: bool
+    auth_version: int
+    pending_email: str | None
+    password_hash: str | None
+    github_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 @dataclass(frozen=True)
 class AuthContext:
     """The outcome of authenticating AND authorizing a request for one project.
 
-    ``project_id`` is the project the caller is allowed to act on. Which of
-    ``api_key_id`` / ``account_id`` is set depends on ``method``; use them for audit
-    logs and for later per-key or per-account decisions.
+    ``project_id`` is set for API keys and ``account_id`` for dashboard JWTs.
+    Use the identity fields for audit logs and rate-limit target selection.
     """
 
-    project_id: UUID
+    project_id: UUID | None
     method: AuthMethod
     api_key_id: UUID | None = None
     account_id: UUID | None = None
+    token_id: str | None = None
+    token_expiry: int | None = None
+    session_id: str | None = None

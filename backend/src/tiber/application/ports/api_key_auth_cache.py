@@ -20,6 +20,9 @@ Contract points that matter for security:
 * **A cache failure is never an authentication failure.** Implementations swallow
   their own errors: ``get`` returns ``None`` (a miss) and writes become no-ops, so
   the authenticator falls back to the database.
+* **Invalidation is different from ordinary cache use.** A revocation operation
+  must observe a failed invalidation and report that revocation state could not be
+  confirmed; it must not return success as if a stale active cache entry were gone.
 * **Anything unreadable is a miss.** An incomplete or corrupt entry must come back
   as ``None``, never as an answer.
 """
