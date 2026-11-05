@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from urllib.parse import parse_qs
 
 import httpx
@@ -9,7 +10,46 @@ from tiber.core.config import Settings
 from tiber.domain.enums import DeliveryChannel
 from tiber.domain.value_objects import ContentAction, ContentImage
 from tiber.infrastructure.providers.factory import build_provider_manager
+from tiber.infrastructure.providers.push.fcm import FCMProvider
 from tiber.infrastructure.providers.sms.twilio import TwilioSMSProvider
+
+
+def test_provider_factory_initializes_fcm_with_application_default_credentials():
+    """FCM uses ADC and the explicitly configured target project."""
+    settings = Settings.model_construct(
+        push_provider="fcm",
+        fcm_project_id="firebase-project",
+    )
+
+    with (
+        patch(
+            "tiber.infrastructure.providers.factory.firebase_admin.get_app",
+            side_effect=ValueError("app does not exist"),
+        ),
+        patch(
+            "tiber.infrastructure.providers.factory.credentials.ApplicationDefault",
+            return_value=object(),
+        ) as application_default,
+        patch(
+            "tiber.infrastructure.providers.factory.firebase_admin.initialize_app",
+            return_value=object(),
+        ) as initialize_app,
+    ):
+        manager = build_provider_manager(settings, channels=(DeliveryChannel.PUSH,))
+
+    application_default.assert_called_once_with()
+    assert initialize_app.call_args.kwargs["options"] == {
+        "projectId": "firebase-project"
+    }
+    assert isinstance(manager.get(DeliveryChannel.PUSH), FCMProvider)
+
+
+def test_provider_factory_requires_fcm_project_id():
+    """FCM cannot be initialized without its target Firebase project."""
+    settings = Settings.model_construct(push_provider="fcm", fcm_project_id="")
+
+    with pytest.raises(ValueError, match="FCM requires FCM_PROJECT_ID"):
+        build_provider_manager(settings, channels=(DeliveryChannel.PUSH,))
 
 
 def test_provider_factory_builds_requested_live_channel_only():

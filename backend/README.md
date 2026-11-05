@@ -90,10 +90,17 @@ connections stay attached to their creating loop across tasks.
 
 Configure live providers with `EMAIL_PROVIDER=resend`,
 `PUSH_PROVIDER=fcm`, or `SMS_PROVIDER=twilio`, and provide the matching
-credentials from `.env.example`. The default `mock` email, push, and SMS
-providers are intended for local development. In-app delivery records the
-notification in the existing project notification feed and needs no external
-provider credentials.
+credentials from `.env.example`. For FCM, also set `GOOGLE_APPLICATION_CREDENTIALS`
+in the worker process environment to the path of a Firebase service-account
+JSON file, and set `FCM_PROJECT_ID` to the target Firebase project. The Firebase
+Admin SDK uses Application Default Credentials to load and refresh credentials.
+Keep the JSON file outside the repository and restrict access to it; on Render,
+use a Secret File and point the worker's environment variable to its `/etc/secrets/`
+path. Do not put the private key contents in `.env`.
+
+The default `mock` email, push, and SMS providers are intended for local
+development. In-app delivery records the notification in the existing project
+notification feed and needs no external provider credentials.
 
 ### Database migrations
 

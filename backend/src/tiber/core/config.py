@@ -98,8 +98,6 @@ class Settings(BaseSettings):
 
     push_provider: Literal["mock", "fcm"] = "mock"
     fcm_project_id: str = ""
-    fcm_private_key: str = ""
-    fcm_client_email: str = ""
 
     sms_provider: Literal["mock", "twilio"] = "mock"
     twilio_account_sid: str = ""

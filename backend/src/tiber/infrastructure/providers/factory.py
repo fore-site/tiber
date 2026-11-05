@@ -49,28 +49,15 @@ def _email_provider(settings: Settings) -> ChannelProvider:
 def _push_provider(settings: Settings) -> ChannelProvider:
     if settings.push_provider == "mock":
         return MockProvider(DeliveryChannel.PUSH)
-    if not all(
-        (settings.fcm_project_id, settings.fcm_private_key, settings.fcm_client_email)
-    ):
-        raise ValueError(
-            "FCM requires FCM_PROJECT_ID, FCM_PRIVATE_KEY, and FCM_CLIENT_EMAIL"
-        )
+    if not settings.fcm_project_id:
+        raise ValueError("FCM requires FCM_PROJECT_ID")
 
     app_name = "tiber-notifications"
     try:
         app = firebase_admin.get_app(app_name)
     except ValueError:
-        credential = credentials.Certificate(
-            {
-                "type": "service_account",
-                "project_id": settings.fcm_project_id,
-                "private_key": settings.fcm_private_key.replace("\\n", "\n"),
-                "client_email": settings.fcm_client_email,
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-        )
         app = firebase_admin.initialize_app(
-            credential,
+            credentials.ApplicationDefault(),
             options={"projectId": settings.fcm_project_id},
             name=app_name,
         )
