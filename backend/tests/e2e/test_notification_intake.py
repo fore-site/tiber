@@ -11,9 +11,24 @@ those journeys here rather than resurrecting per-class unit tests.
 
 from __future__ import annotations
 
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 import pytest
+
+from tiber.domain.entities import Notification
+from tiber.domain.enums import (
+    DeliveryChannel,
+    NotificationCategory,
+    NotificationStatus,
+    SendTimeBasis,
+)
+from tiber.domain.value_objects import NotificationContent
+from tiber.infrastructure.models import RecipientModel
+from tiber.infrastructure.repositories.sqlalchemy_notification_repository import (
+    SQLAlchemyNotificationRepository,
+)
+from tiber.infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = pytest.mark.e2e
 
@@ -126,13 +141,19 @@ async def test_request_status_is_readable_before_fan_out(client, project) -> Non
 
 
 async def test_rate_limited_project_is_rejected(client, app, project) -> None:
-    """The adapter rejects the request and preserves its rate-limit headers."""
+    """The project policy rejects the request and preserves its rate-limit headers."""
     from pycurb.core import RateLimitResult
 
-    from tiber.api.dependencies import get_ingestion_rate_limiter
+    from tiber.api.dependencies import get_rate_limit_policies
+    from tiber.core.redis import RedisKeys
 
     class _DenyingCoreLimiter:
+        key: str | None = None
+        rule_name: str | None = None
+
         async def check(self, key: str, rule_name: str) -> RateLimitResult:
+            self.key = key
+            self.rule_name = rule_name
             return RateLimitResult(
                 allowed=False,
                 remaining=0,
@@ -141,13 +162,12 @@ async def test_rate_limited_project_is_rejected(client, app, project) -> None:
                 retry_after=60,
             )
 
-    class _DenyingAdapterLimiter:
-        limiter = _DenyingCoreLimiter()
-        rule_name = "ingestion"
+    class _DenyingPolicies:
+        def __init__(self) -> None:
+            self.limiter = _DenyingCoreLimiter()
 
-    app.dependency_overrides[get_ingestion_rate_limiter] = lambda: (
-        _DenyingAdapterLimiter()
-    )
+    policies = _DenyingPolicies()
+    app.dependency_overrides[get_rate_limit_policies] = lambda: policies
 
     response = await client.post(
         f"/projects/{project.id}/notifications",
@@ -159,6 +179,8 @@ async def test_rate_limited_project_is_rejected(client, app, project) -> None:
     assert response.headers["x-ratelimit-limit"] == "100"
     assert response.headers["x-ratelimit-remaining"] == "0"
     assert response.headers["retry-after"] == "60"
+    assert policies.limiter.key == RedisKeys.rate_limit("api", str(project.id))
+    assert policies.limiter.rule_name == "api"
 
 
 async def test_list_notifications_is_scoped_to_the_project(client, project) -> None:
@@ -170,3 +192,54 @@ async def test_list_notifications_is_scoped_to_the_project(client, project) -> N
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+async def test_cancel_pending_notification_and_reject_repeat(
+    client,
+    project,
+    session,
+) -> None:
+    """Cancellation persists, and repeat cancellation returns a conflict."""
+    project_id = project.id
+    recipient = RecipientModel(
+        project_id=project_id,
+        addresses={"email": "scheduled@example.com"},
+    )
+    session.add(recipient)
+    await session.commit()
+
+    notification = Notification.create(
+        project_id=project_id,
+        recipient_id=recipient.id,
+        transaction_id=uuid4(),
+        channel=DeliveryChannel.EMAIL,
+        category=NotificationCategory.INFORMATIONAL,
+        content=NotificationContent(title="Scheduled", body="A message"),
+        send_at=datetime.now(UTC) + timedelta(hours=1),
+        send_time_basis=SendTimeBasis.EXPLICIT,
+    )
+    async with SqlAlchemyUnitOfWork(session):
+        await SQLAlchemyNotificationRepository(session).save(notification)
+
+    cancellation_url = (
+        f"/projects/{project_id}/notifications/{notification.id}/cancellation"
+    )
+    cancelled = await client.put(cancellation_url, headers=AUTH)
+    assert cancelled.status_code == 204
+
+    fetched = await client.get(
+        f"/projects/{project_id}/notifications/{notification.id}",
+        headers=AUTH,
+    )
+    assert fetched.status_code == 200
+    assert fetched.json()["status"] == NotificationStatus.CANCELLED.value
+
+    repeated = await client.put(cancellation_url, headers=AUTH)
+    assert repeated.status_code == 409
+
+    await session.refresh(project)
+    missing = await client.put(
+        f"/projects/{project_id}/notifications/{uuid4()}/cancellation",
+        headers=AUTH,
+    )
+    assert missing.status_code == 404

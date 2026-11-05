@@ -77,7 +77,7 @@ class OutboxModel(Base):
             "priority",
             "available_at",
             "id",
-            postgresql_where=text("published_at IS NULL"),
+            postgresql_where=text("published_at IS NULL AND dead_lettered_at IS NULL"),
         ),
         Index("ix_outbox_aggregate", "aggregate_id"),
     )
@@ -123,6 +123,11 @@ class OutboxModel(Base):
     )
 
     published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

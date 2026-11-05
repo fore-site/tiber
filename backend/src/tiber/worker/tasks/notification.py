@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 from typing import NoReturn
 from uuid import UUID
@@ -27,7 +26,7 @@ from ...domain.exceptions import (
 )
 from ...domain.policies import PolicyResolver
 from ...events.job_payload import NotificationJobPayload
-from ...infrastructure.providers.manager import ProviderManager
+from ...infrastructure.providers.factory import build_provider_manager
 from ...infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (
     SQLAlchemyDeliveryAttemptRepository,
 )
@@ -43,6 +42,8 @@ from ...infrastructure.repositories.sqlalchemy_recipient_repository import (
 from ...infrastructure.repositories.sqlalchemy_template_repository import (
     SQLAlchemyTemplateRepository,
 )
+from ...infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
+from ..async_runtime import run_async
 from ..celery_app import celery_app
 from ..retry import exponential_backoff
 
@@ -63,19 +64,24 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
     """Load a project-scoped notification and run it through delivery."""
     async with AsyncSessionFactory() as session:
         notifications = SQLAlchemyNotificationRepository(session)
+        unit_of_work = SqlAlchemyUnitOfWork(session)
         recipients = SQLAlchemyRecipientRepository(session)
         attempts = SQLAlchemyDeliveryAttemptRepository(session)
         templates = SQLAlchemyTemplateRepository(session)
         constraints = SQLAlchemyDeliveryConstraintRepository(session)
 
-        notification = await notifications.get_by_id(notification_id, project_id)
+        async with unit_of_work:
+            notification = await notifications.get_by_id(notification_id, project_id)
         if notification is None:
             logger.warning("Notification %s not found; skipping", notification_id)
             return None
 
-        provider = ProviderManager().get(notification.channel)
+        provider = build_provider_manager(
+            SETTINGS, channels=(notification.channel,)
+        ).get(notification.channel)
 
         processor = NotificationDeliveryProcessor(
+            unit_of_work=unit_of_work,
             notification_repository=notifications,
             recipient_repository=recipients,
             delivery_attempt_repository=attempts,
@@ -87,10 +93,10 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
                 template_repository=templates
             ),
             constraint_repository=constraints,
+            processing_lease_seconds=SETTINGS.notification_processing_lease_seconds,
         )
 
         updated = await processor.process(notification_id, project_id=project_id)
-        await session.commit()
 
         logger.info(
             "Notification %s -> %s",
@@ -106,12 +112,15 @@ def _seconds_until(send_at: datetime) -> int:
 
 
 def _should_defer(notification: Notification) -> bool:
-    """Return True when the notification is not yet due and must be rescheduled.
+    """Return True when scheduled, postponed, or leased work must be rescheduled.
 
     POSTPONED notifications are always re-queued on their resume time: the
-    decision to postpone already recorded when delivery may proceed.
+    decision to postpone already recorded when delivery may proceed. PROCESSING
+    notifications are re-queued until their lease expires in case a worker died.
     """
     if notification.status is NotificationStatus.POSTPONED:
+        return True
+    if notification.status is NotificationStatus.PROCESSING:
         return True
     if notification.status != NotificationStatus.PENDING:
         return False
@@ -161,9 +170,9 @@ def process_notification(self, job) -> None:
         return
 
     try:
-        updated = asyncio.run(_process(payload.notification_id, payload.project_id))
+        updated = run_async(_process(payload.notification_id, payload.project_id))
     except PERMANENT_DELIVERY_ERRORS as exc:
-        asyncio.run(
+        run_async(
             _mark_permanent_failure(
                 payload.notification_id, payload.project_id, str(exc)
             )
@@ -172,12 +181,22 @@ def process_notification(self, job) -> None:
     except Exception as exc:  # transient infra/provider error -> bounded retry
         _retry_or_dead_letter(self, payload, exc)
 
-    if updated is not None and updated.send_at is not None and _should_defer(updated):
-        countdown = _seconds_until(updated.send_at)
+    if updated is not None and _should_defer(updated):
+        if updated.status is NotificationStatus.PROCESSING:
+            lease_expires = updated.updated_at.timestamp() + (
+                SETTINGS.notification_processing_lease_seconds
+            )
+            countdown = max(1, int(lease_expires - datetime.now(UTC).timestamp()))
+        else:
+            if updated.send_at is None:
+                raise ValueError(
+                    f"Notification {updated.id} was deferred without a send time"
+                )
+            countdown = _seconds_until(updated.send_at)
         logger.info(
-            "Notification %s scheduled for %s; deferring for %ss",
+            "Notification %s state=%s deferred for %ss",
             payload.notification_id,
-            updated.send_at,
+            updated.status.value,
             countdown,
         )
         # Re-dispatches are idempotent and use a Celery countdown rather than
@@ -212,6 +231,13 @@ def _retry_or_dead_letter(
         logger.error(
             "Retry budget exhausted notification_id=%s; routing to DLQ",
             payload.notification_id,
+        )
+        run_async(
+            _mark_permanent_failure(
+                payload.notification_id,
+                payload.project_id,
+                f"retry budget exhausted: {type(exc).__name__}: {exc}",
+            )
         )
         raise exc
 
@@ -251,10 +277,10 @@ async def _mark_permanent_failure(
     )
     async with AsyncSessionFactory() as session:
         repository = SQLAlchemyNotificationRepository(session)
-        notification = await repository.get_by_id(notification_id, project_id)
-        if notification is not None and notification.status in (
-            NotificationStatus.PENDING,
-            NotificationStatus.PROCESSING,
-        ):
-            await repository.save(notification.mark_failed(reason))
-            await session.commit()
+        async with SqlAlchemyUnitOfWork(session):
+            notification = await repository.get_by_id(notification_id, project_id)
+            if notification is not None and notification.status in (
+                NotificationStatus.PENDING,
+                NotificationStatus.PROCESSING,
+            ):
+                await repository.save(notification.mark_failed(reason))

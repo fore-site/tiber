@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import cast
 from uuid import UUID
 
@@ -45,6 +46,62 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         if model is not None and model.project_id != project_id:
             return None
         return self._to_entity(model) if model else None
+
+    async def cancel_pending(self, notification: Notification) -> bool:
+        """Atomically persist cancellation only while the row remains pending."""
+        result = await self._session.execute(
+            update(NotificationModel)
+            .where(
+                NotificationModel.id == notification.id,
+                NotificationModel.project_id == notification.project_id,
+                NotificationModel.status == NotificationStatus.PENDING,
+            )
+            .values(
+                status=notification.status,
+                cancellation_reason=notification.cancellation_reason,
+                updated_at=notification.updated_at,
+            )
+        )
+        await self._session.flush()
+        return bool(cast(CursorResult, result).rowcount)
+
+    async def claim_for_delivery(
+        self,
+        notification: Notification,
+        *,
+        expected_status: NotificationStatus,
+        stale_before: datetime | None = None,
+    ) -> bool:
+        """Atomically claim a deliverable row or reclaim an expired processing lease."""
+        content = notification.content
+        statement = (
+            update(NotificationModel)
+            .where(
+                NotificationModel.id == notification.id,
+                NotificationModel.project_id == notification.project_id,
+                NotificationModel.status == expected_status,
+            )
+            .values(
+                status=notification.status,
+                subject=content.title,
+                body=content.body,
+                actions=[
+                    {"label": action.label, "url": action.url}
+                    for action in content.actions
+                ],
+                images=[
+                    {"url": image.url, "alt": image.alt} for image in content.images
+                ],
+                updated_at=notification.updated_at,
+            )
+        )
+        if expected_status is NotificationStatus.PROCESSING:
+            if stale_before is None:
+                raise ValueError("A stale_before cutoff is required to reclaim work")
+            statement = statement.where(NotificationModel.updated_at <= stale_before)
+        result = await self._session.execute(statement)
+        await self._session.flush()
+        return bool(cast(CursorResult, result).rowcount)
 
     async def get_by_idempotency_key(
         self, project_id: UUID, key: str

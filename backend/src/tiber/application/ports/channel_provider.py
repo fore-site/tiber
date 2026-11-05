@@ -25,6 +25,10 @@ class ProviderResult:
     error_message: str | None = None
 
 
+class TransientProviderError(RuntimeError):
+    """A provider failure that should be retried by the worker."""
+
+
 # Channel Provider port
 
 

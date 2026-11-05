@@ -13,6 +13,8 @@ from tiber.worker.queues import (
     DELIVERY_QUEUES,
     DLQ_EXCHANGE,
     DLQS,
+    INTERNAL_DLQ,
+    INTERNAL_QUEUE,
     NOTIFICATIONS_EXCHANGE,
     TASK_QUEUES,
     channel_topology,
@@ -59,13 +61,17 @@ def test_dlq_is_bound_and_durable():
 
 
 def test_queue_sets_cover_all_channels():
-    """CELERY queue sets include one delivery and one DLQ per channel."""
+    """Celery queues include channel queues and the internal worker queues."""
     assert len(DELIVERY_QUEUES) == len(list(DeliveryChannel))
     assert len(DLQS) == len(list(DeliveryChannel))
-    assert len(TASK_QUEUES) == 2 * len(list(DeliveryChannel))
-    assert set(TASK_QUEUES) == set(DELIVERY_QUEUES) | set(DLQS)
+    assert len(TASK_QUEUES) == 2 * len(list(DeliveryChannel)) + 2
+    assert set(TASK_QUEUES) == (
+        set(DELIVERY_QUEUES) | set(DLQS) | {INTERNAL_QUEUE, INTERNAL_DLQ}
+    )
 
     names = {q.name for q in TASK_QUEUES}
     for channel in DeliveryChannel:
         assert f"{channel.value}.delivery.queue" in names
         assert f"{channel.value}.dlq" in names
+    assert INTERNAL_QUEUE.name in names
+    assert INTERNAL_DLQ.name in names

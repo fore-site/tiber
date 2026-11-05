@@ -16,10 +16,11 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import insert
+from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...application.ports.intake import OutboxPriority
+from ...application.ports.outbox_relay import OutboxMessage
 from ...domain.entities import Notification
 from ...domain.entities.notification_intake import NotificationIntake
 from ...domain.enums import NotificationCategory
@@ -77,6 +78,66 @@ class SQLAlchemyOutbox:
                 "channel": notification.channel.value,
             },
             available_at=notification.send_at,
+        )
+
+    async def claim_next(self, now: datetime) -> OutboxMessage | None:
+        """Lock the next due outbox row without blocking other relay workers."""
+        result = await self._session.execute(
+            select(OutboxModel)
+            .where(
+                OutboxModel.published_at.is_(None),
+                OutboxModel.dead_lettered_at.is_(None),
+                OutboxModel.available_at <= now,
+            )
+            .order_by(
+                OutboxModel.priority,
+                OutboxModel.available_at,
+                OutboxModel.id,
+            )
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+        if model.kind not in (OutboxKind.INTAKE.value, OutboxKind.DISPATCH.value):
+            raise ValueError(f"Unknown outbox kind: {model.kind!r}")
+
+        return OutboxMessage(
+            id=model.id,
+            kind=model.kind,
+            aggregate_id=model.aggregate_id,
+            payload=dict(model.payload),
+            attempts=model.attempts,
+        )
+
+    async def mark_published(self, message_id: int, published_at: datetime) -> None:
+        """Mark a locked row as published in the current transaction."""
+        await self._session.execute(
+            update(OutboxModel)
+            .where(OutboxModel.id == message_id)
+            .values(published_at=published_at, last_error=None)
+        )
+
+    async def mark_failed(
+        self,
+        message_id: int,
+        *,
+        failed_at: datetime,
+        error: str,
+        next_attempt_at: datetime | None,
+    ) -> None:
+        """Record an error and either schedule a retry or dead-letter the row."""
+        values: dict[str, Any] = {
+            "attempts": OutboxModel.attempts + 1,
+            "last_error": error[:2000],
+        }
+        if next_attempt_at is None:
+            values["dead_lettered_at"] = failed_at
+        else:
+            values["available_at"] = next_attempt_at
+        await self._session.execute(
+            update(OutboxModel).where(OutboxModel.id == message_id).values(**values)
         )
 
     async def _insert(

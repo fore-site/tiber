@@ -141,9 +141,7 @@ def app(api_module, session: AsyncSession, project):
         async def check(self, key: str, rule_name: str) -> RateLimitResult:
             return self._result
 
-    class _FakeAdapterLimiter:
-        rule_name = "ingestion"
-
+    class _FakePolicies:
         def __init__(self, result: RateLimitResult) -> None:
             self.limiter = _FakeCoreLimiter(result)
 
@@ -161,8 +159,8 @@ def app(api_module, session: AsyncSession, project):
 
     application.dependency_overrides[deps.get_db] = _db
     application.dependency_overrides[deps.get_authenticated_project] = lambda: project
-    application.dependency_overrides[deps.get_ingestion_rate_limiter] = lambda: (
-        _FakeAdapterLimiter(allow_result)
+    application.dependency_overrides[deps.get_rate_limit_policies] = lambda: (
+        _FakePolicies(allow_result)
     )
     return application
 

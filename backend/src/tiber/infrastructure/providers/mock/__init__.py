@@ -7,10 +7,14 @@ prove the provider abstraction without external services.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ....application.ports.channel_provider import ProviderResult
 from ....domain.enums import DeliveryChannel
+
+if TYPE_CHECKING:
+    from ....domain.value_objects import ContentAction, ContentImage
 
 
 class MockProvider:
@@ -36,8 +40,8 @@ class MockProvider:
         recipient_address: str,
         title: str | None,
         body: str,
-        action_url: str | None = None,
-        image_url: str | None = None,
+        actions: tuple[ContentAction, ...] = (),
+        images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
     ) -> ProviderResult:
         """Simulate a delivery attempt."""

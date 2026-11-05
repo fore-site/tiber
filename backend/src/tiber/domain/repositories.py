@@ -8,6 +8,7 @@ One repository per persisted domain entity, mirroring the domain model.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -25,7 +26,7 @@ from .entities import (
     Template,
     WebhookEndpoint,
 )
-from .enums import DeliveryChannel, NotificationCategory
+from .enums import DeliveryChannel, NotificationCategory, NotificationStatus
 
 
 class AccountRepository(Protocol):
@@ -75,6 +76,20 @@ class NotificationRepository(Protocol):
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> Notification | None:
         """Get a notification by its ID within a project's scope."""
+        ...
+
+    async def cancel_pending(self, notification: Notification) -> bool:
+        """Atomically cancel a pending notification; return whether it was updated."""
+        ...
+
+    async def claim_for_delivery(
+        self,
+        notification: Notification,
+        *,
+        expected_status: NotificationStatus,
+        stale_before: datetime | None = None,
+    ) -> bool:
+        """Atomically transition a deliverable or stale processing row to PROCESSING."""
         ...
 
     async def get_by_idempotency_key(
@@ -132,6 +147,14 @@ class APIKeyRepository(Protocol):
         self, project_id: UUID, limit: int, offset: int
     ) -> list[APIKey]:
         """List all API keys for a project."""
+        ...
+
+    async def count_by_project(self, project_id: UUID) -> int:
+        """Count all API keys owned by a project."""
+        ...
+
+    async def list_by_account(self, account_id: UUID) -> list[APIKey]:
+        """List API keys belonging to projects owned by an account."""
         ...
 
 

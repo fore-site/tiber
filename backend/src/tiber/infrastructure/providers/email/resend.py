@@ -5,9 +5,12 @@ from __future__ import annotations
 from html import escape
 from typing import TYPE_CHECKING
 
-import resend
+import httpx
 
-from ....application.ports.channel_provider import ProviderResult
+from ....application.ports.channel_provider import (
+    ProviderResult,
+    TransientProviderError,
+)
 from ....domain.enums import DeliveryChannel
 
 if TYPE_CHECKING:
@@ -59,8 +62,6 @@ class ResendEmailProvider:
                 error_message="recipient address must not be empty",
             )
 
-        resend.api_key = self._api_key
-
         params = {
             "from": self._sender,
             "to": [recipient_address],
@@ -68,34 +69,41 @@ class ResendEmailProvider:
             "text": body,
             "html": self._build_html(body, actions, images),
         }
-
         try:
-            response = await resend.Emails.send_async(params)
-        except resend.ResendError as exc:
-            return ProviderResult(
-                success=False,
-                error_message=str(exc),
-            )
-        except Exception as exc:
-            return ProviderResult(
-                success=False,
-                error_message=str(exc),
-            )
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json=params,
+                )
+        except httpx.HTTPError as exc:
+            raise TransientProviderError("Resend request failed") from exc
 
-        provider_message_id = getattr(response, "id", None)
+        if response.status_code in (408, 429) or response.status_code >= 500:
+            raise TransientProviderError(
+                f"Resend returned transient HTTP {response.status_code}"
+            )
+        if response.is_error:
+            return ProviderResult(
+                success=False,
+                error_message=f"Resend returned HTTP {response.status_code}",
+            )
 
         return ProviderResult(
             success=True,
-            provider_message_id=provider_message_id,
+            provider_message_id=response.json().get("id"),
         )
 
     async def health_check(self) -> bool:
         """Check whether the configured Resend credentials are usable."""
-        resend.api_key = self._api_key
-
         try:
-            await resend.Domains.list_async()
-        except Exception:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(
+                    "https://api.resend.com/domains",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                )
+                response.raise_for_status()
+        except httpx.HTTPError:
             return False
 
         return True

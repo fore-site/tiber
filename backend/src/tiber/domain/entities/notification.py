@@ -253,6 +253,20 @@ class Notification:
 
         return self._transition(status=NotificationStatus.PROCESSING)
 
+    def retry_delivery(self) -> Notification:
+        """Return a transiently failed delivery attempt to PENDING for retry."""
+        if self.status is not NotificationStatus.PROCESSING:
+            raise InvalidStateTransitionError(self.status, NotificationStatus.PENDING)
+        return self._transition(status=NotificationStatus.PENDING)
+
+    def reclaim_processing(self) -> Notification:
+        """Refresh the processing lease after an earlier worker stopped making progress."""
+        if self.status is not NotificationStatus.PROCESSING:
+            raise InvalidStateTransitionError(
+                self.status, NotificationStatus.PROCESSING
+            )
+        return self._transition(status=NotificationStatus.PROCESSING)
+
     def mark_cancelled(self, reason: str | None = None) -> Notification:
         """Transition the notification to the cancelled state."""
         if self.status != NotificationStatus.PENDING:

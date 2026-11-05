@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING
 import firebase_admin
 from firebase_admin import exceptions, messaging
 
-from ....application.ports.channel_provider import ProviderResult
+from ....application.ports.channel_provider import (
+    ProviderResult,
+    TransientProviderError,
+)
 from ....domain.enums import DeliveryChannel
 
 if TYPE_CHECKING:
@@ -93,7 +96,7 @@ class FCMProvider:
                 image=image_url,
             ),
             data=data or None,
-            fid=recipient_address,
+            token=recipient_address,
         )
 
         try:
@@ -101,23 +104,30 @@ class FCMProvider:
                 [message],
                 app=self._firebase_app,
             )
-        except (exceptions.FirebaseError, ValueError) as exc:
+        except ValueError as exc:
             return ProviderResult(
                 success=False,
                 error_message=str(exc),
             )
-        except Exception as exc:
-            return ProviderResult(
-                success=False,
-                error_message=str(exc),
-            )
+        except exceptions.FirebaseError as exc:
+            raise TransientProviderError("Firebase messaging request failed") from exc
 
         result = response.responses[0]
 
         if not result.success:
+            error = result.exception
+            code = getattr(error, "code", None)
+            if code not in {
+                "invalid-argument",
+                "registration-token-not-registered",
+                "mismatched-credential",
+            }:
+                raise TransientProviderError(
+                    "Firebase rejected the message transiently"
+                ) from error
             return ProviderResult(
                 success=False,
-                error_message=str(result.exception),
+                error_message=str(error),
             )
 
         return ProviderResult(

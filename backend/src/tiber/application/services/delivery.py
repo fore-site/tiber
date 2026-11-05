@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from tiber.application.ports.channel_provider import ChannelProvider, ProviderResult
+from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import DeliveryAttempt, Notification, Recipient
 from tiber.domain.enums import (
     DeliveryAttemptStatus,
@@ -38,6 +39,7 @@ class NotificationDeliveryProcessor:
     def __init__(
         self,
         *,
+        unit_of_work: UnitOfWork,
         notification_repository: NotificationRepository,
         recipient_repository: RecipientRepository,
         delivery_attempt_repository: DeliveryAttemptRepository,
@@ -45,6 +47,7 @@ class NotificationDeliveryProcessor:
         policy_guard: DeliveryPolicyGuard | None = None,
         template_resolver: NotificationTemplateResolver | None = None,
         constraint_repository: DeliveryConstraintRepository | None = None,
+        processing_lease_seconds: int = 300,
     ) -> None:
         """Initialize the processor with its ports and the chosen provider.
 
@@ -59,12 +62,14 @@ class NotificationDeliveryProcessor:
         against the recipient alone (project-level constraints unseen).
         """
         self._notifications = notification_repository
+        self._uow = unit_of_work
         self._recipients = recipient_repository
         self._attempts = delivery_attempt_repository
         self._provider = provider
         self._policy_guard = policy_guard
         self._template_resolver = template_resolver
         self._constraints = constraint_repository
+        self._processing_lease = timedelta(seconds=processing_lease_seconds)
 
     async def process(self, notification_id: UUID, *, project_id: UUID) -> Notification:
         """Deliver a notification and return its updated state.
@@ -79,83 +84,88 @@ class NotificationDeliveryProcessor:
         the notification is moved to PROCESSING for the duration of the send,
         then to a terminal state.
         """
-        notification = await self._notifications.get_by_id(notification_id, project_id)
-        if notification is None:
-            raise EntityNotFoundError(Notification, str(notification_id))
+        async with self._uow:
+            notification = await self._notifications.get_by_id(
+                notification_id, project_id
+            )
+            if notification is None:
+                raise EntityNotFoundError(Notification, str(notification_id))
 
-        now = datetime.now(UTC)
+            expected_status = notification.status
+            now = datetime.now(UTC)
 
-        # Idempotent: only deliverable states are dispatched. A PENDING
-        # notification is a normal dispatch; a POSTPONED notification whose
-        # resume time has passed is resumed and delivered; anything else
-        # (in-flight, terminal, postponed-not-yet-due) is left untouched.
-        if notification.status is NotificationStatus.POSTPONED:
-            if notification.send_at is None or notification.send_at > now:
+            stale_before: datetime | None = None
+            if notification.status is NotificationStatus.PROCESSING:
+                stale_before = now - self._processing_lease
+                if notification.updated_at > stale_before:
+                    return notification
+            elif notification.status is NotificationStatus.POSTPONED:
+                if notification.send_at is None or notification.send_at > now:
+                    return notification
+                notification = notification.resume()
+            elif notification.status is not NotificationStatus.PENDING:
                 return notification
-            notification = notification.resume()
-        elif notification.status is not NotificationStatus.PENDING:
-            return notification
 
-        # Scheduling guard - never deliver before send_at.
-        if notification.send_at is not None and notification.send_at > now:
-            return notification
+            if notification.send_at is not None and notification.send_at > now:
+                return notification
 
-        recipient = await self._recipients.get_by_id(
-            notification.recipient_id, notification.project_id
-        )
-        if recipient is None:
-            # Project-scoped lookup: a miss covers both a dangling reference
-            # and a cross-project mismatch. Lookup failures raise so the
-            # task-level permanent-error path classifies them; they never
-            # reached a provider, so no delivery attempt is recorded.
-            raise EntityNotFoundError(Recipient, str(notification.recipient_id))
-
-        # Worker-time policy re-check while still deliverable. The decision's
-        # consequence decides the outcome: quiet-hours violations are
-        # postponed to after the window (the worker re-queues on the resume
-        # time), any other violation is suppressed with a reason. No delivery
-        # attempt is recorded for either - nothing reached a provider.
-        if self._policy_guard is not None:
-            constraint = (
-                await self._constraints.load_constraint(notification.project_id)
-                if self._constraints is not None
-                else None
+            recipient = await self._recipients.get_by_id(
+                notification.recipient_id, notification.project_id
             )
-            decision = await self._policy_guard.check(
-                notification, recipient, constraint
-            )
-            if not decision.allowed:
-                if decision.consequence is PolicyConsequence.POSTPONE:
-                    if decision.resume_at is None:
-                        raise ValueError(
-                            "policy returned POSTPONE without a resume time"
+            if recipient is None:
+                raise EntityNotFoundError(Recipient, str(notification.recipient_id))
+
+            if self._policy_guard is not None:
+                constraint = (
+                    await self._constraints.load_constraint(notification.project_id)
+                    if self._constraints is not None
+                    else None
+                )
+                decision = await self._policy_guard.check(
+                    notification, recipient, constraint
+                )
+                if not decision.allowed:
+                    if decision.consequence is PolicyConsequence.POSTPONE:
+                        if decision.resume_at is None:
+                            raise ValueError(
+                                "policy returned POSTPONE without a resume time"
+                            )
+                        updated = notification.mark_postponed(decision.resume_at)
+                    else:
+                        updated = notification.mark_suppressed(
+                            decision.reason or "policy violation"
                         )
-                    updated = notification.mark_postponed(decision.resume_at)
-                else:
-                    updated = notification.mark_suppressed(
-                        decision.reason or "policy violation"
-                    )
-                await self._notifications.save(updated)
-                return updated
+                    await self._notifications.save(updated)
+                    return updated
 
-        # Resolve content while still PENDING: render the template when one is
-        # referenced, else fall back to the notification's direct content.
-        if self._template_resolver is not None:
-            content = await self._template_resolver.resolve_content(notification)
-        else:
-            content = notification.content
+            content = (
+                await self._template_resolver.resolve_content(notification)
+                if self._template_resolver is not None
+                else notification.content
+            )
+            if (
+                self._template_resolver is not None
+                and notification.template_id is not None
+            ):
+                notification = notification.with_content(content)
 
-        # Store the rendered content in the immutable processing snapshot so
-        # subsequent reads and API responses reflect exactly what was sent.
-        if self._template_resolver is not None and notification.template_id is not None:
-            notification = notification.with_content(content)
+            processing = (
+                notification.reclaim_processing()
+                if expected_status is NotificationStatus.PROCESSING
+                else notification.mark_processing()
+            )
+            claimed = await self._notifications.claim_for_delivery(
+                processing,
+                expected_status=expected_status,
+                stale_before=stale_before,
+            )
+            if not claimed:
+                current = await self._notifications.get_by_id(
+                    notification_id, project_id
+                )
+                return current or notification
 
-        # Acquire the notification for the in-flight window so a concurrent or
-        # duplicate dispatch of the same id no longer sees PENDING.
-        processing = notification.mark_processing()
-        await self._notifications.save(processing)
-
-        address = recipient.addresses.get(notification.channel)
+            address = recipient.addresses.get(notification.channel)
 
         if not address:
             return await self._fail(
@@ -163,17 +173,21 @@ class NotificationDeliveryProcessor:
                 error=f"no {notification.channel.value} address for recipient",
             )
 
-        result: ProviderResult = await self._provider.send(
-            recipient_address=address,
-            title=content.title,
-            body=content.body,
-            action_url=content.action_url,
-            image_url=content.image_url,
-            metadata={
-                "notification_id": str(notification.id),
-                "transaction_id": str(notification.transaction_id),
-            },
-        )
+        try:
+            result: ProviderResult = await self._provider.send(
+                recipient_address=address,
+                title=content.title,
+                body=content.body,
+                actions=content.actions,
+                images=content.images,
+                metadata={
+                    "notification_id": str(notification.id),
+                    "transaction_id": str(notification.transaction_id),
+                },
+            )
+        except Exception as exc:
+            await self._retry(processing, error=str(exc), recipient_address=address)
+            raise
 
         if result.success:
             return await self._succeed(
@@ -217,25 +231,16 @@ class NotificationDeliveryProcessor:
         provider_message_id: str | None,
         recipient_address: str,
     ) -> Notification:
-        await self._record_attempt(
-            notification,
-            success=True,
-            provider_message_id=provider_message_id,
-            error=None,
-            recipient_address=recipient_address,
-        )
-        # Decision: provider acceptance currently ends in DELIVERED.
-        # Acceptance is not delivery - a bounce can still arrive later via
-        # the provider webhook, and DELIVERED -> BOUNCED is not a legal
-        # transition. When the inbound webhook pipeline lands, this flips
-        # to staying PROCESSING so the verdict is asynchronous: delivered
-        # and bounced webhooks transition the row, a polling fallback
-        # catches delayed/missing webhooks, and a 24h reaper marks
-        # anything still unverified as failed. Do not flip this without
-        # those consumers existing, or every notification strands in
-        # PROCESSING permanently.
-        updated = notification.mark_delivered()
-        await self._notifications.save(updated)
+        async with self._uow:
+            await self._record_attempt(
+                notification,
+                success=True,
+                provider_message_id=provider_message_id,
+                error=None,
+                recipient_address=recipient_address,
+            )
+            updated = notification.mark_delivered()
+            await self._notifications.save(updated)
         return updated
 
     async def _fail(
@@ -252,13 +257,32 @@ class NotificationDeliveryProcessor:
         case - so the snapshot on the attempt distinguishes "failed before
         contact" from "contacted and rejected".
         """
-        await self._record_attempt(
-            notification,
-            success=False,
-            provider_message_id=None,
-            error=error,
-            recipient_address=recipient_address,
-        )
-        updated = notification.mark_failed(error)
-        await self._notifications.save(updated)
+        async with self._uow:
+            await self._record_attempt(
+                notification,
+                success=False,
+                provider_message_id=None,
+                error=error,
+                recipient_address=recipient_address,
+            )
+            updated = notification.mark_failed(error)
+            await self._notifications.save(updated)
         return updated
+
+    async def _retry(
+        self,
+        notification: Notification,
+        *,
+        error: str,
+        recipient_address: str,
+    ) -> None:
+        """Persist a failed provider attempt and release the notification for retry."""
+        async with self._uow:
+            await self._record_attempt(
+                notification,
+                success=False,
+                provider_message_id=None,
+                error=error,
+                recipient_address=recipient_address,
+            )
+            await self._notifications.save(notification.retry_delivery())

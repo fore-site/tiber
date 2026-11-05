@@ -30,6 +30,30 @@ DLQ_EXCHANGE = Exchange(
     durable=True,
 )
 
+INTERNAL_EXCHANGE = Exchange(
+    "tiber.internal",
+    type="direct",
+    durable=True,
+)
+
+INTERNAL_QUEUE = Queue(
+    "tiber.internal.queue",
+    exchange=INTERNAL_EXCHANGE,
+    routing_key="internal.tasks",
+    durable=True,
+    queue_arguments={
+        "x-dead-letter-exchange": DLQ_EXCHANGE.name,
+        "x-dead-letter-routing-key": "internal.dlq",
+    },
+)
+
+INTERNAL_DLQ = Queue(
+    "internal.dlq",
+    exchange=DLQ_EXCHANGE,
+    routing_key="internal.dlq",
+    durable=True,
+)
+
 
 def channel_topology(channel: DeliveryChannel) -> tuple[Queue, Queue]:
     """Return ``(delivery_queue, dead_letter_queue)`` for a channel.
@@ -66,4 +90,4 @@ DELIVERY_QUEUES: tuple[Queue, ...] = tuple(
 DLQS: tuple[Queue, ...] = tuple(channel_topology(channel)[1] for channel in _CHANNELS)
 
 #: Queues Celery must declare on connect: every channel delivery queue and DLQ.
-TASK_QUEUES: tuple[Queue, ...] = DELIVERY_QUEUES + DLQS
+TASK_QUEUES: tuple[Queue, ...] = DELIVERY_QUEUES + DLQS + (INTERNAL_QUEUE, INTERNAL_DLQ)

@@ -12,10 +12,8 @@ class Outbox(Protocol):
     """Transactional outbox.
 
     Both methods write a row in the CURRENT transaction;
-    a separate relay publishes rows to the broker after commit. That closes the
-    "committed but never published" gap.
-
-    The relay is not included here.
+    the application outbox relay publishes rows to the broker after commit.
+    That closes the "committed but never published" gap.
     """
 
     async def enqueue_intake(

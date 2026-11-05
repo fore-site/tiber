@@ -7,10 +7,20 @@ queue. The route below only pins the task to the notifications exchange; the
 final queue is resolved from the per-job routing key at publish time.
 """
 
-from .queues import NOTIFICATIONS_EXCHANGE
+from .queues import INTERNAL_EXCHANGE, INTERNAL_QUEUE, NOTIFICATIONS_EXCHANGE
 
 task_routes = {
     "notification.process": {
         "exchange": NOTIFICATIONS_EXCHANGE.name,
+    },
+    "notification.intake": {
+        "exchange": INTERNAL_EXCHANGE.name,
+        "queue": INTERNAL_QUEUE.name,
+        "routing_key": INTERNAL_QUEUE.routing_key,
+    },
+    "outbox.relay": {
+        "exchange": INTERNAL_EXCHANGE.name,
+        "queue": INTERNAL_QUEUE.name,
+        "routing_key": INTERNAL_QUEUE.routing_key,
     },
 }

@@ -12,14 +12,17 @@ from fastapi import (
     Response,
     status,
 )
-from pycurb.core import RateLimitResult
 
+from ...application.services.notification_cancellation import (
+    NotificationCancellationService,
+)
 from ...application.services.notification_intake import NotificationIntakeService
 from ...application.services.notification_query import NotificationQueryService
 from ...infrastructure.models import ProjectModel
 from ..dependencies import (
-    enforce_ingestion_rate_limit,
+    enforce_authenticated_rate_limit,
     get_authenticated_project,
+    get_notification_cancellation_service,
     get_notification_intake_service,
     get_notification_query_service,
 )
@@ -31,7 +34,7 @@ from ..schemas.notification import (
     NotificationResponse,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(enforce_authenticated_rate_limit)])
 
 
 @router.post(
@@ -49,7 +52,6 @@ async def create_notification(
         NotificationIntakeService,
         Depends(get_notification_intake_service),
     ],
-    _rate_limit: Annotated[RateLimitResult, Depends(enforce_ingestion_rate_limit)],
     request: Request,
     response: Response,
     idempotency_key: Annotated[
@@ -70,8 +72,8 @@ async def create_notification(
     ``Idempotent-Replayed: true`` header). Reusing a key with a different body
     is rejected with ``409``.
 
-    Ingestion is rate-limited per project: once the project's windowed quota is
-    exhausted the request is rejected with ``429 Too Many Requests``.
+    Project API requests are rate-limited per project: once the project's
+    windowed quota is exhausted the request is rejected with HTTP 429.
     """
     accepted = await service.accept(
         to_accept_command(
@@ -179,10 +181,11 @@ async def cancel_notification(
         Depends(get_authenticated_project),
     ],
     notification_id: UUID,
-) -> None:
-    """Cancel a scheduled notification.
-
-    Requires repository update semantics via the immutable entity transition;
-    TODO: wire ``Notification.mark_cancelled()`` through the repository.
-    """
-    raise NotImplementedError
+    service: Annotated[
+        NotificationCancellationService,
+        Depends(get_notification_cancellation_service),
+    ],
+) -> Response:
+    """Cancel a project notification that has not started processing."""
+    await service.cancel(project.id, notification_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
