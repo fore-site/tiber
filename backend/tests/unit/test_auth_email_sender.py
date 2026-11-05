@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Literal
-
 import httpx
 import pytest
 import respx
@@ -12,28 +10,17 @@ from tiber.infrastructure.providers.auth_email import (
 )
 
 
-@pytest.mark.parametrize(
-    ("provider", "url", "status_code"),
-    [
-        ("resend", "https://api.resend.com/emails", 200),
-        ("sendgrid", "https://api.sendgrid.com/v3/mail/send", 202),
-    ],
-)
-async def test_auth_email_sender_uses_configured_provider(
-    provider: Literal["resend", "sendgrid"],
-    url: str,
-    status_code: int,
-) -> None:
+async def test_auth_email_sender_uses_configured_provider() -> None:
     """A configured provider receives the transactional email over HTTPS."""
     sender = HttpAuthEmailSender(
-        provider=provider,
+        provider="resend",
         api_key="test-key",
         sender="Tiber <auth@example.com>",
     )
 
     async with respx.mock as router:
-        route = router.post(url).mock(
-            return_value=httpx.Response(status_code=status_code, json={"id": "mail-1"})
+        route = router.post("https://api.resend.com/emails").mock(
+            return_value=httpx.Response(status_code=200, json={"id": "mail-1"})
         )
         await sender.send("user@example.com", "Verify", "Use this link.")
 

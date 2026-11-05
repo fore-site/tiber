@@ -7,7 +7,7 @@
 
 ## Purpose
 
-Delivery providers (Resend, SendGrid, FCM) send inbound HTTP callbacks to Tiber when engagement events occur — a recipient opens an email, clicks a link, a message bounces, a recipient unsubscribes, or a recipient reports a message as spam. This document describes how Tiber receives, validates, and processes those callbacks.
+Delivery providers (Resend, FCM) send inbound HTTP callbacks to Tiber when engagement events occur — a recipient opens an email, clicks a link, a message bounces, a recipient unsubscribes, or a recipient reports a message as spam. This document describes how Tiber receives, validates, and processes those callbacks.
 
 This is distinct from outbound webhook callbacks, which Tiber fires to *client applications* when notification lifecycle events occur. That flow is documented in the customer-facing OpenAPI spec under the Webhooks tag.
 
@@ -17,7 +17,7 @@ This is distinct from outbound webhook callbacks, which Tiber fires to *client a
 
 ```
 Provider                    Tiber API Service              RabbitMQ
-(Resend / FCM / SendGrid)
+(Resend / FCM)
         │                          │                           │
         │  POST /internal/         │                           │
         │  providers/webhooks      │                           │
@@ -67,7 +67,7 @@ Never return `500` to a provider. If internal processing fails after signature v
 ## Provider Configuration
 
 **Spam complaints vs. unsubscribes:** both email providers report spam
-complaints (Resend `email.spam_complaint`, SendGrid `spamreport`). Both map to
+complaints (Resend `email.spam_complaint`). They map to
 the `complaint` engagement event, never `unsubscribe`. These are different
 facts: an unsubscribe means the recipient used the sender's opt-out mechanism
 to stop future mail, while a complaint means the recipient used the mailbox
@@ -122,56 +122,6 @@ RESEND_WEBHOOK_SECRET=whsec_xxxxx
 
 ---
 
-### SendGrid
-
-**Webhook events to subscribe:**
-- `open`
-- `click`
-- `bounce`
-- `unsubscribe`
-- `spamreport` (maps to `complaint`)
-
-**Endpoint to register in SendGrid dashboard:**
-```
-https://api.tiber.dev/internal/providers/webhooks
-```
-
-**Signature verification:**
-SendGrid signs payloads using ECDSA with a public key available from the SendGrid dashboard. The signature is in the `X-Twilio-Email-Event-Webhook-Signature` header and the timestamp in `X-Twilio-Email-Event-Webhook-Timestamp`.
-
-**Required environment variable:**
-```
-SENDGRID_WEBHOOK_PUBLIC_KEY=MFkwEwYH...
-```
-
-**Payload shape:**
-SendGrid sends an array of events per request:
-```json
-[
-  {
-    "email": "user@example.com",
-    "event": "open",
-    "timestamp": 1735722000,
-    "sg_message_id": "sendgrid_message_id.filter-abc123",
-    "useragent": "Mozilla/5.0..."
-  }
-]
-```
-
-**Event type mapping:**
-
-| SendGrid event | Tiber EngagementEventType |
-|---|---|
-| `open` | `open` |
-| `click` | `click` |
-| `bounce` | `bounce` |
-| `unsubscribe` | `unsubscribe` |
-| `spamreport` | `complaint` |
-| `deferred` | — (logged, not recorded as engagement event) |
-| `delivered` | — (handled by delivery tracking, not engagement) |
-
----
-
 ### FCM (Firebase Cloud Messaging)
 
 FCM does not send engagement webhooks in the same model as email providers. Push notification open and interaction events are tracked client-side by the application and reported back to Tiber via a dedicated client-side event endpoint.
@@ -191,13 +141,13 @@ All inbound provider payloads are normalised to a canonical `EngagementEvent` be
 
 The normalisation steps are:
 
-1. **Resolve `notification_id`** — look up the Tiber notification by the provider's message ID (e.g. Resend's `email_id`, SendGrid's `sg_message_id`). These IDs are stored in `delivery_attempts.provider_message_id`. If no match is found, log the event with the provider message ID and return `200` — unmatched events are expected (e.g. emails sent before Tiber started recording provider IDs).
+1. **Resolve `notification_id`** — look up the Tiber notification by the provider's message ID (e.g. Resend's `email_id`). These IDs are stored in `delivery_attempts.provider_message_id`. If no match is found, log the event with the provider message ID and return `200` — unmatched events are expected (e.g. emails sent before Tiber started recording provider IDs).
 
 2. **Resolve `recipient_id` and `project_id`** — derive from the matched notification.
 
 3. **Map event type** — apply the provider-specific mapping table above.
 
-4. **Set `occurred_at`** — use the provider's event timestamp, not Tiber's processing time. For Resend, this is `created_at`. For SendGrid, this is `timestamp` (Unix epoch, convert to ISO 8601). `occurred_at` is what the ML Send-Time Predictor trains on.
+4. **Set `occurred_at`** — use the provider's event timestamp, not Tiber's processing time. For Resend, this is `created_at`. `occurred_at` is what the ML Send-Time Predictor trains on.
 
 5. **Set `is_synthetic: false`** — all events arriving via this endpoint are real provider events.
 
@@ -209,7 +159,7 @@ The normalisation steps are:
 
 Providers retry failed webhook deliveries, and network issues can cause duplicate deliveries even when Tiber returns `200`. The idempotency strategy is:
 
-- Use the provider's event identifier as a deduplication key (Resend's `svix-id`, SendGrid's `sg_event_id`)
+- Use the provider's event identifier as a deduplication key (Resend's `svix-id`)
 - Check this key in Redis before processing with a 48-hour TTL
 - If the key exists, return `200` immediately without re-publishing to RabbitMQ
 
@@ -239,7 +189,6 @@ Where providers publish their outbound IP ranges, configure firewall rules to al
 
 **Provider IP range documentation:**
 - Resend: published at `https://resend.com/docs/webhooks/ip-allowlisting`
-- SendGrid: published at `https://sendgrid.com/docs/for-developers/tracking-events/getting-started-event-webhook-security-features/`
 - FCM: not applicable (client-side model)
 
 ---
@@ -264,5 +213,4 @@ The RabbitMQ unavailability case is the most critical. If the engagement queue i
 | Variable | Required for | Description |
 |---|---|---|
 | `RESEND_WEBHOOK_SECRET` | Resend | HMAC-SHA256 signing secret from Resend dashboard |
-| `SENDGRID_WEBHOOK_PUBLIC_KEY` | SendGrid | ECDSA public key from SendGrid Event Webhook settings |
 | `PROVIDER_WEBHOOK_RATE_LIMIT` | All | Max inbound requests per minute (default: 1000) |

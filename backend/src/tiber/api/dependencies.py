@@ -328,15 +328,11 @@ def get_rate_limit_policies(
 
 def get_auth_email_sender() -> AuthEmailSender:
     """Construct the configured transactional authentication email sender."""
-    if settings.email_provider == "resend":
-        api_key = settings.resend_api_key
-    elif settings.email_provider == "sendgrid":
-        api_key = settings.sendgrid_api_key
-    else:
-        api_key = ""
     return HttpAuthEmailSender(
         provider=settings.email_provider,
-        api_key=api_key,
+        api_key=(
+            settings.resend_api_key if settings.email_provider == "resend" else ""
+        ),
         sender=settings.email_sender,
     )
 

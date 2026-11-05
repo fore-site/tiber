@@ -67,7 +67,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 ### Phase 3: Provider Abstraction and Multi-Channel Delivery
 
 - [ ] Define a `ChannelProvider` interface (send, health-check, capabilities)
-- [ ] Email adapter : live integration (SendGrid or Resend)
+- [ ] Email adapter : live integration (Resend)
 - [ ] Push adapter : live integration (FCM)
 - [ ] SMS, webhook, in-app adapters : built against the same interface, using mock/sandbox implementations, clearly documented as drop-in-ready
 - [ ] Provider Manager returns typed success/failure outcomes only; retry/dead-letter decisions remain in the Notification Processor and Retry Manager

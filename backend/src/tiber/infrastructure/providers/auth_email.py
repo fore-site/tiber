@@ -17,11 +17,11 @@ class HttpAuthEmailSender:
     def __init__(
         self,
         *,
-        provider: Literal["mock", "resend", "sendgrid"],
+        provider: Literal["mock", "resend"],
         api_key: str,
         sender: str,
     ) -> None:
-        """Configure a Resend or SendGrid sender."""
+        """Configure a Resend sender."""
         self._provider = provider
         self._api_key = api_key
         self._sender = sender
@@ -37,24 +37,14 @@ class HttpAuthEmailSender:
                 "Authentication email delivery requires an API key and EMAIL_SENDER."
             )
 
-        if self._provider == "resend":
-            url = "https://api.resend.com/emails"
-            headers = {"Authorization": f"Bearer {self._api_key}"}
-            payload = {
-                "from": self._sender,
-                "to": [recipient],
-                "subject": subject,
-                "text": body,
-            }
-        else:
-            url = "https://api.sendgrid.com/v3/mail/send"
-            headers = {"Authorization": f"Bearer {self._api_key}"}
-            payload = {
-                "personalizations": [{"to": [{"email": recipient}]}],
-                "from": {"email": self._sender},
-                "subject": subject,
-                "content": [{"type": "text/plain", "value": body}],
-            }
+        url = "https://api.resend.com/emails"
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        payload = {
+            "from": self._sender,
+            "to": [recipient],
+            "subject": subject,
+            "text": body,
+        }
 
         try:
             async with httpx.AsyncClient(timeout=10) as client:

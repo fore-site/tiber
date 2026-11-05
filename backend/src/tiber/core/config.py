@@ -93,9 +93,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
 
     # Notification providers
-    email_provider: Literal["mock", "resend", "sendgrid"] = "mock"
+    email_provider: Literal["mock", "resend"] = "mock"
     resend_api_key: str = ""
-    sendgrid_api_key: str = ""
 
     push_provider: Literal["mock", "fcm"] = "mock"
     fcm_project_id: str = ""

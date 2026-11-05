@@ -11,7 +11,6 @@ from ...application.ports.channel_provider import ChannelProvider
 from ...core.config import Settings
 from ...domain.enums import DeliveryChannel
 from .email.resend import ResendEmailProvider
-from .email.sendgrid import SendGridEmailProvider
 from .in_app import InAppProvider
 from .manager import ProviderManager
 from .mock import MockProvider
@@ -42,11 +41,6 @@ def _email_provider(settings: Settings) -> ChannelProvider:
     if settings.email_provider == "resend":
         return ResendEmailProvider(
             api_key=settings.resend_api_key,
-            sender=settings.email_sender,
-        )
-    if settings.email_provider == "sendgrid":
-        return SendGridEmailProvider(
-            api_key=settings.sendgrid_api_key,
             sender=settings.email_sender,
         )
     return MockProvider(DeliveryChannel.EMAIL)

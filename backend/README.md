@@ -43,7 +43,7 @@ short-lived access tokens with single-use rotating refresh tokens. GitHub OAuth
 is optional and requires `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`,
 and `GITHUB_OAUTH_REDIRECT_URI`. Email verification uses a six-digit code,
 while password reset uses a single-use link. Both require a
-live `EMAIL_PROVIDER` (`resend` or `sendgrid`), its API key, and `EMAIL_SENDER`;
+live `EMAIL_PROVIDER=resend`, its API key, and `EMAIL_SENDER`;
 the `mock` notification provider deliberately cannot deliver authentication
 messages.
 
@@ -88,7 +88,7 @@ it until its processing lease expires, then atomically reclaims it.
 Each Celery worker process reuses one asyncio loop so SQLAlchemy's pooled async
 connections stay attached to their creating loop across tasks.
 
-Configure live providers with `EMAIL_PROVIDER=resend` or `sendgrid`,
+Configure live providers with `EMAIL_PROVIDER=resend`,
 `PUSH_PROVIDER=fcm`, or `SMS_PROVIDER=twilio`, and provide the matching
 credentials from `.env.example`. The default `mock` email, push, and SMS
 providers are intended for local development. In-app delivery records the
