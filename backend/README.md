@@ -53,6 +53,11 @@ once; only its SHA-256 hash is stored. API-key requests are authorized against
 the key's actual project, and dashboard JWT requests against the account that
 owns the project.
 
+Notification topics are created with
+`POST /projects/{project_id}/topics`, using a title and category. Tiber derives
+the topic slug from the title; titles and derived slugs must be unique within
+the project.
+
 Rate-limit counters are separate even where budgets currently match:
 
 - unauthenticated authentication endpoints: client IP (`auth`);

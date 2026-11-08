@@ -194,3 +194,16 @@ class ProjectNameConflictError(TiberError):
         """Initialize a ProjectNameConflictError with the user ID and project name."""
         self.name = name
         super().__init__(f"Project name '{name}' is already in use.")
+
+
+class NotificationTopicNameConflictError(TiberError):
+    """Raised when a project already has a topic with the same derived slug."""
+
+    error_code = "notification_topic_name_conflict"
+
+    def __init__(self) -> None:
+        """Initialize a notification topic name conflict."""
+        super().__init__(
+            "A notification topic with this title or slug already exists "
+            "in this project."
+        )

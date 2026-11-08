@@ -28,6 +28,9 @@ from tiber.infrastructure.models import RecipientModel
 from tiber.infrastructure.repositories.sqlalchemy_notification_repository import (
     SQLAlchemyNotificationRepository,
 )
+from tiber.infrastructure.repositories.sqlalchemy_notification_topic_repository import (
+    SQLAlchemyNotificationTopicRepository,
+)
 from tiber.infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = pytest.mark.e2e
@@ -69,6 +72,39 @@ async def test_accept_returns_202_with_a_batch_handle(client, project) -> None:
     assert response.headers["location"].endswith(
         f"/projects/{project.id}/notification-requests/{body['transaction_id']}"
     )
+
+
+async def test_create_notification_topic_persists_project_topic(
+    client,
+    project,
+    session,
+) -> None:
+    """Creating a topic returns its derived slug and persists it in the project."""
+    response = await client.post(
+        f"/projects/{project.id}/topics",
+        headers=AUTH,
+        json={"title": "Product Updates", "category": "informational"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    topic = await SQLAlchemyNotificationTopicRepository(session).get_by_slug(
+        "product-updates", project.id
+    )
+    assert topic is not None
+    assert body["id"] == str(topic.id)
+    assert body["project_id"] == str(project.id)
+    assert body["category"] == "informational"
+    assert body["title"] == "Product Updates"
+    assert body["topic_slug"] == "product-updates"
+
+    duplicate = await client.post(
+        f"/projects/{project.id}/topics",
+        headers=AUTH,
+        json={"title": "Product Updates", "category": "social"},
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"] == "notification_topic_name_conflict"
 
 
 async def test_same_key_and_body_replays_the_same_batch(client, project) -> None:

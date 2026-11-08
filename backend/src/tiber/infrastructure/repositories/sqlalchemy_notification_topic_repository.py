@@ -1,12 +1,19 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import NotificationTopic
 from ...domain.enums import NotificationCategory
+from ...domain.exceptions import NotificationTopicNameConflictError
 from ...domain.repositories import NotificationTopicRepository
 from ...infrastructure.models.topic import NotificationTopicModel
+
+_TOPIC_NAME_CONSTRAINTS = {
+    "topics_project_slug_unique",
+    "topics_project_title_unique",
+}
 
 
 class SQLAlchemyNotificationTopicRepository(NotificationTopicRepository):
@@ -18,15 +25,26 @@ class SQLAlchemyNotificationTopicRepository(NotificationTopicRepository):
 
     async def save(self, topic: NotificationTopic) -> NotificationTopic:
         """Persist a topic, updating it in place when it already exists."""
-        model = await self._session.get(NotificationTopicModel, topic.id)
-        if model is None:
-            self._session.add(self._to_model(topic))
-        else:
-            model.category = topic.category
-            model.title = topic.title
-            model.topic_slug = topic.topic_slug
-            model.updated_at = topic.updated_at
-        await self._session.flush()
+        try:
+            async with self._session.begin_nested():
+                model = await self._session.get(NotificationTopicModel, topic.id)
+                if model is None:
+                    self._session.add(self._to_model(topic))
+                else:
+                    model.category = topic.category
+                    model.title = topic.title
+                    model.topic_slug = topic.topic_slug
+                    model.updated_at = topic.updated_at
+                await self._session.flush()
+        except IntegrityError as exc:
+            original = exc.orig
+            diagnostic = getattr(original, "diag", None)
+            constraint_name = getattr(original, "constraint_name", None) or getattr(
+                diagnostic, "constraint_name", None
+            )
+            if constraint_name in _TOPIC_NAME_CONSTRAINTS:
+                raise NotificationTopicNameConflictError from exc
+            raise
         return topic
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> NotificationTopic | None:

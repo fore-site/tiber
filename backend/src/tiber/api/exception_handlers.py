@@ -27,6 +27,7 @@ _TIBER_ERROR_STATUS: dict[str, int] = {
     "invalid_state_transition": 409,
     "idempotency_key_conflict": 409,
     "project_name_conflict": 409,
+    "notification_topic_name_conflict": 409,
     "project_scope_violated": 403,
     "template_channel_mismatch": 422,
     "delivery_failed": 502,

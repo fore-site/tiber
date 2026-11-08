@@ -23,12 +23,20 @@ class NotificationTopic:
         """Validate the topic's state after initialization."""
         if not self.title or not self.title.strip():
             raise InvalidEntityAttributeError("Topic title must not be empty")
+        if len(self.title) > 200:
+            raise InvalidEntityAttributeError(
+                "Topic title must be 200 characters or fewer"
+            )
 
         if self.topic_slug and not SLUG_RE.fullmatch(self.topic_slug):
             raise InvalidEntityAttributeError(
                 "Topic slug must be lowercase letters and digits separated "
                 "by single hyphens, with no leading or trailing hyphen "
                 f"(got: {self.topic_slug!r})"
+            )
+        if len(self.topic_slug) > 100:
+            raise InvalidEntityAttributeError(
+                "Topic slug must be 100 characters or fewer"
             )
 
     @classmethod

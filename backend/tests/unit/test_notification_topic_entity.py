@@ -66,3 +66,13 @@ def test_create_rejects_a_title_that_cannot_be_slugged():
             category=NotificationCategory.INFORMATIONAL,
             title="!!!",
         )
+
+
+def test_create_rejects_a_slug_longer_than_the_storage_limit():
+    """A title cannot derive a slug longer than the database column."""
+    with pytest.raises(InvalidEntityAttributeError, match="100 characters or fewer"):
+        NotificationTopic.create(
+            project_id=uuid4(),
+            category=NotificationCategory.INFORMATIONAL,
+            title="a" * 101,
+        )

@@ -32,6 +32,7 @@ from ..application.services.notification_cancellation import (
 )
 from ..application.services.notification_intake import NotificationIntakeService
 from ..application.services.notification_query import NotificationQueryService
+from ..application.services.notification_topic import NotificationTopicService
 from ..application.services.recipient_resolution import RecipientResolutionService
 from ..core.config import get_settings
 from ..core.database import AsyncSessionFactory
@@ -505,4 +506,17 @@ def get_notification_cancellation_service(
     return NotificationCancellationService(
         unit_of_work=unit_of_work,
         notification_repository=notification_repository,
+    )
+
+
+def get_notification_topic_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+    topic_repository: Annotated[
+        SQLAlchemyNotificationTopicRepository, Depends(get_topic_repository)
+    ],
+) -> NotificationTopicService:
+    """Provide the transactional notification-topic creation service."""
+    return NotificationTopicService(
+        unit_of_work=unit_of_work,
+        topic_repository=topic_repository,
     )
