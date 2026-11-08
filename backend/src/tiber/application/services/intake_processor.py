@@ -285,12 +285,11 @@ class IntakeProcessor:
                 title="[template pending]"
                 if channel is DeliveryChannel.EMAIL
                 else None,
-                body="[template pending]",
+                plain_text_body="[template pending]",
             )
             provisional = Notification.create(content=placeholder, **fields)
-            child = provisional.with_content(
-                await self._template_resolver.resolve_content(provisional)
-            )
+            rendered = await self._template_resolver.resolve(provisional)
+            child = provisional.with_content(rendered.content)
         else:
             if payload.content is None:
                 raise Exception("Payload content is None.")

@@ -10,9 +10,12 @@ from tiber.core.config import get_settings
 from tiber.infrastructure.models import (  # noqa: F401  # register models into Base.metadata for autogenerate
     AccountModel,
     APIKeyModel,
+    BrandProfileModel,
     NotificationIntakeModel,
     NotificationModel,
     ProjectModel,
+    TemplateModel,
+    TemplateVariantModel,
 )
 from tiber.infrastructure.models.base import Base
 

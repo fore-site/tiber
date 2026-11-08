@@ -44,7 +44,7 @@ async def test_notification_intake_persists_and_enforces_project_idempotency(
     payload = IntakePayload(
         category=NotificationCategory.INFORMATIONAL,
         channels=(DeliveryChannel.EMAIL,),
-        content=NotificationContent(title="Status", body="Integration test"),
+        content=NotificationContent(title="Status", plain_text_body="Integration test"),
     )
     constraints = DecisionConstraints(
         allowed_categories=frozenset({NotificationCategory.INFORMATIONAL}),

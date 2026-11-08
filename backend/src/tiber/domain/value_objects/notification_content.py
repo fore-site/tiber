@@ -39,22 +39,30 @@ class ContentImage:
 class NotificationContent:
     """Value object representing the content of a notification.
 
-    Channel-agnostic *meaning*: ``title``/``body`` carry the message,
-    ``actions`` the ordered recipient actions (buttons/links), ``images``
-    the embedded media. Each channel adapter interprets these per channel
-    (links in email, tap target in push, appended URL in SMS, dropped
-    where unsupported) - the object itself never renders bytes.
+    ``plain_text_body`` and ``html_body`` are alternate or complementary
+    representations of the message. ``title`` carries the explicit subject
+    for channels that require one; it is never inferred from HTML.
     """
 
-    body: str
+    plain_text_body: str | None = None
+    html_body: str | None = None
     title: str | None = None
     actions: tuple[ContentAction, ...] = field(default=())
     images: tuple[ContentImage, ...] = field(default=())
 
     def __post_init__(self) -> None:
         """Validate the notification content after initialization."""
-        if not self.body or not self.body.strip():
-            raise ValueError("Notification content body must not be empty")
+        if not any(
+            value is not None and value.strip()
+            for value in (self.plain_text_body, self.html_body)
+        ):
+            raise ValueError(
+                "Notification content needs a non-empty plain_text_body or html_body"
+            )
+        if self.plain_text_body is not None and not self.plain_text_body.strip():
+            raise ValueError("Notification plain_text_body must not be empty")
+        if self.html_body is not None and not self.html_body.strip():
+            raise ValueError("Notification html_body must not be empty")
 
     def to_dict(self) -> dict:
         """Serialize to a plain JSON-shaped dict.
@@ -65,7 +73,8 @@ class NotificationContent:
         """
         return {
             "title": self.title,
-            "body": self.body,
+            "plain_text_body": self.plain_text_body,
+            "html_body": self.html_body,
             "actions": [{"label": a.label, "url": a.url} for a in self.actions],
             "images": [{"url": i.url, "alt": i.alt} for i in self.images],
         }
@@ -73,12 +82,12 @@ class NotificationContent:
     @classmethod
     def from_dict(cls, data: dict) -> NotificationContent:
         """Rebuild content from its JSON-shaped dict form."""
-        try:
-            body = data["body"]
-        except KeyError:
-            raise ValueError("content is missing required field 'body'") from None
-        if not isinstance(body, str):
-            raise ValueError("content field 'body' must be a string")
+        plain_text_body = data.get("plain_text_body", data.get("body"))
+        html_body = data.get("html_body")
+        if plain_text_body is not None and not isinstance(plain_text_body, str):
+            raise ValueError("content field 'plain_text_body' must be a string or null")
+        if html_body is not None and not isinstance(html_body, str):
+            raise ValueError("content field 'html_body' must be a string or null")
 
         title = data.get("title")
         if title is not None and not isinstance(title, str):
@@ -102,7 +111,8 @@ class NotificationContent:
             images.append(ContentImage(url=raw["url"], alt=raw.get("alt")))
 
         return cls(
-            body=body,
+            plain_text_body=plain_text_body,
+            html_body=html_body,
             title=title,
             actions=tuple(actions),
             images=tuple(images),

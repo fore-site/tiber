@@ -20,6 +20,7 @@ from .routers.api_keys import router as api_key_router
 from .routers.auth import router as auth_router
 from .routers.health import router as health_router
 from .routers.notification import router as notification_router
+from .routers.templates import router as templates_router
 from .routers.topics import router as topics_router
 
 logger = get_logger(__name__)
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(api_key_router)
     app.include_router(notification_router)
     app.include_router(topics_router)
+    app.include_router(templates_router)
     return app
 
 

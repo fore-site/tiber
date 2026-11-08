@@ -11,6 +11,9 @@ from ...application.services.template import NotificationTemplateResolver
 from ...core.database import AsyncSessionFactory
 from ...domain.policies import PolicyResolver
 from ...infrastructure.ai.fallback import FallbackDecisionEngine
+from ...infrastructure.repositories.sqlalchemy_brand_profile_repository import (
+    SQLAlchemyBrandProfileRepository,
+)
 from ...infrastructure.repositories.sqlalchemy_delivery_constraint_repository import (
     SQLAlchemyDeliveryConstraintRepository,
 )
@@ -50,7 +53,10 @@ async def _process(intake_id: UUID) -> None:
             notification_repository=notification_repository,
             recipient_repository=recipient_repository,
             topic_repository=SQLAlchemyNotificationTopicRepository(session),
-            template_resolver=NotificationTemplateResolver(template_repository),
+            template_resolver=NotificationTemplateResolver(
+                template_repository,
+                brand_profile_repository=SQLAlchemyBrandProfileRepository(session),
+            ),
             policy_resolver=PolicyResolver(),
             decision_engine=FallbackDecisionEngine(),
             outbox=SQLAlchemyOutbox(session),

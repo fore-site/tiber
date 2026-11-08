@@ -11,14 +11,32 @@ fallback" path.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from tiber.domain.entities import Notification, Template
+from tiber.domain.entities.brand_profile import BrandProfile
 from tiber.domain.exceptions import (
     EntityNotFoundError,
     TemplateChannelMismatchError,
 )
-from tiber.domain.repositories import TemplateRepository
+from tiber.domain.repositories import BrandProfileRepository, TemplateRepository
 from tiber.domain.services import TemplateRenderer
 from tiber.domain.value_objects import NotificationContent
+
+DEFAULT_BRAND_TOKENS = {
+    "primary": "#3157d5",
+    "background": "#f4f6fb",
+    "surface": "#ffffff",
+    "text": "#182230",
+    "muted": "#667085",
+}
+
+
+@dataclass(frozen=True)
+class ResolvedTemplateContent:
+    """Rendered content for one notification."""
+
+    content: NotificationContent
 
 
 class NotificationTemplateResolver:
@@ -28,18 +46,17 @@ class NotificationTemplateResolver:
         self,
         template_repository: TemplateRepository,
         renderer: TemplateRenderer | None = None,
+        brand_profile_repository: BrandProfileRepository | None = None,
     ) -> None:
-        """Initialize the resolver with a template repository and renderer."""
+        """Initialize the resolver with template and optional brand repositories."""
         self._templates = template_repository
         self._renderer = renderer or TemplateRenderer()
+        self._brand_profiles = brand_profile_repository
 
-    async def resolve_content(self, notification: Notification) -> NotificationContent:
-        """Return the notification's content, rendering its template if any.
-
-        Direct-content notifications have no template and are returned as-is.
-        """
+    async def resolve(self, notification: Notification) -> ResolvedTemplateContent:
+        """Return rendered text and HTML, with direct-content fallback."""
         if notification.template_id is None:
-            return notification.content
+            return ResolvedTemplateContent(notification.content)
 
         template = await self._templates.get_by_id(
             notification.template_id, notification.project_id
@@ -47,9 +64,6 @@ class NotificationTemplateResolver:
         if template is None:
             raise EntityNotFoundError(Template, str(notification.template_id))
 
-        # A template holds one variant per channel; the notification's channel
-        # must have one. Accept-time validation guarantees it for requests that
-        # came through intake, so this only fires if the template changed since.
         variant = template.variants.get(notification.channel)
         if variant is None:
             available = (
@@ -61,6 +75,27 @@ class NotificationTemplateResolver:
                 str(notification.channel.value),
             )
 
-        # ASSUMPTION: the renderer takes a TemplateVariant. Its old signature took
-        # the single-channel Template, so TemplateRenderer needs the same update.
-        return self._renderer.render(variant, notification.template_variables)
+        brand_tokens = DEFAULT_BRAND_TOKENS
+        if template.brand_profile_id is not None:
+            if self._brand_profiles is None:
+                raise RuntimeError(
+                    "Brand profile repository is required for styled templates"
+                )
+            profile = await self._brand_profiles.get_by_id(
+                template.brand_profile_id, notification.project_id
+            )
+            if profile is None:
+                raise EntityNotFoundError(BrandProfile, str(template.brand_profile_id))
+            brand_tokens = DEFAULT_BRAND_TOKENS | profile.tokens
+
+        return ResolvedTemplateContent(
+            content=self._renderer.render(
+                variant,
+                notification.template_variables,
+                brand_tokens,
+            ),
+        )
+
+    async def resolve_content(self, notification: Notification) -> NotificationContent:
+        """Return only the rendered semantic content for compatibility."""
+        return (await self.resolve(notification)).content

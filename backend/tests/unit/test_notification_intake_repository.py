@@ -102,7 +102,8 @@ def test_notification_intake_model_serializes_direct_content() -> None:
         channels=(DeliveryChannel.EMAIL,),
         content=NotificationContent(
             title="Hello",
-            body="Your account changed.",
+            plain_text_body="Your account changed.",
+            html_body="<p>Your account changed.</p>",
         ),
     )
     direct = NotificationIntake.create(
@@ -117,9 +118,12 @@ def test_notification_intake_model_serializes_direct_content() -> None:
     restored = SQLAlchemyNotificationIntakeRepository._to_entity(model)
 
     assert restored == direct
+    assert restored.payload.content is not None
+    assert restored.payload.content.html_body == "<p>Your account changed.</p>"
     assert model.payload["content"] == {
         "title": "Hello",
-        "body": "Your account changed.",
+        "plain_text_body": "Your account changed.",
+        "html_body": "<p>Your account changed.</p>",
         "actions": [],
         "images": [],
     }

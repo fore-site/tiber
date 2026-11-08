@@ -30,7 +30,7 @@ def make_notification(
         category=category,
         content=NotificationContent(
             title="Hi" if channel is DeliveryChannel.EMAIL else None,
-            body="Hello",
+            plain_text_body="Hello",
         ),
         send_at=send_at,
         send_time_basis=(

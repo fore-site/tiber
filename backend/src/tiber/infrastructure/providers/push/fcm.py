@@ -43,6 +43,7 @@ class FCMProvider:
         actions: tuple[ContentAction, ...] = (),
         images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
+        html_body: str | None = None,
     ) -> ProviderResult:
         """Send a push notification through FCM."""
         if not recipient_address:

@@ -57,6 +57,7 @@ class ChannelProvider(Protocol):
         actions: tuple[ContentAction, ...] = (),
         images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
+        html_body: str | None = None,
     ) -> ProviderResult:
         """Send a message to the specified recipient address.
 
@@ -71,6 +72,8 @@ class ChannelProvider(Protocol):
             images (tuple[ContentImage, ...]): Embedded images, interpreted
                 per channel (empty where the channel has none).
             metadata (dict | None): Optional metadata for the message.
+            html_body (str | None): Trusted pre-rendered HTML for email/in-app
+                channels; adapters may ignore it when unsupported.
 
         Returns:
             ProviderResult: The result of the delivery attempt.

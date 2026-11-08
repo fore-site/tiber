@@ -54,6 +54,7 @@ class TwilioSMSProvider:
         actions: tuple[ContentAction, ...] = (),
         images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
+        html_body: str | None = None,
     ) -> ProviderResult:
         """Send a text message through Twilio's Messages endpoint."""
         if not recipient_address:

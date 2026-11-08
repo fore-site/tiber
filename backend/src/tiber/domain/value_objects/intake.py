@@ -85,6 +85,10 @@ class IntakePayload:
             raise InvalidEntityAttributeError(
                 "Either a template or direct content is required"
             )
+        if self.template_id is not None and self.content is not None:
+            raise InvalidEntityAttributeError(
+                "A template cannot be combined with direct content"
+            )
         if self.template_id is None and self.template_variables is not None:
             raise InvalidEntityAttributeError(
                 "`template_variables` requires a template"

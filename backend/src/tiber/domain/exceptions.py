@@ -36,12 +36,16 @@ class TemplateChannelMismatchError(TiberError):
 
     error_code = "template_channel_mismatch"
 
-    def __init__(self, template: str, channel: str) -> None:
+    def __init__(
+        self, template: str, available_channels: str, requested_channel: str
+    ) -> None:
         """Initialize a TemplateChannelMismatchError."""
         self.template = template
-        self.channel = channel
+        self.available_channels = available_channels
+        self.channel = requested_channel
         super().__init__(
-            f"Template '{self.template}' is not configured for channel '{self.channel}', "
+            f"Template '{self.template}' is not configured for channel "
+            f"'{self.channel}' (available: {self.available_channels})."
         )
 
 
@@ -206,4 +210,26 @@ class NotificationTopicNameConflictError(TiberError):
         super().__init__(
             "A notification topic with this title or slug already exists "
             "in this project."
+        )
+
+
+class TemplateNameConflictError(TiberError):
+    """Raised when a project already has a template with the derived slug."""
+
+    error_code = "template_name_conflict"
+
+    def __init__(self) -> None:
+        """Initialize a template name conflict."""
+        super().__init__("A template with this name already exists in this project.")
+
+
+class BrandProfileNameConflictError(TiberError):
+    """Raised when a project already has a brand profile with the same name."""
+
+    error_code = "brand_profile_name_conflict"
+
+    def __init__(self) -> None:
+        """Initialize a brand profile name conflict."""
+        super().__init__(
+            "A brand profile with this name already exists in this project."
         )

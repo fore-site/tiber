@@ -11,6 +11,7 @@ from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import DeliveryAttempt, Notification, Recipient
 from tiber.domain.enums import (
     DeliveryAttemptStatus,
+    DeliveryChannel,
     NotificationStatus,
     PolicyConsequence,
 )
@@ -138,11 +139,12 @@ class NotificationDeliveryProcessor:
                     await self._notifications.save(updated)
                     return updated
 
-            content = (
-                await self._template_resolver.resolve_content(notification)
+            rendered = (
+                await self._template_resolver.resolve(notification)
                 if self._template_resolver is not None
-                else notification.content
+                else None
             )
+            content = rendered.content if rendered is not None else notification.content
             if (
                 self._template_resolver is not None
                 and notification.template_id is not None
@@ -177,9 +179,15 @@ class NotificationDeliveryProcessor:
             result: ProviderResult = await self._provider.send(
                 recipient_address=address,
                 title=content.title,
-                body=content.body,
+                body=content.plain_text_body or "",
                 actions=content.actions,
                 images=content.images,
+                html_body=(
+                    content.html_body
+                    if notification.channel
+                    in (DeliveryChannel.EMAIL, DeliveryChannel.IN_APP)
+                    else None
+                ),
                 metadata={
                     "notification_id": str(notification.id),
                     "transaction_id": str(notification.transaction_id),

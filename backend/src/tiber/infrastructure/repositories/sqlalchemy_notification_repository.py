@@ -84,7 +84,8 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             .values(
                 status=notification.status,
                 subject=content.title,
-                body=content.body,
+                body=content.plain_text_body,
+                html_body=content.html_body,
                 actions=[
                     {"label": action.label, "url": action.url}
                     for action in content.actions
@@ -172,9 +173,6 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
     @staticmethod
     def _to_model(entity: Notification) -> NotificationModel:
         content = entity.content
-        if content is None:
-            # The body column is NOT NULL, and a placeholder must never be stored.
-            raise ValueError("Cannot persist a notification without content")
 
         # NOTE: JSONB columns must not be passed an explicit Python None - the
         # asyncpg driver serializes None as JSON "null" rather than SQL NULL,
@@ -194,7 +192,8 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             "idempotency_key": entity.idempotency_key,
             "group_key": entity.group_key,
             "subject": content.title,
-            "body": content.body,
+            "body": content.plain_text_body,
+            "html_body": content.html_body,
             "actions": [{"label": a.label, "url": a.url} for a in content.actions],
             "images": [{"url": i.url, "alt": i.alt} for i in content.images],
             "send_at": entity.send_at,
@@ -226,7 +225,8 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
             category=NotificationCategory(model.category),
             content=NotificationContent(
                 title=model.subject,
-                body=model.body,
+                plain_text_body=model.body,
+                html_body=model.html_body,
                 actions=tuple(
                     ContentAction(label=a["label"], url=a["url"])
                     for a in (model.actions or [])

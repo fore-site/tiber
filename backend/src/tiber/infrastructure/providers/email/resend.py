@@ -54,6 +54,7 @@ class ResendEmailProvider:
         actions: tuple[ContentAction, ...] = (),
         images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
+        html_body: str | None = None,
     ) -> ProviderResult:
         """Send an email through Resend."""
         if not recipient_address:
@@ -67,7 +68,7 @@ class ResendEmailProvider:
             "to": [recipient_address],
             "subject": title or "",
             "text": body,
-            "html": self._build_html(body, actions, images),
+            "html": html_body or self._build_html(body, actions, images),
         }
         try:
             async with httpx.AsyncClient(timeout=10) as client:

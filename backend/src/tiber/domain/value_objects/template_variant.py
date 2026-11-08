@@ -10,8 +10,7 @@ from ..value_objects import NotificationContent
 class TemplateVariant:
     """Variant of a reusable notification content tied to a channel.
 
-    Contains a title and body with ``{{variable}}`` placeholders, an optional
-    action URL, and an optional image URL.
+    Contains a title and body representations with ``{{variable}}`` placeholders.
     """
 
     channel: DeliveryChannel
@@ -27,4 +26,8 @@ class TemplateVariant:
 
         Derived from the content on demand, so it can never go stale.
         """
-        return content_variables(self.content)
+        from .placeholders import extract_placeholders
+
+        return content_variables(self.content) | extract_placeholders(
+            self.content.html_body
+        )

@@ -130,7 +130,6 @@ class NotificationIntakeService:
                 template_variables=cmd.template_variables,
                 content=cmd.content,
             )
-
             payload = IntakePayload(
                 category=cmd.category,
                 topic=topic,

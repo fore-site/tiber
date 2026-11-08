@@ -90,6 +90,7 @@ class _Provider:
         actions=(),
         images=(),
         metadata=None,
+        html_body=None,
     ):
         self.calls.append(
             {
@@ -98,6 +99,7 @@ class _Provider:
                 "body": body,
                 "actions": actions,
                 "images": images,
+                "html_body": html_body,
                 "metadata": metadata,
             }
         )
@@ -122,7 +124,7 @@ def _processor(*, provider):
         category=NotificationCategory.INFORMATIONAL,
         content=NotificationContent(
             title="Subject",
-            body="Message",
+            plain_text_body="Message",
             actions=(action,),
             images=(image,),
         ),

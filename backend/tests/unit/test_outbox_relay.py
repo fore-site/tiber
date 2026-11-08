@@ -72,7 +72,7 @@ def _notification():
         transaction_id=uuid4(),
         channel=DeliveryChannel.EMAIL,
         category=NotificationCategory.INFORMATIONAL,
-        content=NotificationContent(title="Subject", body="Message"),
+        content=NotificationContent(title="Subject", plain_text_body="Message"),
         send_time_basis=SendTimeBasis.IMMEDIATE,
     )
 

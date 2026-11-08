@@ -32,6 +32,7 @@ class InAppProvider:
         actions: tuple[ContentAction, ...] = (),
         images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
+        html_body: str | None = None,
     ) -> ProviderResult:
         """Acknowledge the feed entry already persisted by the intake workflow."""
         notification_id = (metadata or {}).get("notification_id")

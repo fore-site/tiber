@@ -9,6 +9,7 @@ from ...domain.enums import NotificationCategory
 from ...domain.exceptions import NotificationTopicNameConflictError
 from ...domain.repositories import NotificationTopicRepository
 from ...infrastructure.models.topic import NotificationTopicModel
+from .sqlalchemy_errors import get_constraint_name
 
 _TOPIC_NAME_CONSTRAINTS = {
     "topics_project_slug_unique",
@@ -37,12 +38,7 @@ class SQLAlchemyNotificationTopicRepository(NotificationTopicRepository):
                     model.updated_at = topic.updated_at
                 await self._session.flush()
         except IntegrityError as exc:
-            original = exc.orig
-            diagnostic = getattr(original, "diag", None)
-            constraint_name = getattr(original, "constraint_name", None) or getattr(
-                diagnostic, "constraint_name", None
-            )
-            if constraint_name in _TOPIC_NAME_CONSTRAINTS:
+            if get_constraint_name(exc) in _TOPIC_NAME_CONSTRAINTS:
                 raise NotificationTopicNameConflictError from exc
             raise
         return topic

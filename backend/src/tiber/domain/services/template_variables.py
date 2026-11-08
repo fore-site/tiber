@@ -39,7 +39,8 @@ def content_variables(content: NotificationContent) -> frozenset[str]:
     """Names of every placeholder in a piece of notification content."""
     found: set[str] = set()
     found |= extract_variables(content.title)
-    found |= extract_variables(content.body)
+    found |= extract_variables(content.plain_text_body)
+    found |= extract_variables(content.html_body)
     for action in content.actions:
         found |= extract_variables(action.label)
         found |= extract_variables(action.url)

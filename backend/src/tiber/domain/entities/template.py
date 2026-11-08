@@ -16,6 +16,7 @@ class Template:
     project_id: UUID
     name: str
     template_slug: str | None = None
+    brand_profile_id: UUID | None = None
     variants: dict[DeliveryChannel, TemplateVariant] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -38,13 +39,23 @@ class Template:
 
     @classmethod
     def create(
-        cls, *, project_id: UUID, name: str, variants: list[TemplateVariant]
+        cls,
+        *,
+        project_id: UUID,
+        name: str,
+        variants: list[TemplateVariant],
+        brand_profile_id: UUID | None = None,
     ) -> Template:
         """Create a new Template aggregate with a system-generated id and timestamps."""
-        template_variants = {}
+        template_variants: dict[DeliveryChannel, TemplateVariant] = {}
         for variant in variants:
             template_variants[variant.channel] = variant
-        return cls(project_id=project_id, name=name, variants=template_variants)
+        return cls(
+            project_id=project_id,
+            name=name,
+            variants=template_variants,
+            brand_profile_id=brand_profile_id,
+        )
 
     @classmethod
     def reconstitute(
@@ -56,9 +67,10 @@ class Template:
         variants: list[TemplateVariant],
         created_at: datetime,
         updated_at: datetime,
+        brand_profile_id: UUID | None = None,
     ) -> Template:
         """Rebuild an existing Template aggregate from persisted state."""
-        template_variants = {}
+        template_variants: dict[DeliveryChannel, TemplateVariant] = {}
         for variant in variants:
             template_variants[variant.channel] = variant
         return cls(
@@ -66,6 +78,7 @@ class Template:
             project_id=project_id,
             name=name,
             variants=template_variants,
+            brand_profile_id=brand_profile_id,
             created_at=created_at,
             updated_at=updated_at,
         )
@@ -112,5 +125,26 @@ class Template:
             self,
             name=name,
             template_slug=derive_slug(name),
+            updated_at=datetime.now(UTC),
+        )
+
+    def update(
+        self,
+        *,
+        name: str,
+        variants: list[TemplateVariant],
+        brand_profile_id: UUID | None,
+    ) -> Template:
+        """Replace template variants and its optional brand profile."""
+        if not name or not name.strip():
+            raise InvalidEntityAttributeError("Template name must not be empty")
+        require_derivable_name(name)
+        template_variants = {variant.channel: variant for variant in variants}
+        return replace(
+            self,
+            name=name,
+            template_slug=derive_slug(name),
+            variants=template_variants,
+            brand_profile_id=brand_profile_id,
             updated_at=datetime.now(UTC),
         )

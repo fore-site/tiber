@@ -1,10 +1,12 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import Template
 from ...domain.enums import DeliveryChannel
+from ...domain.exceptions import TemplateNameConflictError
 from ...domain.repositories import TemplateRepository
 from ...domain.value_objects import (
     ContentAction,
@@ -13,6 +15,9 @@ from ...domain.value_objects import (
     TemplateVariant,
 )
 from ...infrastructure.models.template import TemplateModel, TemplateVariantModel
+from .sqlalchemy_errors import get_constraint_name
+
+_TEMPLATE_NAME_CONSTRAINT = "templates_project_slug_unique"
 
 
 class SQLAlchemyTemplateRepository(TemplateRepository):
@@ -33,8 +38,14 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
         persistence must update rather than re-insert. ``merge`` also removes the
         variants the new entity no longer has (delete-orphan).
         """
-        await self._session.merge(self._to_model(template))
-        await self._session.flush()
+        try:
+            async with self._session.begin_nested():
+                await self._session.merge(self._to_model(template))
+                await self._session.flush()
+        except IntegrityError as exc:
+            if get_constraint_name(exc) == _TEMPLATE_NAME_CONSTRAINT:
+                raise TemplateNameConflictError from exc
+            raise
         return template
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> Template | None:
@@ -55,18 +66,33 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
         return self._to_entity(model) if model else None
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        offset: int,
+        channel: DeliveryChannel | None = None,
     ) -> list[Template]:
         """List a project's templates, newest first, with pagination."""
+        statement = select(TemplateModel).where(TemplateModel.project_id == project_id)
+        if channel is not None:
+            statement = statement.join(TemplateVariantModel).where(
+                TemplateVariantModel.channel == channel.value
+            )
         result = await self._session.execute(
-            select(TemplateModel)
-            .where(TemplateModel.project_id == project_id)
+            statement
             # Offset pagination needs a total order, or pages can repeat or skip rows.
             .order_by(TemplateModel.created_at.desc(), TemplateModel.id.desc())
             .limit(limit)
             .offset(offset)
         )
         return [self._to_entity(model) for model in result.scalars().all()]
+
+    async def delete(self, template: Template) -> None:
+        """Delete a template without committing its transaction."""
+        model = await self._session.get(TemplateModel, template.id)
+        if model is not None and model.project_id == template.project_id:
+            await self._session.delete(model)
+            await self._session.flush()
 
     @staticmethod
     def _to_model(entity: Template) -> TemplateModel:
@@ -77,6 +103,7 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
         return TemplateModel(
             id=entity.id,
             project_id=entity.project_id,
+            brand_profile_id=entity.brand_profile_id,
             name=entity.name,
             template_slug=entity.template_slug,
             created_at=entity.created_at,
@@ -86,7 +113,8 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
                     template_id=entity.id,
                     channel=channel.value,
                     title=variant.content.title,
-                    body=variant.content.body,
+                    body=variant.content.plain_text_body,
+                    html_body=variant.content.html_body,
                     actions=[
                         {"label": a.label, "url": a.url}
                         for a in variant.content.actions
@@ -105,12 +133,14 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
             id=model.id,
             project_id=model.project_id,
             name=model.name,
+            brand_profile_id=model.brand_profile_id,
             variants=[
                 TemplateVariant(
                     channel=DeliveryChannel(v.channel),
                     content=NotificationContent(
                         title=v.title,
-                        body=v.body,
+                        plain_text_body=v.body,
+                        html_body=v.html_body,
                         actions=tuple(
                             ContentAction(label=a["label"], url=a["url"])
                             for a in (v.actions or [])

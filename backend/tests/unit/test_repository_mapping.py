@@ -30,12 +30,13 @@ def test_template_model_round_trip_preserves_variants():
             TemplateVariant(
                 channel=DeliveryChannel.EMAIL,
                 content=NotificationContent(
-                    title="Hi {{first_name}}", body="Order {{order_id}} shipped"
+                    title="Hi {{first_name}}",
+                    plain_text_body="Order {{order_id}} shipped",
                 ),
             ),
             TemplateVariant(
                 channel=DeliveryChannel.SMS,
-                content=NotificationContent(body="Order shipped"),
+                content=NotificationContent(plain_text_body="Order shipped"),
             ),
         ],
     )
@@ -62,7 +63,7 @@ def test_template_model_stores_the_persisted_slug():
         variants=[
             TemplateVariant(
                 channel=DeliveryChannel.SMS,
-                content=NotificationContent(body="Shipped"),
+                content=NotificationContent(plain_text_body="Shipped"),
             )
         ],
     )

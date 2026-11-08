@@ -1,4 +1,5 @@
 from .sqlalchemy_account_repository import SQLAlchemyAccountRepository
+from .sqlalchemy_brand_profile_repository import SQLAlchemyBrandProfileRepository
 from .sqlalchemy_delivery_attempt_repository import SQLAlchemyDeliveryAttemptRepository
 from .sqlalchemy_delivery_constraint_repository import (
     SQLAlchemyDeliveryConstraintRepository,
@@ -15,6 +16,7 @@ from .sqlalchemy_template_repository import SQLAlchemyTemplateRepository
 
 __all__ = [
     "SQLAlchemyAccountRepository",
+    "SQLAlchemyBrandProfileRepository",
     "SQLAlchemyDeliveryAttemptRepository",
     "SQLAlchemyDeliveryConstraintRepository",
     "SQLAlchemyNotificationIntakeRepository",

@@ -46,6 +46,16 @@ class TemplateModel(Base):
         nullable=False,
     )
 
+    brand_profile_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "brand_profiles.id",
+            ondelete="SET NULL",
+            name="templates_brand_profile_id_fkey",
+        ),
+        nullable=True,
+    )
+
     name: Mapped[str] = mapped_column(Text, nullable=False)
 
     template_slug: Mapped[str] = mapped_column(Text, nullable=False)
@@ -87,6 +97,11 @@ class TemplateVariantModel(Base):
             "jsonb_typeof(images) = 'array'",
             name="template_variants_images_check",
         ),
+        CheckConstraint(
+            "(body IS NOT NULL AND btrim(body) <> '') OR "
+            "(html_body IS NOT NULL AND btrim(html_body) <> '')",
+            name="template_variants_content_body_check",
+        ),
     )
 
     template_id: Mapped[UUID] = mapped_column(
@@ -104,7 +119,9 @@ class TemplateVariantModel(Base):
     # which channels require or forbid one.
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    body: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    html_body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # JSON arrays of {"label", "url"} and {"url", "alt"}. Never NULL: an empty
     # array is stored (asyncpg writes an explicit Python None as JSON null).

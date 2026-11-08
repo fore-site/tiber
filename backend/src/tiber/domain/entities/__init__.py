@@ -1,5 +1,6 @@
 from .account import Account
 from .api_key import APIKey
+from .brand_profile import BrandProfile
 from .delivery_attempt import DeliveryAttempt
 from .delivery_constraint import DeliveryConstraint
 from .engagement_event import EngagementEvent
@@ -14,6 +15,7 @@ from .webhook_endpoint import WebhookEndpoint
 __all__ = [
     "APIKey",
     "Account",
+    "BrandProfile",
     "DeliveryAttempt",
     "DeliveryConstraint",
     "EngagementEvent",

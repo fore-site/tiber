@@ -98,7 +98,7 @@ def _notification(
         transaction_id=uuid4(),
         channel=DeliveryChannel.EMAIL,
         category=NotificationCategory.INFORMATIONAL,
-        content=NotificationContent(title="Scheduled", body="A message"),
+        content=NotificationContent(title="Scheduled", plain_text_body="A message"),
         send_time_basis=SendTimeBasis.EXPLICIT,
         send_at=datetime.now(UTC) + timedelta(hours=1),
         status=status,

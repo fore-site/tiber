@@ -109,11 +109,18 @@ def _payload_from_json(value: object) -> IntakePayload:
     raw_adhoc_channels = data.get("adhoc_channels")
     raw_variables = data.get("template_variables")
     raw_content = data.get("content")
+    legacy_html_body = data.get("html_body")
 
     if raw_variables is not None and not isinstance(raw_variables, dict):
         raise ValueError("payload.template_variables must be a JSON object or null")
     if raw_content is not None and not isinstance(raw_content, dict):
         raise ValueError("payload.content must be a JSON object or null")
+    if (
+        isinstance(raw_content, dict)
+        and legacy_html_body is not None
+        and "html_body" not in raw_content
+    ):
+        raw_content = {**raw_content, "html_body": legacy_html_body}
 
     return IntakePayload(
         category=(

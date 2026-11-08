@@ -4,9 +4,8 @@ These drive the real ASGI app against a real Postgres database and assert only
 what the HTTP contract promises: a 202 with a batch handle, replay safety,
 conflict detection, request-status reads, rate limiting, and project scoping.
 
-Fan-out is not covered yet: nothing consumes the intake outbox, so the
-notifications list is legitimately empty until the worker wiring lands. Add
-those journeys here rather than resurrecting per-class unit tests.
+The HTML-content journey invokes the intake processor after acceptance so it
+also verifies that authored HTML reaches the persisted notification.
 """
 
 from __future__ import annotations
@@ -16,6 +15,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from tiber.application.services.intake_processor import IntakeProcessor
+from tiber.application.services.template import NotificationTemplateResolver
 from tiber.domain.entities import Notification
 from tiber.domain.enums import (
     DeliveryChannel,
@@ -23,13 +24,24 @@ from tiber.domain.enums import (
     NotificationStatus,
     SendTimeBasis,
 )
+from tiber.domain.policies import PolicyResolver
 from tiber.domain.value_objects import NotificationContent
+from tiber.infrastructure.ai.fallback import FallbackDecisionEngine
 from tiber.infrastructure.models import RecipientModel
+from tiber.infrastructure.repositories.sqlalchemy_notification_intake_repository import (
+    SQLAlchemyNotificationIntakeRepository,
+)
 from tiber.infrastructure.repositories.sqlalchemy_notification_repository import (
     SQLAlchemyNotificationRepository,
 )
 from tiber.infrastructure.repositories.sqlalchemy_notification_topic_repository import (
     SQLAlchemyNotificationTopicRepository,
+)
+from tiber.infrastructure.repositories.sqlalchemy_recipient_repository import (
+    SQLAlchemyRecipientRepository,
+)
+from tiber.infrastructure.repositories.sqlalchemy_template_repository import (
+    SQLAlchemyTemplateRepository,
 )
 from tiber.infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -50,7 +62,7 @@ def request_body(**overrides) -> dict:
         "category": "promotional",
         "content": {
             "title": "Your statement is ready",
-            "body": "Sign in to view it.",
+            "plain_text_body": "Sign in to view it.",
         },
     }
     body.update(overrides)
@@ -72,6 +84,109 @@ async def test_accept_returns_202_with_a_batch_handle(client, project) -> None:
     assert response.headers["location"].endswith(
         f"/projects/{project.id}/notification-requests/{body['transaction_id']}"
     )
+
+
+async def test_direct_html_is_included_in_the_accepted_intake(
+    client,
+    project,
+    session,
+) -> None:
+    """Direct HTML survives request mapping and the intake persistence boundary."""
+    project_id = project.id
+    response = await client.post(
+        f"/projects/{project_id}/notifications",
+        headers=headers("direct-html-1"),
+        json=request_body(
+            content={
+                "title": "Your statement is ready",
+                "html_body": "<main><h1>Your statement is ready</h1></main>",
+            }
+        ),
+    )
+
+    assert response.status_code == 202
+    intake = await SQLAlchemyNotificationIntakeRepository(
+        session
+    ).get_by_transaction_id(UUID(response.json()["transaction_id"]), project_id)
+    assert intake is not None
+    assert intake.payload.content is not None
+    assert intake.payload.content.html_body == (
+        "<main><h1>Your statement is ready</h1></main>"
+    )
+
+    changed_markup = await client.post(
+        f"/projects/{project_id}/notifications",
+        headers=headers("direct-html-1"),
+        json=request_body(
+            content={
+                "title": "Your statement is ready",
+                "html_body": "<main><h1>Different</h1></main>",
+            }
+        ),
+    )
+    assert changed_markup.status_code == 409
+    assert changed_markup.json()["error"] == "idempotency_key_conflict"
+
+    class _Outbox:
+        async def enqueue_dispatch(self, notification) -> None:
+            return None
+
+    processor = IntakeProcessor(
+        unit_of_work=SqlAlchemyUnitOfWork(session),
+        intake_repository=SQLAlchemyNotificationIntakeRepository(session),
+        notification_repository=SQLAlchemyNotificationRepository(session),
+        recipient_repository=SQLAlchemyRecipientRepository(session),
+        topic_repository=SQLAlchemyNotificationTopicRepository(session),
+        template_resolver=NotificationTemplateResolver(
+            SQLAlchemyTemplateRepository(session)
+        ),
+        policy_resolver=PolicyResolver(),
+        decision_engine=FallbackDecisionEngine(),
+        outbox=_Outbox(),
+    )
+    await processor.process(intake.id)
+
+    stored = await SQLAlchemyNotificationRepository(session).list_by_transaction_id(
+        intake.transaction_id, project_id
+    )
+    assert len(stored) == 1
+    assert (
+        stored[0].content.html_body == "<main><h1>Your statement is ready</h1></main>"
+    )
+
+    await session.refresh(project)
+    status_response = await client.get(
+        f"/projects/{project_id}/notification-requests/{intake.transaction_id}",
+        headers=AUTH,
+    )
+    assert status_response.status_code == 200
+    status_body = status_response.json()
+    assert status_body["status"] == "completed"
+    assert status_body["notifications"][0]["content"]["html_body"] == (
+        "<main><h1>Your statement is ready</h1></main>"
+    )
+
+
+async def test_direct_html_requires_an_email_or_in_app_channel(
+    client,
+    project,
+) -> None:
+    """Do not accept HTML that cannot be attached to any selected channel."""
+    response = await client.post(
+        f"/projects/{project.id}/notifications",
+        headers=headers("direct-html-unsupported-channel"),
+        json=request_body(
+            email=None,
+            push="push-token",
+            content={
+                "title": "Styled",
+                "html_body": "<main>Styled content</main>",
+            },
+        ),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "channel_not_available"
 
 
 async def test_create_notification_topic_persists_project_topic(
@@ -250,7 +365,7 @@ async def test_cancel_pending_notification_and_reject_repeat(
         transaction_id=uuid4(),
         channel=DeliveryChannel.EMAIL,
         category=NotificationCategory.INFORMATIONAL,
-        content=NotificationContent(title="Scheduled", body="A message"),
+        content=NotificationContent(title="Scheduled", plain_text_body="A message"),
         send_at=datetime.now(UTC) + timedelta(hours=1),
         send_time_basis=SendTimeBasis.EXPLICIT,
     )

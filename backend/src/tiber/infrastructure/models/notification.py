@@ -67,6 +67,11 @@ class NotificationModel(Base):
             name="notifications_images_check",
         ),
         CheckConstraint(
+            "(body IS NOT NULL AND btrim(body) <> '') OR "
+            "(html_body IS NOT NULL AND btrim(html_body) <> '')",
+            name="notifications_content_body_check",
+        ),
+        CheckConstraint(
             """
             (
                 status = 'suppressed'
@@ -196,9 +201,14 @@ class NotificationModel(Base):
         nullable=True,
     )
 
-    body: Mapped[str] = mapped_column(
+    body: Mapped[str | None] = mapped_column(
         Text,
-        nullable=False,
+        nullable=True,
+    )
+
+    html_body: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )
 
     # ``NotificationContent.actions`` / ``.images`` as JSON arrays of

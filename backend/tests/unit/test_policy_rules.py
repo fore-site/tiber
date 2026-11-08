@@ -54,7 +54,7 @@ def make_ctx(
         category=category,
         content=NotificationContent(
             title="Hi" if channel == DeliveryChannel.EMAIL else None,
-            body="Hello",
+            plain_text_body="Hello",
         ),
         send_at=send_at,
         # Same classification the intake applies: explicit time, critical, else predicted.

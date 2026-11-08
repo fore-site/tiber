@@ -27,6 +27,9 @@ from ...domain.exceptions import (
 from ...domain.policies import PolicyResolver
 from ...events.job_payload import NotificationJobPayload
 from ...infrastructure.providers.factory import build_provider_manager
+from ...infrastructure.repositories.sqlalchemy_brand_profile_repository import (
+    SQLAlchemyBrandProfileRepository,
+)
 from ...infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (
     SQLAlchemyDeliveryAttemptRepository,
 )
@@ -90,7 +93,8 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
             # template rendering with direct-content fallback.
             policy_guard=DeliveryPolicyGuard(PolicyResolver()),
             template_resolver=NotificationTemplateResolver(
-                template_repository=templates
+                template_repository=templates,
+                brand_profile_repository=SQLAlchemyBrandProfileRepository(session),
             ),
             constraint_repository=constraints,
             processing_lease_seconds=SETTINGS.notification_processing_lease_seconds,

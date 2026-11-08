@@ -40,7 +40,7 @@ def email_variant(title: str, body: str) -> TemplateVariant:
     """Build an email variant (email requires a title)."""
     return TemplateVariant(
         channel=DeliveryChannel.EMAIL,
-        content=NotificationContent(title=title, body=body),
+        content=NotificationContent(title=title, plain_text_body=body),
     )
 
 
@@ -48,7 +48,7 @@ def sms_variant(body: str) -> TemplateVariant:
     """Build an SMS variant (SMS forbids a title)."""
     return TemplateVariant(
         channel=DeliveryChannel.SMS,
-        content=NotificationContent(body=body),
+        content=NotificationContent(plain_text_body=body),
     )
 
 
@@ -158,7 +158,7 @@ def test_renderer_substitutes_a_variable_the_entity_counted():
 
     rendered = TemplateRenderer().render(variant, {"first_name": "Ada"})
 
-    assert rendered.body == "Hi Ada"
+    assert rendered.plain_text_body == "Hi Ada"
 
 
 def test_renderer_rejects_a_missing_variable_the_entity_counted():

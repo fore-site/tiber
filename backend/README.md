@@ -58,6 +58,19 @@ Notification topics are created with
 the topic slug from the title; titles and derived slugs must be unique within
 the project.
 
+Templates and brand profiles are project-scoped. Create a reusable design-token
+profile through `/projects/{project_id}/brand-profiles`, then attach it to a
+template created through `/projects/{project_id}/templates`. Each channel
+variant's `content` can provide `plain_text_body`, `html_body`, or both. Direct
+notification requests use the same content shape. Plain text is used by
+text-only channels; HTML is supported by email and in-app. Email still requires
+an explicit `title` (subject). HTML-only content cannot be sent to SMS or push.
+`GET /projects/{project_id}/template-presets` lists selectable email/in-app
+starters, and `POST .../templates/{template_id}/preview` renders a variant with
+sample variables. Template HTML is trusted source, not sanitized HTML.
+Dashboard clients must display returned HTML in a sandboxed iframe and must
+never inject it directly into the dashboard DOM.
+
 Rate-limit counters are separate even where budgets currently match:
 
 - unauthenticated authentication endpoints: client IP (`auth`);
@@ -112,6 +125,7 @@ notification feed and needs no external provider credentials.
 Set `DATABASE_URL` to the intended PostgreSQL database, then run
 `uv run alembic upgrade head` from `backend/`. The migration chain installs the
 required extensions, creates the core schema, adds authentication state and API
-keys, and creates the notification outbox. The core-schema migration follows the
-existing `2d9adfec7c5d` extension-only revision, so databases already stamped at
-that revision can be migrated forward without dropping their data.
+keys, creates the notification outbox, and adds brand profiles and styled
+template content. The core-schema migration follows the existing
+`2d9adfec7c5d` extension-only revision, so databases already stamped at that
+revision can be migrated forward without dropping their data.

@@ -97,6 +97,9 @@ class Notification:
             raise InvalidEntityAttributeError(
                 "`send_at` is required when status is POSTPONED (the resume time)"
             )
+        from ..services import validate_content
+
+        validate_content(self.channel, self.content)
 
     @classmethod
     def create(
@@ -229,8 +232,12 @@ class Notification:
         )
 
     def with_content(self, content: NotificationContent) -> Notification:
-        """Return this notification with a replaced content snapshot."""
-        return replace(self, content=content, updated_at=datetime.now(UTC))
+        """Return this notification with replaced rendered content."""
+        return replace(
+            self,
+            content=content,
+            updated_at=datetime.now(UTC),
+        )
 
     def mark_processing(self) -> Notification:
         """Transition the notification into the in-flight processing state.

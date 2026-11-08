@@ -43,6 +43,7 @@ class MockProvider:
         actions: tuple[ContentAction, ...] = (),
         images: tuple[ContentImage, ...] = (),
         metadata: dict | None = None,
+        html_body: str | None = None,
     ) -> ProviderResult:
         """Simulate a delivery attempt."""
         if self._fail:

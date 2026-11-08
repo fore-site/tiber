@@ -6,6 +6,7 @@ from typing import Any, Self
 from uuid import UUID
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -82,7 +83,7 @@ class NotificationContentModel(BaseModel):
     """Channel-agnostic notification content on the API wire.
 
     Mirrors the domain ``NotificationContent`` value object: the API exposes
-    meaning (title, body, actions, images), never channel-specific bytes.
+    meaning (title, plain text and/or authored HTML, actions, images).
     """
 
     model_config = ConfigDict(
@@ -97,7 +98,16 @@ class NotificationContentModel(BaseModel):
         description="Message title; used by channels that support one (e.g. email subject).",
     )
 
-    body: str = Field(description="Message body text.")
+    plain_text_body: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("plain_text_body", "body"),
+        description="Plain-text representation, suitable for text-only channels.",
+    )
+    html_body: str | None = Field(
+        default=None,
+        max_length=1_000_000,
+        description="Authored HTML representation; only supported by email and in-app.",
+    )
 
     actions: list[ContentActionModel] = Field(
         default_factory=list,
@@ -109,11 +119,21 @@ class NotificationContentModel(BaseModel):
         description="Embedded images; interpreted per channel.",
     )
 
+    @model_validator(mode="after")
+    def _require_body_representation(self) -> Self:
+        if not any(
+            body is not None and body.strip()
+            for body in (self.plain_text_body, self.html_body)
+        ):
+            raise ValueError("Provide a non-empty `plain_text_body` or `html_body`.")
+        return self
+
     def to_domain(self) -> NotificationContent:
         """Convert the wire content into the domain value object."""
         return NotificationContent(
             title=self.title,
-            body=self.body,
+            plain_text_body=self.plain_text_body,
+            html_body=self.html_body,
             actions=tuple(
                 ContentAction(label=a.label, url=a.url) for a in self.actions
             ),
@@ -240,11 +260,10 @@ class NotificationCreateRequest(BaseModel):
             raise ValueError("Provide `recipient_id` or at least one channel address.")
 
         # Content
-        if self.template_slug is None and self.content is None:
-            raise ValueError("Provide `content` when `template_slug` is not set.")
+        if (self.template_slug is None) == (self.content is None):
+            raise ValueError("Provide exactly one of `template_slug` or `content`.")
         if self.template_variables is not None and self.template_slug is None:
             raise ValueError("`template_variables` requires `template_slug`.")
-
         # Category
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise ValueError(
@@ -280,7 +299,6 @@ class NotificationResponse(BaseModel):
     content: NotificationContentModel = Field(
         description="Content delivered on this channel (rendered from the template, or supplied directly).",
     )
-
     status: NotificationStatus
     send_at: datetime | None = None
     send_time_basis: SendTimeBasis
