@@ -50,7 +50,9 @@ class Settings(BaseSettings):
     github_oauth_redirect_uri: str = "http://localhost:8000/v1/auth/github/callback"
 
     # Rate limiting
-    rate_limit_algorithm: Literal["sliding_window", "token_bucket"] = "sliding_window"
+    rate_limit_algorithm: Literal["sliding_window", "token_bucket", "gcra"] = (
+        "sliding_window"
+    )
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
     rate_limit_auth_requests: int = 20
