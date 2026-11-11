@@ -33,6 +33,7 @@ from ..application.services.notification_cancellation import (
 from ..application.services.notification_intake import NotificationIntakeService
 from ..application.services.notification_query import NotificationQueryService
 from ..application.services.notification_topic import NotificationTopicService
+from ..application.services.project_management import ProjectManagementService
 from ..application.services.recipient_resolution import RecipientResolutionService
 from ..application.services.template_management import (
     BrandProfileManagementService,
@@ -256,6 +257,18 @@ async def get_authenticated_project(
     return project
 
 
+async def get_active_authenticated_project(
+    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
+) -> ProjectModel:
+    """Require an authenticated project that is not in its deletion grace period."""
+    if project.deleted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="deleted projects are read-only.",
+        )
+    return project
+
+
 async def get_current_account(
     context: Annotated[AuthContext, Depends(get_auth_context)],
     service: Annotated[AuthenticationService, Depends(get_authentication_service)],
@@ -283,6 +296,26 @@ def get_unit_of_work(
 ) -> UnitOfWork:
     """Provide the unit of work over the request session."""
     return SqlAlchemyUnitOfWork(db)
+
+
+def get_project_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemyProjectRepository:
+    """Provide the project repository bound to the request session."""
+    return SQLAlchemyProjectRepository(db)
+
+
+def get_project_management_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+    project_repository: Annotated[
+        SQLAlchemyProjectRepository, Depends(get_project_repository)
+    ],
+) -> ProjectManagementService:
+    """Provide account-scoped project lifecycle operations."""
+    return ProjectManagementService(
+        unit_of_work=unit_of_work,
+        project_repository=project_repository,
+    )
 
 
 def get_notification_repository(
@@ -479,12 +512,16 @@ def get_notification_intake_service(
     topic_repository: Annotated[
         SQLAlchemyNotificationTopicRepository, Depends(get_topic_repository)
     ],
+    project_repository: Annotated[
+        SQLAlchemyProjectRepository, Depends(get_project_repository)
+    ],
 ) -> NotificationIntakeService:
     """Provide the synchronous accept path (validate, persist intake, enqueue)."""
     return NotificationIntakeService(
         unit_of_work=unit_of_work,
         intake_repository=intake_repository,
         outbox=outbox,
+        project_repository=project_repository,
         recipient_resolution=recipient_resolution,
         template_repository=template_repository,
         topic_repository=topic_repository,

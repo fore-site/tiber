@@ -251,6 +251,7 @@ def make_service(repository: FakeTemplateRepository) -> NotificationIntakeServic
         recipient_resolution=None,
         template_repository=repository,
         topic_repository=None,
+        project_repository=None,
     )
 
 

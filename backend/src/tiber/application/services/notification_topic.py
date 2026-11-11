@@ -5,7 +5,7 @@ from uuid import UUID
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import NotificationTopic
 from tiber.domain.enums import NotificationCategory
-from tiber.domain.exceptions import NotificationTopicNameConflictError
+from tiber.domain.exceptions import NameConflictError
 from tiber.domain.repositories import NotificationTopicRepository
 
 
@@ -38,5 +38,5 @@ class NotificationTopicService:
         async with self._uow:
             existing = await self._topics.get_by_slug(topic.topic_slug, project_id)
             if existing is not None:
-                raise NotificationTopicNameConflictError()
+                raise NameConflictError(NotificationTopic)
             return await self._topics.save(topic)

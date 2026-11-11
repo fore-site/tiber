@@ -20,10 +20,10 @@ from uuid import UUID
 from tiber.domain.entities import Recipient
 from tiber.domain.enums import DeliveryChannel
 from tiber.domain.exceptions import (
-    AddressConflictError,
+    AddressMismatchError,
     AmbiguousRecipientError,
+    ConflictError,
     EntityNotFoundError,
-    RecipientAddressTakenError,
 )
 from tiber.domain.repositories import RecipientRepository
 from tiber.domain.services.addresses import normalize_addresses
@@ -81,7 +81,7 @@ class RecipientResolutionService:
                     return await self._recipients.add(
                         Recipient.create(project_id=project_id, addresses=normalized)
                     )
-                except RecipientAddressTakenError:
+                except ConflictError:
                     continue  # someone created it first; re-read
 
             return await self._extend(next(iter(matches.values())), normalized)
@@ -97,8 +97,8 @@ class RecipientResolutionService:
             if ch in existing.addresses and existing.addresses[ch] != addr
         )
         if conflicts:
-            raise AddressConflictError(
-                f"Recipient already has a different address for: {conflicts}"
+            raise AddressMismatchError(
+                f"Recipient already has different address for: {conflicts}"
             )
 
         new = {ch: a for ch, a in supplied.items() if ch not in existing.addresses}
@@ -109,7 +109,7 @@ class RecipientResolutionService:
         updated = existing.update_addresses({**existing.addresses, **new})
         try:
             await self._recipients.save(updated)
-        except RecipientAddressTakenError as exc:  # claimed concurrently elsewhere
+        except ConflictError as exc:  # claimed concurrently elsewhere
             raise AmbiguousRecipientError(
                 "A supplied address belongs to another recipient."
             ) from exc

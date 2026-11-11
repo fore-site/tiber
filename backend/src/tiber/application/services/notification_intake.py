@@ -23,22 +23,21 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from tiber.application.ports.intake import (
-    Outbox,
-)
+from tiber.application.ports.intake import Outbox
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.application.services.recipient_resolution import RecipientResolutionService
-from tiber.domain.entities import NotificationTopic, Template
+from tiber.domain.entities import NotificationTopic, Project, Template
 from tiber.domain.entities.notification_intake import NotificationIntake
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import (
+    ConflictError,
     EntityNotFoundError,
     IdempotencyKeyConflictError,
-    IntakeAlreadyExistsError,
 )
 from tiber.domain.repositories import (
     NotificationIntakeRepository,
     NotificationTopicRepository,
+    ProjectRepository,
     TemplateRepository,
 )
 from tiber.domain.services.addresses import normalize_address
@@ -83,6 +82,7 @@ class NotificationIntakeService:
         unit_of_work: UnitOfWork,
         intake_repository: NotificationIntakeRepository,
         outbox: Outbox,
+        project_repository: ProjectRepository,
         recipient_resolution: RecipientResolutionService,
         template_repository: TemplateRepository,
         topic_repository: NotificationTopicRepository,
@@ -91,6 +91,7 @@ class NotificationIntakeService:
         self._uow = unit_of_work
         self._intakes = intake_repository
         self._outbox = outbox
+        self._projects = project_repository
         self._recipients = recipient_resolution
         self._templates = template_repository
         self._topics = topic_repository
@@ -100,9 +101,15 @@ class NotificationIntakeService:
         fingerprint = request_fingerprint(cmd)
 
         async with self._uow:
+            project = await self._projects.get_by_id_for_update(cmd.project_id)
+            if project is None:
+                raise EntityNotFoundError(Project, str(cmd.project_id))
+
             replay = await self._replay(cmd, fingerprint)
             if replay is not None:
                 return replay
+            if project.deleted:
+                raise EntityNotFoundError(Project, str(cmd.project_id))
 
             topic = await self._require_topic(cmd)
             template = await self._require_template(cmd)
@@ -153,7 +160,7 @@ class NotificationIntakeService:
 
             try:
                 await self._intakes.add(intake)
-            except IntakeAlreadyExistsError:
+            except ConflictError:
                 # Lost a race with an identical request: replay the winner.
                 replay = await self._replay(cmd, fingerprint)
                 if replay is None:

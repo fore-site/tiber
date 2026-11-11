@@ -76,7 +76,7 @@ def make_ctx(
         language=None,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         updated_at=datetime(2026, 1, 1, tzinfo=UTC),
-        archived_at=None,
+        deleted_at=None,
     )
     return PolicyContext(
         notification=notification,

@@ -79,7 +79,7 @@ class RecipientModel(Base):
         onupdate=func.now(),
     )
 
-    archived_at: Mapped[datetime | None] = mapped_column(
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

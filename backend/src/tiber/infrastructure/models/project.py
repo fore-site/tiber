@@ -63,12 +63,12 @@ class ProjectModel(Base):
         onupdate=func.now(),
     )
 
-    archived_at: Mapped[datetime | None] = mapped_column(
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     @property
-    def archived(self) -> bool:
-        """Whether the project has been archived."""
-        return self.archived_at is not None
+    def deleted(self) -> bool:
+        """Whether the project has been deleted."""
+        return self.deleted_at is not None

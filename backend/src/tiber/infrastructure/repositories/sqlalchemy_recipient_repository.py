@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import Recipient
 from ...domain.enums import DeliveryChannel
-from ...domain.exceptions import RecipientAddressTakenError
+from ...domain.exceptions import ConflictError
 from ...domain.repositories import RecipientRepository
 from ...domain.services.addresses import normalize_addresses
 from ...domain.value_objects import RecipientPreferences
@@ -53,14 +53,12 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         """Initialize the repository with an async session."""
         self._session = session
 
-    # ------------------------------------------------------------------ #
     # Writes
-    # ------------------------------------------------------------------ #
 
     async def add(self, recipient: Recipient) -> Recipient:
         """Insert a new recipient.
 
-        A unique violation on an address raises ``RecipientAddressTakenError``;
+        A unique violation on an address raises ``ConflictError``;
         callers re-read and reuse the recipient that won the race.
         """
         await self._write(self._to_model(recipient), upsert=False)
@@ -70,7 +68,7 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         """Insert or update the recipient with the same ID.
 
         Recipients are immutable entities (``update_addresses``, ``claim``,
-        ``archive`` ... return a new entity with the same id), so persistence
+        ``delete`` ... return a new entity with the same id), so persistence
         updates rather than re-inserts.
         """
         await self._write(self._to_model(recipient), upsert=True)
@@ -89,14 +87,12 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
                 await self._session.flush()
         except IntegrityError as exc:
             if _ADDRESS_INDEX_PREFIX in str(exc.orig):
-                raise RecipientAddressTakenError(
+                raise ConflictError(
                     "An address already belongs to another recipient."
                 ) from exc
             raise  # any other violation (primary key, external_id) is unchanged
 
-    # ------------------------------------------------------------------ #
     # Reads
-    # ------------------------------------------------------------------ #
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> Recipient | None:
         """Get a recipient by its ID."""
@@ -120,12 +116,12 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
     async def find_by_addresses(
         self, project_id: UUID, addresses: Mapping[DeliveryChannel, str]
     ) -> list[Recipient]:
-        """Return distinct, NON-ARCHIVED recipients holding any of the given pairs.
+        """Return distinct, NON-deleted recipients holding any of the given pairs.
 
         One row-level OR over the ``(channel, address)`` pairs, so a recipient matching several of them
         still appears once. ``addresses`` must already be normalized; stored
         addresses are canonical because every write goes through ``_to_model``.
-        Archived recipients (for example the absorbed side of a merge) keep their
+        deleted recipients (for example the absorbed side of a merge) keep their
         addresses but never match.
         """
         if not addresses:
@@ -134,7 +130,7 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         result = await self._session.execute(
             select(RecipientModel)
             .where(RecipientModel.project_id == project_id)
-            .where(RecipientModel.archived_at.is_(None))
+            .where(RecipientModel.deleted_at.is_(None))
             .where(
                 or_(
                     *(
@@ -188,9 +184,7 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         models = result.scalars().all()
         return [self._to_entity(model) for model in models]
 
-    # ------------------------------------------------------------------ #
     # Mapping
-    # ------------------------------------------------------------------ #
 
     @staticmethod
     def _to_model(entity: Recipient) -> RecipientModel:
@@ -211,7 +205,7 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
             language=entity.language,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
-            archived_at=entity.archived_at,
+            deleted_at=entity.deleted_at,
         )
 
     @staticmethod
@@ -236,5 +230,5 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
             language=model.language,
             created_at=model.created_at,
             updated_at=model.updated_at,
-            archived_at=model.archived_at,
+            deleted_at=model.deleted_at,
         )

@@ -156,7 +156,7 @@ class TemplateManagementService:
         project_id: UUID,
         template_id: UUID,
         name: str,
-        variants: list[TemplateVariant],
+        variants: list[TemplateVariant],  # type: ignore  # mypy conflates list method with list type
         brand_profile_id: UUID | None,
     ) -> Template:
         """Replace all editable template properties."""

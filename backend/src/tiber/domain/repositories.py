@@ -57,6 +57,10 @@ class ProjectRepository(Protocol):
         """Get a project by its ID."""
         ...
 
+    async def get_by_id_for_update(self, id: UUID) -> Project | None:
+        """Load and lock a project row within the current transaction."""
+        ...
+
     async def get_by_slug(self, slug: str, account_id: UUID) -> Project | None:
         """Get a project by its slug within an account's scope.
 
@@ -65,6 +69,16 @@ class ProjectRepository(Protocol):
         accounts, so an unscoped lookup would return an arbitrary row among
         them.
         """
+        ...
+
+    async def list_by_account(
+        self, account_id: UUID, limit: int, offset: int
+    ) -> list[Project]:
+        """List projects owned by an account, newest first."""
+        ...
+
+    async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
+        """Permanently remove deleted projects older than the cutoff."""
         ...
 
 
@@ -220,7 +234,7 @@ class BrandProfileRepository(Protocol):
 class RecipientRepository(Protocol):
     """Contract for recipient data access."""
 
-    async def add(self, recipient: Recipient) -> None:
+    async def add(self, recipient: Recipient) -> Recipient:
         """Insert a recipient into the repository."""
         ...
 
@@ -254,7 +268,7 @@ class RecipientRepository(Protocol):
     async def find_by_addresses(
         self, project_id: UUID, addresses: Mapping[DeliveryChannel, str]
     ) -> list[Recipient]:
-        """Return distinct, NON-ARCHIVED recipients holding any of the ``(channel, address)`` pairs."""
+        """Return distinct, NON-deleted recipients holding any of the ``(channel, address)`` pairs."""
         ...
 
     async def list_by_project(
@@ -399,7 +413,7 @@ class NotificationIntakeRepository(Protocol):
     async def add(self, intake: NotificationIntake) -> None:
         """Insert NotificationIntake.
 
-        Raises ``IntakeAlreadyExistsError`` when ``(project_id, idempotency_key)`` is taken.
+        Raises ``ConflictError`` when ``(project_id, idempotency_key)`` is taken.
         Use a savepoint or ON CONFLICT DO NOTHING so the surrounding transaction stays usable and
         the caller can re-read the winner.
         """

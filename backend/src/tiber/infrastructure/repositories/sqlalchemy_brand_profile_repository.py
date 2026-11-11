@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import BrandProfile
-from ...domain.exceptions import BrandProfileNameConflictError
+from ...domain.exceptions import NameConflictError
 from ...domain.repositories import BrandProfileRepository
 from ..models.brand_profile import BrandProfileModel
 from .sqlalchemy_errors import get_constraint_name
@@ -34,7 +34,7 @@ class SQLAlchemyBrandProfileRepository(BrandProfileRepository):
                 await self._session.flush()
         except IntegrityError as exc:
             if get_constraint_name(exc) == _BRAND_NAME_CONSTRAINT:
-                raise BrandProfileNameConflictError from exc
+                raise NameConflictError(BrandProfile) from exc
             raise
         return profile
 

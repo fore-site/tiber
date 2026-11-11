@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import Template
 from ...domain.enums import DeliveryChannel
-from ...domain.exceptions import TemplateNameConflictError
+from ...domain.exceptions import NameConflictError
 from ...domain.repositories import TemplateRepository
 from ...domain.value_objects import (
     ContentAction,
@@ -44,7 +44,7 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
                 await self._session.flush()
         except IntegrityError as exc:
             if get_constraint_name(exc) == _TEMPLATE_NAME_CONSTRAINT:
-                raise TemplateNameConflictError from exc
+                raise NameConflictError(Template) from exc
             raise
         return template
 

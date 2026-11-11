@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import NotificationTopic
 from ...domain.enums import NotificationCategory
-from ...domain.exceptions import NotificationTopicNameConflictError
+from ...domain.exceptions import NameConflictError
 from ...domain.repositories import NotificationTopicRepository
 from ...infrastructure.models.topic import NotificationTopicModel
 from .sqlalchemy_errors import get_constraint_name
@@ -39,7 +39,7 @@ class SQLAlchemyNotificationTopicRepository(NotificationTopicRepository):
                 await self._session.flush()
         except IntegrityError as exc:
             if get_constraint_name(exc) in _TOPIC_NAME_CONSTRAINTS:
-                raise NotificationTopicNameConflictError from exc
+                raise NameConflictError(NotificationTopic) from exc
             raise
         return topic
 

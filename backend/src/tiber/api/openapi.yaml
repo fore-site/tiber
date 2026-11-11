@@ -556,10 +556,10 @@ paths:
 
     delete:
       tags: [Projects]
-      summary: Archive or permanently delete a project
+      summary: delete or permanently delete a project
       operationId: deletev1projectsprojectid
       description: |
-        Archives the project by default and prevents new notifications from being accepted.
+        deletes the project by default and prevents new notifications from being accepted.
         Existing delivery history, engagement events, and audit records are retained.
 
         To permanently delete a project, pass `?permanent=true`. This operation is irreversible,
@@ -575,10 +575,10 @@ paths:
             default: false
           description: |
             When `true`, permanently deletes the project instead of archiving it.
-            If omitted or `false`, the project is archived.
+            If omitted or `false`, the project is deleted.
       responses:
         "204":
-          description: Project archived or permanently deleted
+          description: Project deleted or permanently deleted
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
@@ -901,10 +901,10 @@ paths:
 
     delete:
       tags: [Recipients]
-      summary: Archive or permanently delete a Recipient
+      summary: delete or permanently delete a Recipient
       operationId: deletev1projectsprojectidrecipientsrecipientid
       description: |
-        Archives the recipient by default and prevents it from receiving new notifications.
+        deletes the recipient by default and prevents it from receiving new notifications.
 
         To permanently delete a recipient, pass `?permanent=true`. This operation is irreversible.
       parameters:
@@ -916,10 +916,10 @@ paths:
             default: false
           description: |
             When `true`, permanently deletes the recipient instead of archiving it.
-            If omitted or `false`, the recipient is archived.
+            If omitted or `false`, the recipient is deleted.
       responses:
         "204":
-          description: Recipient archived or permanently deleted
+          description: Recipient deleted or permanently deleted
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -1980,7 +1980,7 @@ components:
 
     Project:
       type: object
-      required: [id, name, slug, archived, created_at, updated_at]
+      required: [id, name, slug, deleted, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -1995,17 +1995,17 @@ components:
             thereafter. Clients never supply it.
         description:
           type: [string, "null"]
-        archived:
+        deleted:
           type: boolean
           description: >
-            Indicates whether the project is archived. Archived projects
+            Indicates whether the project is deleted. deleted projects
             remain accessible for historical data but cannot accept new
             notifications or other mutating operations.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
-        archived_at:
+        deleted_at:
           oneOf:
             - $ref: "#/components/schemas/Timestamp"
             - type: "null"
@@ -2229,7 +2229,7 @@ components:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
-        archived_at:
+        deleted_at:
           oneOf:
             - $ref: "#/components/schemas/Timestamp"
             - type: "null"

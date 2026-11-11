@@ -92,7 +92,7 @@ def test_reconstitute_loads_stored_slug_as_is():
         description=None,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
-        archived_at=None,
+        deleted_at=None,
     )
 
     assert restored.slug == "acme"
@@ -109,7 +109,7 @@ def test_reconstitute_rejects_malformed_stored_slug():
             description=None,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
-            archived_at=None,
+            deleted_at=None,
         )
 
 

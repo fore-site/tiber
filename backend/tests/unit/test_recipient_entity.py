@@ -91,7 +91,7 @@ def test_reconstitute_validates_timezone():
             language="en",
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
-            archived_at=None,
+            deleted_at=None,
         )
 
 

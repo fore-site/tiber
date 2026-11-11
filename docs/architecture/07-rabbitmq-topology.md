@@ -77,7 +77,7 @@ Examples include:
 
 - **Broker-managed retry delays:** Retry delays are implemented using RabbitMQ retry queues rather than sleeping or delaying worker processes. Once the configured delay expires, RabbitMQ automatically returns the message to its original delivery queue for another delivery attempt. This keeps worker processes available to process new jobs while the broker manages retry timing.
 
-- **Dead-letter queues preserve failed deliveries:** Notifications that exceed the configured retry limit are never discarded. Instead, they are routed to channel-specific dead-letter queues, allowing operators to inspect, replay, or permanently archive failed deliveries.
+- **Dead-letter queues preserve failed deliveries:** Notifications that exceed the configured retry limit are never discarded. Instead, they are routed to channel-specific dead-letter queues, allowing operators to inspect, replay, or permanently delete failed deliveries.
 
 ## What this diagram does not show
 

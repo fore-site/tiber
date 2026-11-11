@@ -30,7 +30,7 @@ class Recipient:
     language: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    archived_at: datetime | None = None
+    deleted_at: datetime | None = None
 
     def __post_init__(self) -> None:
         """Validate the recipient's state after initialization."""
@@ -93,7 +93,7 @@ class Recipient:
         language: str | None,
         created_at: datetime,
         updated_at: datetime,
-        archived_at: datetime | None,
+        deleted_at: datetime | None,
     ) -> Recipient:
         """Rebuild an existing recipient from persisted state.
 
@@ -110,7 +110,7 @@ class Recipient:
             language=language,
             created_at=created_at,
             updated_at=updated_at,
-            archived_at=archived_at,
+            deleted_at=deleted_at,
         )
 
     def claim(
@@ -175,8 +175,6 @@ class Recipient:
             self, timezone=timezone, language=language, updated_at=datetime.now(UTC)
         )
 
-    def archive(self) -> Recipient:
-        """Return a copy with archived_at stamped to now."""
-        return replace(
-            self, archived_at=datetime.now(UTC), updated_at=datetime.now(UTC)
-        )
+    def delete(self) -> Recipient:
+        """Return a copy with deleted_at stamped to now."""
+        return replace(self, deleted_at=datetime.now(UTC), updated_at=datetime.now(UTC))

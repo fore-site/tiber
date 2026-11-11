@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities.notification_intake import NotificationIntake
 from ...domain.enums import DeliveryChannel, IntakeStatus, NotificationCategory
-from ...domain.exceptions import IntakeAlreadyExistsError
+from ...domain.exceptions import ConflictError
 from ...domain.repositories import NotificationIntakeRepository
 from ...domain.value_objects import NotificationContent
 from ...domain.value_objects.intake import (
@@ -277,7 +277,9 @@ class SQLAlchemyNotificationIntakeRepository(NotificationIntakeRepository):
         )
         result = await self._session.execute(statement)
         if result.scalar_one_or_none() is None:
-            raise IntakeAlreadyExistsError()
+            raise ConflictError(
+                f"Intake with project_id={intake.project_id} and idempotency_key={intake.idempotency_key} already exists."
+            )
 
     async def get_by_transaction_id(
         self, transaction_id: UUID, project_id: UUID
