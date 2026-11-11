@@ -75,27 +75,29 @@ def validation_error_response(
 
 
 async def tiber_error_exception_handler(
-    request: Request, exc: TiberError
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """Handle TiberError errors."""
-    status_code = _TIBER_ERROR_STATUS.get(exc.error_code, 500)
-    error_code = exc.error_code
-    message = str(exc)
+    if isinstance(exc, TiberError):
+        status_code = _TIBER_ERROR_STATUS.get(exc.error_code, 500)
+        error_code = exc.error_code
+        message = str(exc)
 
-    logger.warning(
-        "Domain exception caught",
-        method=request.method,
-        path=request.url.path,
-        error_code=error_code,
-        status_code=status_code,
-    )
+        logger.warning(
+            "Domain exception caught",
+            method=request.method,
+            path=request.url.path,
+            error_code=error_code,
+            status_code=status_code,
+        )
 
-    return error_response(
-        error=error_code,
-        message=message,
-        status=status_code,
-        headers=None,
-    )
+        return error_response(
+            error=error_code,
+            message=message,
+            status=status_code,
+            headers=None,
+        )
+    raise exc  # Re-raise if it's not a TiberError
 
 
 async def http_exception_handler(
