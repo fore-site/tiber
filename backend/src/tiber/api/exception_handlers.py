@@ -17,19 +17,12 @@ from .schemas.error import (
 
 logger = get_logger(__name__)
 
-# The domain layer defines error conditions and their ``error_code`` strings;
-# it never knows about HTTP. This table is the API layer's translation of
-# domain error codes to HTTP statuses, per the domain exceptions module
-# docstring. Unmapped codes fall through to 500.
 _TIBER_ERROR_STATUS: dict[str, int] = {
     "not_found_error": 404,
     "invalid_entity_attribute": 422,
     "invalid_state_transition": 409,
     "idempotency_key_conflict": 409,
-    "project_name_conflict": 409,
-    "notification_topic_name_conflict": 409,
-    "template_name_conflict": 409,
-    "brand_profile_name_conflict": 409,
+    "name_conflict": 409,
     "project_scope_violated": 403,
     "channel_not_available": 422,
     "template_channel_mismatch": 422,
