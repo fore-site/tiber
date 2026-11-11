@@ -9,6 +9,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from tiber.domain.exceptions import TiberError
+
 from ..core.config import get_settings
 from ..core.database import engine
 from ..core.logging import (
@@ -18,7 +20,8 @@ from ..core.logging import (
     set_correlation_id,
 )
 from .exception_handlers import (
-    tiber_exception_handler,
+    tiber_error_exception_handler,
+    unhandled_exception_handler,
     validation_exception_handler,
 )
 from .routers.api_keys import router as api_key_router
@@ -28,9 +31,7 @@ from .routers.notification import router as notification_router
 from .routers.templates import router as templates_router
 from .routers.topics import router as topics_router
 
-# Configure structlog before the first log call in this process: the bound logger
-# below caches its configuration on first use, and uvicorn has already installed
-# its own handlers by the time this module is imported.
+# Configure structlog before the first log call in this process
 configure_logging()
 
 logger = get_logger(__name__)
@@ -62,8 +63,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    app.add_exception_handler(Exception, tiber_exception_handler)
+    app.add_exception_handler(TiberError, tiber_error_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
 
     if settings.cors_enabled:
         app.add_middleware(
