@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import cast
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..core.logging import get_correlation_id, get_logger
 from ..domain.exceptions import TiberError
@@ -73,53 +74,74 @@ def validation_error_response(
     )
 
 
-async def tiber_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Handle TiberError and HTTPException errors."""
-    if isinstance(exc, TiberError):
-        status_code = _TIBER_ERROR_STATUS.get(exc.error_code, 500)
-        error_code = exc.error_code
-        message = str(exc)
+async def tiber_error_exception_handler(
+    request: Request, exc: TiberError
+) -> JSONResponse:
+    """Handle TiberError errors."""
+    status_code = _TIBER_ERROR_STATUS.get(exc.error_code, 500)
+    error_code = exc.error_code
+    message = str(exc)
 
-        logger.warning(
-            "Domain exception caught",
-            method=request.method,
-            path=request.url.path,
-            error_code=error_code,
-            status_code=status_code,
-        )
-
-    elif isinstance(exc, HTTPException):
-        status_code = exc.status_code
-        error_code = "http_error"
-        message = str(exc.detail)
-
-        logger.warning(
-            "HTTP exception",
-            method=request.method,
-            path=request.url.path,
-            status_code=exc.status_code,
-            detail=str(exc.detail),
-        )
-
-    else:
-        # Unexpected exception
-        status_code = 500
-        error_code = "internal_error"
-        message = "An unexpected error occurred."
-        logger.warning(
-            "Unhandled exception",
-            method=request.method,
-            path=request.url.path,
-            error_code=error_code,
-            status_code=status_code,
-            detail=str(exc),
-        )
+    logger.warning(
+        "Domain exception caught",
+        method=request.method,
+        path=request.url.path,
+        error_code=error_code,
+        status_code=status_code,
+    )
 
     return error_response(
         error=error_code,
         message=message,
         status=status_code,
-        headers=exc.headers if isinstance(exc, HTTPException) else None,
+        headers=None,
+    )
+
+
+async def http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    """Handle HTTPException errors."""
+    status_code = exc.status_code
+    error_code = "http_error"
+    message = str(exc.detail)
+
+    logger.warning(
+        "HTTP exception",
+        method=request.method,
+        path=request.url.path,
+        status_code=exc.status_code,
+        detail=str(exc.detail),
+    )
+
+    return error_response(
+        error=error_code,
+        message=message,
+        status=status_code,
+        headers=exc.headers,
+    )
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle unexpected errors."""
+    status_code = 500
+    error_code = "internal_error"
+    message = "An unexpected error occurred."
+
+    logger.warning(
+        "Unhandled exception",
+        method=request.method,
+        path=request.url.path,
+        error_code=error_code,
+        status_code=status_code,
+        detail=str(exc),
+    )
+
+    return error_response(
+        error=error_code,
+        message=message,
+        status=status_code,
+        headers=None,
     )
 
 
