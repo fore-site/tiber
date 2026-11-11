@@ -17,12 +17,20 @@ class Project:
     description: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    archived_at: datetime | None = field(default=None)
+    deleted_at: datetime | None = field(default=None)
 
     def __post_init__(self) -> None:
         """Validate state; derive the slug when the caller did not supply one."""
         if not self.name or not self.name.strip():
             raise InvalidEntityAttributeError("Project name must not be empty")
+        if len(self.name) > 100:
+            raise InvalidEntityAttributeError(
+                "Project name must be 100 characters or fewer"
+            )
+        if self.description is not None and len(self.description) > 1000:
+            raise InvalidEntityAttributeError(
+                "Project description must be 1000 characters or fewer"
+            )
 
     @classmethod
     def create(
@@ -48,7 +56,7 @@ class Project:
         description: str | None,
         created_at: datetime,
         updated_at: datetime,
-        archived_at: datetime | None,
+        deleted_at: datetime | None,
     ) -> Project:
         """Rebuild an existing project from persisted state.
 
@@ -69,7 +77,7 @@ class Project:
             description=description,
             created_at=created_at,
             updated_at=updated_at,
-            archived_at=archived_at,
+            deleted_at=deleted_at,
         )
 
     def rename(self, name: str) -> Project:
@@ -82,5 +90,32 @@ class Project:
             self,
             name=name,
             slug=derive_slug(name),
+            updated_at=datetime.now(UTC),
+        )
+
+    @property
+    def deleted(self) -> bool:
+        """Whether the project is in its 90-day deletion grace period."""
+        return self.deleted_at is not None
+
+    def update(self, *, name: str, description: str | None) -> Project:
+        """Replace the project's editable details."""
+        renamed = self.rename(name)
+        return replace(renamed, description=description)
+
+    def delete(self) -> Project:
+        """Make the project soft deleted and start its hard deletion grace period."""
+        if self.deleted:
+            return self
+        now = datetime.now(UTC)
+        return replace(self, deleted_at=now, updated_at=now)
+
+    def restore(self) -> Project:
+        """Restore a deleted project and cancel its scheduled deletion."""
+        if not self.deleted:
+            return self
+        return replace(
+            self,
+            deleted_at=None,
             updated_at=datetime.now(UTC),
         )
