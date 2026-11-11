@@ -189,47 +189,24 @@ class InvalidEntityAttributeError(TiberError):
         super().__init__(f"{self.message}")
 
 
-class ProjectNameConflictError(TiberError):
-    """Raised when a project name is already in use."""
+class NameConflictError(TiberError):
+    """Raised when a name is already in use for an entity."""
 
-    error_code = "project_name_conflict"
+    error_code = "name_conflict"
 
-    def __init__(self, name: str) -> None:
-        """Initialize a ProjectNameConflictError with the user ID and project name."""
-        self.name = name
-        super().__init__(f"Project name '{name}' is already in use.")
-
-
-class NotificationTopicNameConflictError(TiberError):
-    """Raised when a project already has a topic with the same derived slug."""
-
-    error_code = "notification_topic_name_conflict"
-
-    def __init__(self) -> None:
-        """Initialize a notification topic name conflict."""
+    def __init__(self, entity_cls: type) -> None:
+        """Initialize a NameConflictError."""
+        self.entity_name = entity_cls.__name__
         super().__init__(
-            "A notification topic with this title or slug already exists "
-            "in this project."
+            f"{self.entity_name} with this name or title is already in use."
         )
 
 
-class TemplateNameConflictError(TiberError):
-    """Raised when a project already has a template with the derived slug."""
+class ProjectArchivedError(TiberError):
+    """Raised when a new project-scoped write targets an archived project."""
 
-    error_code = "template_name_conflict"
-
-    def __init__(self) -> None:
-        """Initialize a template name conflict."""
-        super().__init__("A template with this name already exists in this project.")
-
-
-class BrandProfileNameConflictError(TiberError):
-    """Raised when a project already has a brand profile with the same name."""
-
-    error_code = "brand_profile_name_conflict"
+    error_code = "project_archived"
 
     def __init__(self) -> None:
-        """Initialize a brand profile name conflict."""
-        super().__init__(
-            "A brand profile with this name already exists in this project."
-        )
+        """Initialize the archived-project error."""
+        super().__init__("Archived projects are read-only.")
