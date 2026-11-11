@@ -1,5 +1,6 @@
 import logging
 import sys
+from collections.abc import Sequence
 from contextvars import ContextVar, Token
 from typing import Any
 
@@ -37,13 +38,21 @@ def _add_correlation_id(
     return event_dict
 
 
-def configure_logging() -> None:
-    """Configure logging with structlog and standard logging."""
+def configure_logging(
+    extra_processors: Sequence[structlog.typing.Processor] = (),
+) -> None:
+    """Configure logging with structlog and standard logging.
+
+    ``extra_processors`` see every record after the correlation ID is attached
+    and before formatting. They also join ``foreign_pre_chain``, so records
+    emitted through stdlib loggers get the same enrichment.
+    """
     settings = get_settings()
 
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         _add_correlation_id,
+        *extra_processors,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),

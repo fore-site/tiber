@@ -11,7 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..core.config import get_settings
 from ..core.database import engine
-from ..core.logging import get_logger, reset_correlation_id, set_correlation_id
+from ..core.logging import (
+    configure_logging,
+    get_logger,
+    reset_correlation_id,
+    set_correlation_id,
+)
 from .exception_handlers import (
     tiber_exception_handler,
     validation_exception_handler,
@@ -22,6 +27,11 @@ from .routers.health import router as health_router
 from .routers.notification import router as notification_router
 from .routers.templates import router as templates_router
 from .routers.topics import router as topics_router
+
+# Configure structlog before the first log call in this process: the bound logger
+# below caches its configuration on first use, and uvicorn has already installed
+# its own handlers by the time this module is imported.
+configure_logging()
 
 logger = get_logger(__name__)
 

@@ -71,8 +71,15 @@ async def _process(intake_id: UUID) -> None:
     max_retries=5,
     default_retry_delay=30,
 )
-def process_notification_intake(self, intake_id: str) -> None:
-    """Expand one accepted intake; retry infrastructure failures."""
+def process_notification_intake(
+    self, intake_id: str, transaction_id: str | None = None
+) -> None:
+    """Expand one accepted intake; retry infrastructure failures.
+
+    ``transaction_id`` is logging metadata only - the intake row stays the
+    source of truth for what to expand. It is ``None`` for messages published
+    before it was carried, and the log processor skips it then.
+    """
     parsed_id = UUID(intake_id)
     try:
         run_async(_process(parsed_id))

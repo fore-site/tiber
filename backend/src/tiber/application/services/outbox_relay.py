@@ -85,7 +85,12 @@ class OutboxRelayService:
     async def _publish(self, message: OutboxMessage) -> None:
         """Publish one validated row using the matching worker task."""
         if message.kind == "intake":
-            await self._publisher.publish_intake(message.aggregate_id)
+            # Absent on rows written before the relay started carrying it.
+            transaction_id = message.payload.get("transaction_id")
+            await self._publisher.publish_intake(
+                message.aggregate_id,
+                UUID(transaction_id) if isinstance(transaction_id, str) else None,
+            )
             return
 
         if message.kind == "dispatch":

@@ -1,10 +1,90 @@
-from celery import Celery
+import logging
+from typing import Any
+
+from celery import Celery, _state
+from celery.signals import beat_init, setup_logging
 
 from ..core.config import get_settings
+from ..core.logging import configure_logging
 from .queues import NOTIFICATIONS_EXCHANGE, TASK_QUEUES
 from .routing import task_routes
 
 settings = get_settings()
+
+
+def _transaction_id_from(request: Any) -> str | None:
+    """Return the transaction this message was published for, if it carries one.
+
+    ``notification.process`` puts it inside the job payload;
+    ``notification.intake`` receives it as a keyword argument. Messages
+    published without it (in flight during a deploy, or ``outbox.relay``,
+    which spans many transactions) return ``None`` rather than guessing, since
+    recovering it would need a database read.
+    """
+    args = getattr(request, "args", None) or ()
+    if args:
+        job = args[0]
+        if hasattr(job, "model_dump"):
+            job = job.model_dump(mode="json")
+        if isinstance(job, dict) and job.get("transaction_id"):
+            return str(job["transaction_id"])
+
+    transaction_id = (getattr(request, "kwargs", None) or {}).get("transaction_id")
+    return str(transaction_id) if transaction_id else None
+
+
+def _add_task_context(
+    logger: Any, method: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
+    """Attach the running task's id and the business ids it carries.
+
+    ``task_id`` identifies one message and stays fixed across retries and
+    deferrals, so it separates concurrent runs of the same job. The
+    ``transaction_id`` taken from the job payload identifies the client
+    request instead: it is the same for every channel's job, survives
+    republication from the outbox, and is what the API stores and returns.
+
+    Both are read from Celery's task stack rather than bound as contextvars on
+    purpose: ``async_runtime`` reuses a single ``asyncio.Runner``, whose
+    ``Context`` is captured once on first use, so per-task contextvar bindings
+    would leak the first task's values into every later one.
+    """
+    request = getattr(_state.get_current_task(), "request", None)
+    if request is None:
+        return event_dict
+
+    task_id = getattr(request, "id", None)
+    if task_id is not None:
+        event_dict.setdefault("task_id", task_id)
+
+    transaction_id = _transaction_id_from(request)
+    if transaction_id is not None:
+        event_dict.setdefault("transaction_id", transaction_id)
+
+    return event_dict
+
+
+@setup_logging.connect(weak=False)
+def _configure_worker_logging(**_: object) -> None:
+    """Install structlog for the worker and beat processes.
+
+    Celery only configures logging when this signal has no receivers, so
+    connecting it replaces Celery's formatter rather than layering on top of
+    it: the ``celery``, ``celery.task`` and task-module loggers keep
+    ``propagate = True`` and reach the single root handler installed here.
+
+    Celery's ``--loglevel`` flag is ignored on purpose; the level follows
+    ``settings.debug``, like the API. This runs in the worker's main process
+    before the pool forks, so pool children inherit the handler.
+    """
+    configure_logging(extra_processors=[_add_task_context])
+
+
+@beat_init.connect(weak=False)
+def _quiet_beat_logger(**_: object) -> None:
+    """Hold beat's scheduler at WARNING; the worker keeps structlog's level."""
+    logging.getLogger("celery.beat").setLevel(logging.WARNING)
+
 
 # Create Celery instance
 celery_app = Celery(

@@ -166,10 +166,13 @@ def process_notification(self, job) -> None:
 
     if payload.send_at is not None and payload.send_at > datetime.now(UTC):
         countdown = _seconds_until(payload.send_at)
+        # Deferring is not a new job: keep the message's task_id so one logical
+        # delivery has one identity across however many times it is rescheduled.
         celery_app.tasks["notification.process"].apply_async(
             args=[payload.to_json_dict()],
             countdown=countdown,
             routing_key=payload.routing_key,
+            task_id=self.request.id,
         )
         return
 
@@ -209,6 +212,7 @@ def process_notification(self, job) -> None:
             args=[payload.to_json_dict()],
             countdown=countdown,
             routing_key=payload.routing_key,
+            task_id=self.request.id,
         )
 
 

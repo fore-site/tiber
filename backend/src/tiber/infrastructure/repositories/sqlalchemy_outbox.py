@@ -52,6 +52,9 @@ class SQLAlchemyOutbox:
             payload={
                 "intake_id": str(intake.id),
                 "project_id": str(intake.project_id),
+                # A trace hint, so the intake worker's logs can be joined to the
+                # client request. The worker still reads state by intake id.
+                "transaction_id": str(intake.transaction_id),
             },
         )
 

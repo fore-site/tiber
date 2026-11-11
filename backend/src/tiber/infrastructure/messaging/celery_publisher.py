@@ -14,11 +14,22 @@ class CeleryPublisher(MessagePublisher):
     routed to the channel-specific delivery queue.
     """
 
-    async def publish_intake(self, intake_id: UUID) -> None:
-        """Publish an intake identifier for asynchronous fan-out."""
+    async def publish_intake(
+        self, intake_id: UUID, transaction_id: UUID | None = None
+    ) -> None:
+        """Publish an intake identifier for asynchronous fan-out.
+
+        ``transaction_id`` travels as a keyword argument purely so worker logs
+        for the fan-out can be joined to the request that created the intake.
+        """
         celery_app.send_task(
             "notification.intake",
             args=[str(intake_id)],
+            kwargs=(
+                {"transaction_id": str(transaction_id)}
+                if transaction_id is not None
+                else None
+            ),
             queue=INTERNAL_QUEUE.name,
             routing_key=INTERNAL_QUEUE.routing_key,
         )

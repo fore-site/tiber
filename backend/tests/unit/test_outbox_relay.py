@@ -54,7 +54,7 @@ class _Publisher:
         self.calls = []
         self.failure = failure
 
-    async def publish_intake(self, intake_id):
+    async def publish_intake(self, intake_id, transaction_id=None):
         self.calls.append(("intake", intake_id))
         if self.failure:
             raise self.failure
