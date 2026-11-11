@@ -79,16 +79,10 @@ class AmbiguousRecipientError(TiberError):
     error_code = "ambiguous_recipient"
 
 
-class AddressConflictError(TiberError):
+class AddressMismatchError(TiberError):
     """A supplied address differs from the one already stored for that channel."""
 
-    error_code = "address_conflict"
-
-
-class RecipientAddressTakenError(TiberError):
-    """Raised by the repository when the unique address constraint fires."""
-
-    error_code = "recipient_address_taken"
+    error_code = "address_mismatch"
 
 
 class RecipientMergeNotAllowedError(TiberError):
@@ -97,13 +91,10 @@ class RecipientMergeNotAllowedError(TiberError):
     error_code = "recipient_merge_not_allowed"
 
 
-class IntakeAlreadyExistsError(TiberError):
-    """Raised by the intake repository when (project_id, idempotency_key) is taken.
+class ConflictError(TiberError):
+    """Raised when a unique constraint fires (an entity or a composite already exists)."""
 
-    Internal: the accept service catches it and replays the winning intake.
-    """
-
-    error_code = "intake_already_exists"
+    error_code = "conflict"
 
 
 # Policy & access
@@ -148,7 +139,7 @@ class ProviderUnavailableError(TiberError):
         super().__init__(f"{self.provider} is unavailable.")
 
 
-class IdempotencyKeyConflictError(TiberError):
+class IdempotencyKeyConflictError(ConflictError):
     """Raised when an idempotency key is reused with a different request payload.
 
     A duplicate submission with the identical payload is not an error —
@@ -189,7 +180,7 @@ class InvalidEntityAttributeError(TiberError):
         super().__init__(f"{self.message}")
 
 
-class NameConflictError(TiberError):
+class NameConflictError(ConflictError):
     """Raised when a name is already in use for an entity."""
 
     error_code = "name_conflict"
@@ -200,13 +191,3 @@ class NameConflictError(TiberError):
         super().__init__(
             f"{self.entity_name} with this name or title is already in use."
         )
-
-
-class ProjectArchivedError(TiberError):
-    """Raised when a new project-scoped write targets an archived project."""
-
-    error_code = "project_archived"
-
-    def __init__(self) -> None:
-        """Initialize the archived-project error."""
-        super().__init__("Archived projects are read-only.")
