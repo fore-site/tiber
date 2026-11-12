@@ -13,6 +13,7 @@ from tiber.application.pagination import (
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import Project
 from tiber.domain.exceptions import (
+    ConflictError,
     EntityNotFoundError,
     ProjectScopeViolationError,
 )
@@ -93,11 +94,30 @@ class ProjectManagementService:
                 project.update(name=name, description=description)
             )
 
-    async def delete(self, *, account_id: UUID, project_id: UUID) -> Project:
-        """Delete a project and start its 90-day deletion grace period."""
+    async def delete(
+        self,
+        *,
+        account_id: UUID,
+        project_id: UUID,
+        permanent: bool = False,
+    ) -> Project:
+        """Soft-delete a project, or permanently purge an already deleted one.
+
+        Permanent removal requires a prior soft delete, so an irreversible
+        operation cannot be triggered in one accidental request.
+        """
         async with self._uow:
             project = await self._owned_project_for_update(account_id, project_id)
-            return await self._projects.save(project.delete())
+            if not permanent:
+                return await self._projects.save(project.delete())
+            if not project.deleted:
+                raise ConflictError(
+                    "Project must be deleted before it can be permanently removed."
+                )
+            purged = await self._projects.purge(project.id)
+            if not purged:
+                raise EntityNotFoundError(Project, str(project_id))
+            return project
 
     async def restore(self, *, account_id: UUID, project_id: UUID) -> Project:
         """Restore an deleted project before its scheduled purge."""

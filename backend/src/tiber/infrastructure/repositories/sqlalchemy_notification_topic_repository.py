@@ -76,6 +76,13 @@ class SQLAlchemyNotificationTopicRepository(NotificationTopicRepository):
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
+    async def delete(self, topic: NotificationTopic) -> None:
+        """Permanently delete a topic within its project."""
+        model = await self._session.get(NotificationTopicModel, topic.id)
+        if model is not None and model.project_id == topic.project_id:
+            await self._session.delete(model)
+            await self._session.flush()
+
     async def list_by_category(
         self,
         project_id: UUID,

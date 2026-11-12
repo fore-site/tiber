@@ -3,10 +3,47 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ...domain.entities import Recipient
 from ...domain.enums import DeliveryChannel
+
+
+class RecipientCreateRequest(BaseModel):
+    """Fields accepted when registering a recipient."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    external_id: str | None = Field(default=None, max_length=255)
+    addresses: dict[DeliveryChannel, str] = Field(min_length=1)
+
+    @field_validator("addresses")
+    @classmethod
+    def addresses_are_not_blank(
+        cls, addresses: dict[DeliveryChannel, str]
+    ) -> dict[DeliveryChannel, str]:
+        """Reject empty channel addresses early."""
+        if any(not address for address in addresses.values()):
+            raise ValueError("addresses must not contain an empty value")
+        return addresses
+
+
+class RecipientUpdateRequest(BaseModel):
+    """Replacement address book for a recipient."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    addresses: dict[DeliveryChannel, str] = Field(min_length=1)
+
+    @field_validator("addresses")
+    @classmethod
+    def addresses_are_not_blank(
+        cls, addresses: dict[DeliveryChannel, str]
+    ) -> dict[DeliveryChannel, str]:
+        """Reject empty channel addresses early."""
+        if any(not address for address in addresses.values()):
+            raise ValueError("addresses must not contain an empty value")
+        return addresses
 
 
 class RecipientResponse(BaseModel):

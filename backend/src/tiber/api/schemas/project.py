@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ProjectCreateRequest(BaseModel):
@@ -15,8 +15,24 @@ class ProjectCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
 
 
-class ProjectUpdateRequest(ProjectCreateRequest):
-    """Replacement fields accepted when updating a project."""
+class ProjectUpdateRequest(BaseModel):
+    """Optional fields accepted when updating a project.
+
+    Omitting a field leaves it unchanged; sending `description: null` clears it.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("name")
+    @classmethod
+    def name_is_not_null(cls, name: str | None) -> str | None:
+        """Reject an explicit null name; omission is the way to keep it."""
+        if name is None:
+            raise ValueError("name cannot be null; omit it to keep the current name")
+        return name
 
 
 class ProjectResponse(BaseModel):

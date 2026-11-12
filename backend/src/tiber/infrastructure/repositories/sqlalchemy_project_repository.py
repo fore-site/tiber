@@ -12,11 +12,13 @@ from ...domain.entities import Project
 from ...domain.exceptions import NameConflictError
 from ...domain.repositories import ProjectRepository
 from ..models.delivery_attempt import DeliveryAttemptModel
+from ..models.engagement_event import EngagementEventModel
 from ..models.notification import NotificationModel
 from ..models.notification_intake import NotificationIntakeModel
 from ..models.outbox import OutboxModel
 from ..models.project import ProjectModel
 from ..models.template import TemplateModel
+from ..models.webhook_endpoint import WebhookEndpointModel
 from .sqlalchemy_errors import get_constraint_name
 
 _PROJECT_SLUG_CONSTRAINT = "projects_account_slug_unique"
@@ -142,7 +144,26 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         )
         if not project_ids:
             return 0
+        return await self._purge_projects(project_ids)
 
+    async def purge(self, project_id: UUID) -> bool:
+        """Permanently delete one project and its owned data."""
+        exists = await self._session.scalar(
+            select(ProjectModel.id)
+            .where(ProjectModel.id == project_id)
+            .with_for_update()
+        )
+        if exists is None:
+            return False
+        await self._purge_projects([project_id])
+        return True
+
+    async def _purge_projects(self, project_ids: list[UUID]) -> int:
+        """Delete project-owned rows in FK-safe order.
+
+        Tables with ``ON DELETE CASCADE`` are removed by deleting the project;
+        the explicit deletes below cover the ``RESTRICT`` relationships.
+        """
         intake_ids = select(NotificationIntakeModel.id).where(
             NotificationIntakeModel.project_id.in_(project_ids)
         )
@@ -161,6 +182,11 @@ class SQLAlchemyProjectRepository(ProjectRepository):
             )
         )
         await self._session.execute(
+            delete(EngagementEventModel).where(
+                EngagementEventModel.project_id.in_(project_ids)
+            )
+        )
+        await self._session.execute(
             delete(NotificationModel).where(
                 NotificationModel.project_id.in_(project_ids)
             )
@@ -174,8 +200,14 @@ class SQLAlchemyProjectRepository(ProjectRepository):
             delete(TemplateModel).where(TemplateModel.project_id.in_(project_ids))
         )
         await self._session.execute(
+            delete(WebhookEndpointModel).where(
+                WebhookEndpointModel.project_id.in_(project_ids)
+            )
+        )
+        await self._session.execute(
             delete(ProjectModel).where(ProjectModel.id.in_(project_ids))
         )
+        await self._session.flush()
         return len(project_ids)
 
     @staticmethod

@@ -562,9 +562,9 @@ paths:
         Existing delivery history, engagement events, and audit records are retained.
 
         To permanently delete a project, pass `?permanent=true`. This operation is irreversible,
-        is only permitted when the project satisfies the server's deletion policy 
-        (e.g, it contains no retained operational data), and deletes all 
-        project-owned operational data.
+        requires the project to be soft-deleted first, and deletes all
+        project-owned operational data. A project that is not already deleted
+        is rejected with `409`.
       parameters:
         - name: permanent
           in: query
@@ -905,7 +905,9 @@ paths:
       description: |
         deletes the recipient by default and prevents it from receiving new notifications.
 
-        To permanently delete a recipient, pass `?permanent=true`. This operation is irreversible.
+        To permanently delete a recipient, pass `?permanent=true`. This operation is irreversible
+        and requires the recipient to be soft-deleted first. A recipient with
+        delivery history that still references it is rejected with `409`.
       parameters:
         - name: permanent
           in: query
@@ -919,6 +921,114 @@ paths:
       responses:
         "204":
           description: Recipient deleted or permanently deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{project_id}/topics:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    post:
+      tags: [Topics]
+      summary: Create a topic
+      operationId: postprojectsprojectidtopics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationTopicCreateRequest"
+      responses:
+        "201":
+          description: Topic created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTopic"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    get:
+      tags: [Topics]
+      summary: List topics
+      operationId: getprojectsprojectidtopics
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: List of topics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTopicList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /projects/{project_id}/topics/{topic_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - name: topic_id
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/UUID"
+
+    get:
+      tags: [Topics]
+      summary: Get a topic
+      operationId: getprojectsprojectidtopicstopicid
+      responses:
+        "200":
+          description: Topic found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTopic"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [Topics]
+      summary: Update a topic
+      operationId: patchprojectsprojectidtopicstopicid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationTopicUpdateRequest"
+      responses:
+        "200":
+          description: Topic updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTopic"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    delete:
+      tags: [Topics]
+      summary: Delete a topic
+      operationId: deleteprojectsprojectidtopicstopicid
+      responses:
+        "204":
+          description: Topic deleted
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -2221,33 +2331,21 @@ components:
       type: object
       description: |
         Channel-specific addressing. At least one address must be provided.
-        Addresses are used during delivery based on the notification channel.
+        A recipient has exactly one address per configured channel.
+      minProperties: 1
+      additionalProperties: false
       properties:
         email:
-          type: array
-          items:
-            type: string
-            format: email
+          type: string
+          format: email
         sms:
-          type: array
-          items:
-            type: string
-            example: "+2348012345678"
+          type: string
+          example: "+2348012345678"
         push:
-          type: array
-          items:
-            type: string
-            description: FCM push token.
-        webhook:
-          type: array
-          items:
-            type: string
-            format: uri
-      anyOf:
-        - required: [email]
-        - required: [sms]
-        - required: [push]
-        - required: [webhook]
+          type: string
+          description: FCM push token.
+        in_app:
+          type: string
 
     Recipient:
       type: object
@@ -2286,14 +2384,15 @@ components:
         external_id:
           type: string
           maxLength: 255
-        channels:
-          $ref: "#/components/schemas/RecipientChannels"
+        addresses:
+          $ref: "#/components/schemas/RecipientAddresses"
 
     UpdateRecipientRequest:
       type: object
+      required: [addresses]
       properties:
-        channels:
-          $ref: "#/components/schemas/RecipientChannels"
+        addresses:
+          $ref: "#/components/schemas/RecipientAddresses"
 
     RecipientList:
       type: object
@@ -2511,6 +2610,64 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Notification"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
+
+    # Notification Topic
+
+    NotificationTopic:
+      type: object
+      required: [id, project_id, category, title, topic_slug, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/UUID"
+        project_id:
+          $ref: "#/components/schemas/UUID"
+        category:
+          $ref: "#/components/schemas/NotificationCategory"
+        title:
+          type: string
+          maxLength: 200
+        topic_slug:
+          type: string
+          maxLength: 100
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    NotificationTopicCreateRequest:
+      type: object
+      required: [title, category]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        category:
+          $ref: "#/components/schemas/NotificationCategory"
+
+    NotificationTopicUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        category:
+          $ref: "#/components/schemas/NotificationCategory"
+
+    NotificationTopicList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationTopic"
         next_cursor:
           type: string
           nullable: true

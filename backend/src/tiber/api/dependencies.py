@@ -36,7 +36,7 @@ from ..application.services.notification_intake import NotificationIntakeService
 from ..application.services.notification_query import NotificationQueryService
 from ..application.services.notification_topic import NotificationTopicService
 from ..application.services.project_management import ProjectManagementService
-from ..application.services.recipient_query import RecipientQueryService
+from ..application.services.recipient_management import RecipientManagementService
 from ..application.services.recipient_resolution import RecipientResolutionService
 from ..application.services.template_management import (
     BrandProfileManagementService,
@@ -531,13 +531,17 @@ def get_recipient_resolution_service(
     return RecipientResolutionService(recipient_repository=recipient_repository)
 
 
-def get_recipient_query_service(
+def get_recipient_management_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
     recipient_repository: Annotated[
         SQLAlchemyRecipientRepository, Depends(get_recipient_repository)
     ],
-) -> RecipientQueryService:
-    """Provide cursor-paginated recipient reads."""
-    return RecipientQueryService(recipient_repository=recipient_repository)
+) -> RecipientManagementService:
+    """Provide recipient lifecycle and cursor-paginated read operations."""
+    return RecipientManagementService(
+        unit_of_work=unit_of_work,
+        recipient_repository=recipient_repository,
+    )
 
 
 def get_notification_intake_service(

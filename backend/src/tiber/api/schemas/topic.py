@@ -21,6 +21,15 @@ class NotificationTopicCreateRequest(BaseModel):
     category: NotificationCategory
 
 
+class NotificationTopicUpdateRequest(BaseModel):
+    """Optional title and category changes for a topic."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    category: NotificationCategory | None = None
+
+
 class NotificationTopicResponse(BaseModel):
     """API representation of a persisted notification topic."""
 

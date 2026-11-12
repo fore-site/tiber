@@ -87,6 +87,10 @@ class ProjectRepository(Protocol):
         """List a page of projects owned by an account, newest first."""
         ...
 
+    async def purge(self, project_id: UUID) -> bool:
+        """Permanently delete a project and its owned data; False if absent."""
+        ...
+
     async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
         """Permanently remove deleted projects older than the cutoff."""
         ...
@@ -312,6 +316,10 @@ class RecipientRepository(Protocol):
         """
         ...
 
+    async def delete(self, recipient: Recipient) -> None:
+        """Permanently delete a recipient; conflicts when history references it."""
+        ...
+
     async def get_many_for_update(
         self, project_id: UUID, ids: Sequence[UUID]
     ) -> list[Recipient]:
@@ -402,6 +410,10 @@ class NotificationTopicRepository(Protocol):
         cursor: tuple[datetime, UUID] | None = None,
     ) -> list[NotificationTopic]:
         """List a page of a project's notification topics, newest first."""
+        ...
+
+    async def delete(self, topic: NotificationTopic) -> None:
+        """Permanently delete a project-scoped topic."""
         ...
 
 

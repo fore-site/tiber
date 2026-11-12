@@ -20,6 +20,7 @@ from ...infrastructure.models.recipient import RecipientModel
 # names the index, which is how an address clash is told apart from any other
 # unique violation.
 _ADDRESS_INDEX_PREFIX = "uq_recipients_active_address_"
+_EXTERNAL_ID_CONSTRAINT = "recipients_project_external_id_unique"
 
 _CHANNEL_KEY_RE = re.compile(r"^[a-z_]+$")
 
@@ -92,7 +93,11 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
                 raise ConflictError(
                     "An address already belongs to another recipient."
                 ) from exc
-            raise  # any other violation (primary key, external_id) is unchanged
+            if _EXTERNAL_ID_CONSTRAINT in str(exc.orig):
+                raise ConflictError(
+                    "external_id is already used by another recipient."
+                ) from exc
+            raise  # any other violation (primary key) is unchanged
 
     # Reads
 
@@ -170,6 +175,20 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
             .execution_options(populate_existing=True)
         )
         return [self._to_entity(model) for model in result.scalars().all()]
+
+    async def delete(self, recipient: Recipient) -> None:
+        """Permanently delete a recipient, unless delivery history references it."""
+        model = await self._session.get(RecipientModel, recipient.id)
+        if model is None or model.project_id != recipient.project_id:
+            return
+        try:
+            async with self._session.begin_nested():
+                await self._session.delete(model)
+                await self._session.flush()
+        except IntegrityError as exc:
+            raise ConflictError(
+                "Recipient has delivery history and cannot be permanently deleted."
+            ) from exc
 
     async def list_by_project(
         self,
