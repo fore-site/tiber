@@ -11,11 +11,13 @@ class DeliveryAttempt:
     """DeliveryAttempt entity - a single immutable attempt to deliver a notification.
 
     Attempts are immutable records: retries generate additional attempts rather
-    than mutating existing ones.
+    than mutating existing ones. ``attempt_number`` is 1-based and unique per
+    notification, so "attempt #2" is a stable reference for diagnostics.
     """
 
     id: UUID = field(default_factory=uuid4)
     notification_id: UUID
+    attempt_number: int
     status: DeliveryAttemptStatus
     channel: DeliveryChannel
     provider: str
@@ -29,6 +31,11 @@ class DeliveryAttempt:
         if not self.provider or not self.provider.strip():
             raise InvalidEntityAttributeError(
                 "DeliveryAttempt provider must not be empty"
+            )
+
+        if self.attempt_number < 1:
+            raise InvalidEntityAttributeError(
+                "DeliveryAttempt attempt_number must be >= 1."
             )
 
         # A success means something was contacted: the snapshot cannot be
@@ -47,6 +54,7 @@ class DeliveryAttempt:
         cls,
         *,
         notification_id: UUID,
+        attempt_number: int,
         status: DeliveryAttemptStatus,
         channel: DeliveryChannel,
         provider: str,
@@ -57,6 +65,7 @@ class DeliveryAttempt:
         """Record a new delivery attempt with a system-generated id and timestamp."""
         return cls(
             notification_id=notification_id,
+            attempt_number=attempt_number,
             status=status,
             channel=channel,
             provider=provider,
@@ -71,6 +80,7 @@ class DeliveryAttempt:
         *,
         id: UUID,
         notification_id: UUID,
+        attempt_number: int,
         status: DeliveryAttemptStatus,
         channel: DeliveryChannel,
         provider: str,
@@ -83,6 +93,7 @@ class DeliveryAttempt:
         return cls(
             id=id,
             notification_id=notification_id,
+            attempt_number=attempt_number,
             status=status,
             channel=channel,
             provider=provider,

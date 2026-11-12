@@ -26,10 +26,13 @@ from .exception_handlers import (
 )
 from .routers.api_keys import router as api_key_router
 from .routers.auth import router as auth_router
+from .routers.delivery_attempts import router as delivery_attempts_router
+from .routers.engagement_events import router as engagement_events_router
 from .routers.health import router as health_router
 from .routers.notification import router as notification_router
 from .routers.templates import router as templates_router
 from .routers.topics import router as topics_router
+from .routers.webhooks import router as webhooks_router
 
 # Configure structlog before the first log call in this process
 configure_logging()
@@ -110,6 +113,9 @@ def create_app() -> FastAPI:
     app.include_router(notification_router)
     app.include_router(topics_router)
     app.include_router(templates_router)
+    app.include_router(delivery_attempts_router)
+    app.include_router(engagement_events_router)
+    app.include_router(webhooks_router)
     return app
 
 

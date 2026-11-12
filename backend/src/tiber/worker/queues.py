@@ -54,6 +54,27 @@ INTERNAL_DLQ = Queue(
     durable=True,
 )
 
+# Outbound webhooks get their own queue and DLQ: a slow or dead client endpoint
+# must not delay notifications, and exhausted webhook retries need a replay
+# path separate from undelivered notifications.
+WEBHOOK_QUEUE = Queue(
+    "webhook.delivery.queue",
+    exchange=NOTIFICATIONS_EXCHANGE,
+    routing_key="notification.webhook",
+    durable=True,
+    queue_arguments={
+        "x-dead-letter-exchange": DLQ_EXCHANGE.name,
+        "x-dead-letter-routing-key": "webhook.dlq",
+    },
+)
+
+WEBHOOK_DLQ = Queue(
+    "webhook.dlq",
+    exchange=DLQ_EXCHANGE,
+    routing_key="webhook.dlq",
+    durable=True,
+)
+
 
 def channel_topology(channel: DeliveryChannel) -> tuple[Queue, Queue]:
     """Return ``(delivery_queue, dead_letter_queue)`` for a channel.
@@ -90,4 +111,6 @@ DELIVERY_QUEUES: tuple[Queue, ...] = tuple(
 DLQS: tuple[Queue, ...] = tuple(channel_topology(channel)[1] for channel in _CHANNELS)
 
 #: Queues Celery must declare on connect: every channel delivery queue and DLQ.
-TASK_QUEUES: tuple[Queue, ...] = DELIVERY_QUEUES + DLQS + (INTERNAL_QUEUE, INTERNAL_DLQ)
+TASK_QUEUES: tuple[Queue, ...] = (
+    DELIVERY_QUEUES + DLQS + (INTERNAL_QUEUE, INTERNAL_DLQ, WEBHOOK_QUEUE, WEBHOOK_DLQ)
+)

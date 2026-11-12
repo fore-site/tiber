@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     notification_retry_max_delay_seconds: int = 3600
     notification_processing_lease_seconds: int = Field(default=300, ge=1)
 
+    # Outbound webhooks (client-registered callbacks)
+    webhook_endpoint_timeout_seconds: float = Field(default=10.0, gt=0)
+    webhook_dispatch_max_endpoints: int = Field(default=100, ge=1)
+    webhook_retry_max_attempts: int = 4
+    webhook_retry_base_delay_seconds: int = 30
+    webhook_retry_backoff_factor: int = 2
+    webhook_retry_max_delay_seconds: int = 3600
+
     # Transactional outbox relay
     outbox_relay_interval_seconds: int = Field(default=1, ge=1)
     outbox_relay_batch_size: int = Field(default=100, ge=1)

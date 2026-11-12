@@ -144,6 +144,17 @@ def generate_api_key() -> str:
     return f"tb_{api_key}"  # Prefix with 'tb_' to indicate it's a Tiber API key
 
 
+def generate_webhook_secret() -> tuple[str, str]:
+    """Generate a webhook signing secret and its non-sensitive prefix.
+
+    Returns ``(secret, prefix)``. The secret is shown to the client once; the
+    prefix is stored alongside the encrypted secret so a client can tell two
+    endpoints' secrets apart without revealing either.
+    """
+    secret = f"whsec_{secrets.token_urlsafe(32)}"
+    return secret, secret[:12]
+
+
 def hash_api_key(api_key: str) -> str:
     """Hashes an API key using SHA-256. The raw key is never persisted.
 

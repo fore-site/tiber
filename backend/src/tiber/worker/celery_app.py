@@ -134,6 +134,7 @@ celery_app.conf.update(
         "tiber.worker.tasks.intake",
         "tiber.worker.tasks.notification",
         "tiber.worker.tasks.outbox",
+        "tiber.worker.tasks.webhook",
     ),
     beat_schedule={
         "relay-transactional-outbox": {

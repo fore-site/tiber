@@ -220,6 +220,7 @@ class NotificationDeliveryProcessor:
     ) -> None:
         attempt = DeliveryAttempt.create(
             notification_id=notification.id,
+            attempt_number=await self._attempts.next_attempt_number(notification.id),
             status=(
                 DeliveryAttemptStatus.SUCCESS if success else DeliveryAttemptStatus.FAIL
             ),

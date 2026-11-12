@@ -28,6 +28,7 @@ def test_succeeded_attempt_requires_recipient_address():
     with pytest.raises(InvalidEntityAttributeError, match="recipient_address"):
         DeliveryAttempt.create(
             notification_id=uuid4(),
+            attempt_number=1,
             status=DeliveryAttemptStatus.SUCCESS,
             channel="email",
             provider="postmark",
@@ -39,6 +40,7 @@ def test_failed_attempt_may_precede_any_contact():
     """None snapshot on a failure means 'failed before contact', and is legal."""
     attempt = DeliveryAttempt.create(
         notification_id=uuid4(),
+        attempt_number=2,
         status=DeliveryAttemptStatus.FAIL,
         channel="sms",
         provider="twilio",
@@ -53,6 +55,7 @@ def test_failed_attempt_still_snapshots_when_contact_was_made():
     """A failure after contact records the address the provider rejected."""
     attempt = DeliveryAttempt.create(
         notification_id=uuid4(),
+        attempt_number=2,
         status=DeliveryAttemptStatus.FAIL,
         channel="email",
         provider="postmark",

@@ -48,6 +48,7 @@ from ...infrastructure.repositories.sqlalchemy_template_repository import (
 from ...infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
 from ..async_runtime import run_async
 from ..celery_app import celery_app
+from ..queues import WEBHOOK_QUEUE
 from ..retry import exponential_backoff
 
 logger = get_task_logger(__name__)
@@ -60,6 +61,18 @@ PERMANENT_DELIVERY_ERRORS = (
     InvalidStateTransitionError,
     ProjectScopeViolationError,
     TemplateChannelMismatchError,
+)
+
+# States that end a notification's delivery lifecycle. Reaching one is the
+# trigger for client webhooks; being in one already is not.
+TERMINAL_STATUSES = frozenset(
+    {
+        NotificationStatus.DELIVERED,
+        NotificationStatus.FAILED,
+        NotificationStatus.BOUNCED,
+        NotificationStatus.SUPPRESSED,
+        NotificationStatus.CANCELLED,
+    }
 )
 
 
@@ -78,6 +91,8 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
         if notification is None:
             logger.warning("Notification %s not found; skipping", notification_id)
             return None
+
+        was_terminal = notification.status in TERMINAL_STATUSES
 
         provider = build_provider_manager(
             SETTINGS, channels=(notification.channel,)
@@ -107,6 +122,19 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
             notification_id,
             updated.status.value,
         )
+
+        # Fire client webhooks once per transition, after the delivery record is
+        # committed. A notification already terminal when the job started never
+        # reaches here (the processor returns early), so redelivery does not
+        # re-trigger callbacks. A crash between commit and publish can still
+        # lose the callback - at-least-once is not guaranteed on this hop.
+        if not was_terminal and updated.status in TERMINAL_STATUSES:
+            celery_app.send_task(
+                "notification.webhook",
+                args=[str(updated.id), str(updated.project_id)],
+                queue=WEBHOOK_QUEUE.name,
+                routing_key=WEBHOOK_QUEUE.routing_key,
+            )
         return updated
 
 

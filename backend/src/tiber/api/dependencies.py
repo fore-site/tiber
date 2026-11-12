@@ -27,6 +27,8 @@ from ..application.services.authentication import (
     AuthenticationOperationError,
     AuthenticationService,
 )
+from ..application.services.delivery_attempt_query import DeliveryAttemptQueryService
+from ..application.services.engagement_event import EngagementEventService
 from ..application.services.notification_cancellation import (
     NotificationCancellationService,
 )
@@ -39,6 +41,7 @@ from ..application.services.template_management import (
     BrandProfileManagementService,
     TemplateManagementService,
 )
+from ..application.services.webhook_endpoint import WebhookEndpointService
 from ..core.config import get_settings
 from ..core.database import AsyncSessionFactory
 from ..core.redis import RedisKeys, get_redis_client
@@ -59,6 +62,12 @@ from ..infrastructure.repositories.sqlalchemy_auth_account_repository import (
 from ..infrastructure.repositories.sqlalchemy_brand_profile_repository import (
     SQLAlchemyBrandProfileRepository,
 )
+from ..infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (
+    SQLAlchemyDeliveryAttemptRepository,
+)
+from ..infrastructure.repositories.sqlalchemy_engagement_event_repository import (
+    SQLAlchemyEngagementEventRepository,
+)
 from ..infrastructure.repositories.sqlalchemy_notification_intake_repository import (
     SQLAlchemyNotificationIntakeRepository,
 )
@@ -77,6 +86,9 @@ from ..infrastructure.repositories.sqlalchemy_recipient_repository import (
 )
 from ..infrastructure.repositories.sqlalchemy_template_repository import (
     SQLAlchemyTemplateRepository,
+)
+from ..infrastructure.repositories.sqlalchemy_webhook_endpoint_repository import (
+    SQLAlchemyWebhookEndpointRepository,
 )
 from ..infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -367,6 +379,27 @@ def get_topic_repository(
     return SQLAlchemyNotificationTopicRepository(db)
 
 
+def get_engagement_event_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemyEngagementEventRepository:
+    """Provide the SQLAlchemy engagement-event repository for this request."""
+    return SQLAlchemyEngagementEventRepository(db)
+
+
+def get_webhook_endpoint_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemyWebhookEndpointRepository:
+    """Provide the SQLAlchemy webhook-endpoint repository for this request."""
+    return SQLAlchemyWebhookEndpointRepository(db)
+
+
+def get_delivery_attempt_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemyDeliveryAttemptRepository:
+    """Provide the SQLAlchemy delivery-attempt repository for this request."""
+    return SQLAlchemyDeliveryAttemptRepository(db)
+
+
 def get_rate_limit_policies(
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> RateLimitPolicies:
@@ -570,6 +603,51 @@ def get_notification_topic_service(
     return NotificationTopicService(
         unit_of_work=unit_of_work,
         topic_repository=topic_repository,
+    )
+
+
+def get_webhook_endpoint_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+    endpoint_repository: Annotated[
+        SQLAlchemyWebhookEndpointRepository, Depends(get_webhook_endpoint_repository)
+    ],
+) -> WebhookEndpointService:
+    """Provide project-scoped webhook endpoint registration."""
+    return WebhookEndpointService(
+        unit_of_work=unit_of_work,
+        endpoint_repository=endpoint_repository,
+    )
+
+
+def get_engagement_event_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+    event_repository: Annotated[
+        SQLAlchemyEngagementEventRepository, Depends(get_engagement_event_repository)
+    ],
+    notification_repository: Annotated[
+        SQLAlchemyNotificationRepository, Depends(get_notification_repository)
+    ],
+) -> EngagementEventService:
+    """Provide project-scoped engagement event recording and queries."""
+    return EngagementEventService(
+        unit_of_work=unit_of_work,
+        event_repository=event_repository,
+        notification_repository=notification_repository,
+    )
+
+
+def get_delivery_attempt_query_service(
+    notification_repository: Annotated[
+        SQLAlchemyNotificationRepository, Depends(get_notification_repository)
+    ],
+    attempt_repository: Annotated[
+        SQLAlchemyDeliveryAttemptRepository, Depends(get_delivery_attempt_repository)
+    ],
+) -> DeliveryAttemptQueryService:
+    """Provide project-scoped delivery attempt reads."""
+    return DeliveryAttemptQueryService(
+        notification_repository=notification_repository,
+        attempt_repository=attempt_repository,
     )
 
 

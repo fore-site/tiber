@@ -18,6 +18,9 @@ task_routes = {
         "queue": INTERNAL_QUEUE.name,
         "routing_key": INTERNAL_QUEUE.routing_key,
     },
+    "notification.webhook": {
+        "exchange": NOTIFICATIONS_EXCHANGE.name,
+    },
     "outbox.relay": {
         "exchange": INTERNAL_EXCHANGE.name,
         "queue": INTERNAL_QUEUE.name,

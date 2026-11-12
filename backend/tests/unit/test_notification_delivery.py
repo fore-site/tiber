@@ -73,6 +73,9 @@ class _Attempts:
         self.saved.append(attempt)
         return attempt
 
+    async def next_attempt_number(self, notification_id):
+        return len(self.saved) + 1
+
 
 class _Provider:
     channel = DeliveryChannel.EMAIL

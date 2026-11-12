@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.entities import DeliveryAttempt
@@ -23,14 +23,34 @@ class SQLAlchemyDeliveryAttemptRepository(DeliveryAttemptRepository):
         await self._session.flush()
         return attempt
 
+    async def get_by_id(
+        self, id: UUID, notification_id: UUID
+    ) -> DeliveryAttempt | None:
+        """Get an attempt by id, scoped to its notification."""
+        model = await self._session.get(DeliveryAttemptModel, id)
+        if model is not None and model.notification_id != notification_id:
+            return None
+        return self._to_entity(model) if model is not None else None
+
+    async def next_attempt_number(self, notification_id: UUID) -> int:
+        """Return the next 1-based attempt number for a notification."""
+        current = await self._session.scalar(
+            select(
+                func.coalesce(func.max(DeliveryAttemptModel.attempt_number), 0)
+            ).where(DeliveryAttemptModel.notification_id == notification_id)
+        )
+        return int(current or 0) + 1
+
     async def list_by_notification(
-        self, notification_id: UUID
+        self, notification_id: UUID, limit: int, offset: int
     ) -> list[DeliveryAttempt]:
         """List all attempts for a notification, oldest first."""
         result = await self._session.execute(
             select(DeliveryAttemptModel)
             .where(DeliveryAttemptModel.notification_id == notification_id)
             .order_by(DeliveryAttemptModel.attempt_number)
+            .limit(limit)
+            .offset(offset)
         )
         models = result.scalars().all()
         return [self._to_entity(model) for model in models]

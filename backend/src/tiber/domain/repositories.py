@@ -27,7 +27,13 @@ from .entities import (
     Template,
     WebhookEndpoint,
 )
-from .enums import DeliveryChannel, NotificationCategory, NotificationStatus
+from .enums import (
+    DeliveryChannel,
+    EngagementEventType,
+    NotificationCategory,
+    NotificationStatus,
+    WebhookEventType,
+)
 
 
 class AccountRepository(Protocol):
@@ -296,10 +302,27 @@ class DeliveryAttemptRepository(Protocol):
         """Save a delivery attempt to the repository."""
         ...
 
+    async def get_by_id(
+        self, id: UUID, notification_id: UUID
+    ) -> DeliveryAttempt | None:
+        """Get an attempt by id, scoped to its notification."""
+        ...
+
+    async def next_attempt_number(self, notification_id: UUID) -> int:
+        """Return the next 1-based attempt number for a notification.
+
+        A read-then-insert race between two workers is possible in principle;
+        the ``(notification_id, attempt_number)`` unique constraint rejects the
+        loser instead of silently overwriting history. Attempts are only
+        recorded after a notification is claimed for delivery, so the race is
+        not expected in practice.
+        """
+        ...
+
     async def list_by_notification(
         self, notification_id: UUID, limit: int, offset: int
     ) -> list[DeliveryAttempt]:
-        """List all delivery attempts for a notification."""
+        """List all delivery attempts for a notification, oldest first."""
         ...
 
 
@@ -345,21 +368,31 @@ class WebhookEndpointRepository(Protocol):
     """Contract for webhook endpoint data access."""
 
     async def save(self, endpoint: WebhookEndpoint) -> WebhookEndpoint:
-        """Save a webhook endpoint to the repository."""
+        """Insert or update a webhook endpoint."""
         ...
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> WebhookEndpoint | None:
-        """Get a webhook endpoint by its ID."""
+        """Get a webhook endpoint by its ID within a project's scope."""
         ...
 
-    async def list_by_project(self, project_id: UUID) -> list[WebhookEndpoint]:
-        """List all webhook endpoints for a project."""
+    async def list_by_project(
+        self, project_id: UUID, limit: int, offset: int
+    ) -> list[WebhookEndpoint]:
+        """List a project's endpoints, newest first."""
         ...
 
     async def list_by_event(
-        self, project_id: UUID, event_type: str, limit: int, offset: int
+        self,
+        project_id: UUID,
+        event_type: WebhookEventType,
+        limit: int,
+        offset: int,
     ) -> list[WebhookEndpoint]:
-        """List all webhook endpoints by event type for a project."""
+        """List the project's endpoints subscribed to one event type."""
+        ...
+
+    async def delete(self, id: UUID, project_id: UUID) -> bool:
+        """Delete an endpoint; False when it does not exist in the project."""
         ...
 
 
@@ -392,6 +425,41 @@ class EngagementEventRepository(Protocol):
 
     async def save(self, event: EngagementEvent) -> EngagementEvent:
         """Save an engagement event to the repository."""
+        ...
+
+    async def get_by_idempotency_key(
+        self, project_id: UUID, idempotency_key: str
+    ) -> EngagementEvent | None:
+        """Get a client-reported event by its project-scoped idempotency key."""
+        ...
+
+    async def insert_if_absent(self, event: EngagementEvent) -> bool:
+        """Insert an event unless ``(project_id, idempotency_key)`` is taken.
+
+        Returns ``True`` when the row was inserted and ``False`` when the key
+        already exists. Uses ``ON CONFLICT DO NOTHING`` so a lost race leaves
+        the surrounding transaction usable and the caller can re-read the winner.
+        """
+        ...
+
+    async def get_by_id(self, id: UUID, project_id: UUID) -> EngagementEvent | None:
+        """Get an event by id within a project's scope."""
+        ...
+
+    async def list_by_project(
+        self,
+        project_id: UUID,
+        limit: int,
+        offset: int,
+        *,
+        event_type: EngagementEventType | None = None,
+        recipient_id: UUID | None = None,
+        notification_id: UUID | None = None,
+        channel: DeliveryChannel | None = None,
+        occurred_after: datetime | None = None,
+        occurred_before: datetime | None = None,
+    ) -> list[EngagementEvent]:
+        """List a project's events, newest first, with optional filters."""
         ...
 
     async def list_by_notification(

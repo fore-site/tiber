@@ -3,11 +3,18 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ..enums import DeliveryChannel, EngagementEventType
+from ..exceptions import InvalidEntityAttributeError
 
 
 @dataclass(frozen=True, kw_only=True)
 class EngagementEvent:
-    """Domain entity representing recipient interaction reported by delivery providers."""
+    """Domain entity representing a recipient interaction.
+
+    Events come from two sources: delivery providers (opens, clicks, bounces,
+    complaints, unsubscribes) and client applications (push and in-app taps).
+    Client-reported rows may carry an idempotency key so a retried report does
+    not duplicate a training signal.
+    """
 
     id: UUID = field(default_factory=uuid4)
     notification_id: UUID
@@ -16,10 +23,25 @@ class EngagementEvent:
     event_type: EngagementEventType
     channel: DeliveryChannel
     provider: str
+    # Client-supplied dedupe key. Provider-reported events leave it None.
+    idempotency_key: str | None = None
     occurred_at: datetime
     metadata: dict | None = None
     is_synthetic: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """Reject an idempotency key that cannot identify one report."""
+        if self.idempotency_key is None:
+            return
+        if not self.idempotency_key.strip():
+            raise InvalidEntityAttributeError(
+                "`idempotency_key` must be a non-empty string when provided"
+            )
+        if len(self.idempotency_key) > 255:
+            raise InvalidEntityAttributeError(
+                "`idempotency_key` must be at most 255 characters"
+            )
 
     @classmethod
     def create(
@@ -31,6 +53,7 @@ class EngagementEvent:
         event_type: EngagementEventType,
         channel: DeliveryChannel,
         provider: str,
+        idempotency_key: str | None = None,
         occurred_at: datetime,
         metadata: dict | None = None,
         is_synthetic: bool = False,
@@ -43,6 +66,7 @@ class EngagementEvent:
             event_type=event_type,
             channel=channel,
             provider=provider,
+            idempotency_key=idempotency_key,
             occurred_at=occurred_at,
             metadata=metadata,
             is_synthetic=is_synthetic,
@@ -59,6 +83,7 @@ class EngagementEvent:
         event_type: EngagementEventType,
         channel: DeliveryChannel,
         provider: str,
+        idempotency_key: str | None,
         occurred_at: datetime,
         metadata: dict | None = None,
         is_synthetic: bool,
@@ -73,6 +98,7 @@ class EngagementEvent:
             event_type=event_type,
             channel=channel,
             provider=provider,
+            idempotency_key=idempotency_key,
             occurred_at=occurred_at,
             metadata=metadata,
             is_synthetic=is_synthetic,

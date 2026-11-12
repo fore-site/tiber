@@ -64,10 +64,15 @@ def test_queue_sets_cover_all_channels():
     """Celery queues include channel queues and the internal worker queues."""
     assert len(DELIVERY_QUEUES) == len(list(DeliveryChannel))
     assert len(DLQS) == len(list(DeliveryChannel))
-    assert len(TASK_QUEUES) == 2 * len(list(DeliveryChannel)) + 2
-    assert set(TASK_QUEUES) == (
-        set(DELIVERY_QUEUES) | set(DLQS) | {INTERNAL_QUEUE, INTERNAL_DLQ}
-    )
+    # Channel delivery + channel DLQs, plus the internal and webhook queue/DLQ pairs.
+    assert len(TASK_QUEUES) == 2 * len(list(DeliveryChannel)) + 4
+    extras = set(TASK_QUEUES) - set(DELIVERY_QUEUES) - set(DLQS)
+    assert {queue.name for queue in extras} == {
+        "tiber.internal.queue",
+        "internal.dlq",
+        "webhook.delivery.queue",
+        "webhook.dlq",
+    }
 
     names = {q.name for q in TASK_QUEUES}
     for channel in DeliveryChannel:
@@ -75,3 +80,5 @@ def test_queue_sets_cover_all_channels():
         assert f"{channel.value}.dlq" in names
     assert INTERNAL_QUEUE.name in names
     assert INTERNAL_DLQ.name in names
+    assert "webhook.delivery.queue" in names
+    assert "webhook.dlq" in names
