@@ -109,17 +109,24 @@ def create_app() -> FastAPI:
         finally:
             reset_correlation_id(token)
 
+    # Health is intentionally unversioned: infrastructure probes should not
+    # need to change when the API version does.
     app.include_router(health_router)
-    app.include_router(auth_router)
-    app.include_router(api_key_router)
-    app.include_router(projects_router)
-    app.include_router(notification_router)
-    app.include_router(recipients_router)
-    app.include_router(topics_router)
-    app.include_router(templates_router)
-    app.include_router(delivery_attempts_router)
-    app.include_router(engagement_events_router)
-    app.include_router(webhooks_router)
+
+    api_routers = (
+        auth_router,
+        api_key_router,
+        projects_router,
+        notification_router,
+        recipients_router,
+        topics_router,
+        templates_router,
+        delivery_attempts_router,
+        engagement_events_router,
+        webhooks_router,
+    )
+    for router in api_routers:
+        app.include_router(router, prefix=settings.api_prefix)
     return app
 
 

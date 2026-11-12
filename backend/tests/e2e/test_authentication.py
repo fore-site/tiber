@@ -251,13 +251,13 @@ async def test_api_key_is_project_scoped_and_revoke_takes_effect(
     assert "key_hash" not in key_response
 
     notification_list = await client.get(
-        f"/projects/{project_id}/notifications",
+        f"/v1/projects/{project_id}/notifications",
         headers=_bearer(raw_key),
     )
     assert notification_list.status_code == 200
 
     outside_project = await client.get(
-        f"/projects/{uuid4()}/notifications",
+        f"/v1/projects/{uuid4()}/notifications",
         headers=_bearer(raw_key),
     )
     assert outside_project.status_code == 403
@@ -269,7 +269,7 @@ async def test_api_key_is_project_scoped_and_revoke_takes_effect(
     assert revoked.status_code == 204
 
     rejected = await client.get(
-        f"/projects/{project_id}/notifications",
+        f"/v1/projects/{project_id}/notifications",
         headers=_bearer(raw_key),
     )
     assert rejected.status_code == 401

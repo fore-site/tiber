@@ -33,7 +33,7 @@ from ..schemas.auth import (
     UpdateAccountRequest,
 )
 
-router = APIRouter(prefix="/v1/auth", tags=["Auth"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 _ERRORS: dict[str, tuple[int, str | dict[str, str]]] = {

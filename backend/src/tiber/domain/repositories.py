@@ -87,10 +87,6 @@ class ProjectRepository(Protocol):
         """List a page of projects owned by an account, newest first."""
         ...
 
-    async def purge(self, project_id: UUID) -> bool:
-        """Permanently delete a project and its owned data; False if absent."""
-        ...
-
     async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
         """Permanently remove deleted projects older than the cutoff."""
         ...

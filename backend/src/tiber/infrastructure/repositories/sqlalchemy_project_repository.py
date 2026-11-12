@@ -146,18 +146,6 @@ class SQLAlchemyProjectRepository(ProjectRepository):
             return 0
         return await self._purge_projects(project_ids)
 
-    async def purge(self, project_id: UUID) -> bool:
-        """Permanently delete one project and its owned data."""
-        exists = await self._session.scalar(
-            select(ProjectModel.id)
-            .where(ProjectModel.id == project_id)
-            .with_for_update()
-        )
-        if exists is None:
-            return False
-        await self._purge_projects([project_id])
-        return True
-
     async def _purge_projects(self, project_ids: list[UUID]) -> int:
         """Delete project-owned rows in FK-safe order.
 

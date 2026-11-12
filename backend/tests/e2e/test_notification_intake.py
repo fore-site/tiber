@@ -72,7 +72,7 @@ def request_body(**overrides) -> dict:
 async def test_accept_returns_202_with_a_batch_handle(client, project) -> None:
     """A valid request is accepted and identified by a server-generated correlation id."""
     response = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("accept-1"),
         json=request_body(),
     )
@@ -82,7 +82,7 @@ async def test_accept_returns_202_with_a_batch_handle(client, project) -> None:
     assert body["project_id"] == str(project.id)
     UUID(body["transaction_id"])
     assert response.headers["location"].endswith(
-        f"/projects/{project.id}/notification-requests/{body['transaction_id']}"
+        f"/v1/projects/{project.id}/notification-requests/{body['transaction_id']}"
     )
 
 
@@ -94,7 +94,7 @@ async def test_direct_html_is_included_in_the_accepted_intake(
     """Direct HTML survives request mapping and the intake persistence boundary."""
     project_id = project.id
     response = await client.post(
-        f"/projects/{project_id}/notifications",
+        f"/v1/projects/{project_id}/notifications",
         headers=headers("direct-html-1"),
         json=request_body(
             content={
@@ -115,7 +115,7 @@ async def test_direct_html_is_included_in_the_accepted_intake(
     )
 
     changed_markup = await client.post(
-        f"/projects/{project_id}/notifications",
+        f"/v1/projects/{project_id}/notifications",
         headers=headers("direct-html-1"),
         json=request_body(
             content={
@@ -156,7 +156,7 @@ async def test_direct_html_is_included_in_the_accepted_intake(
 
     await session.refresh(project)
     status_response = await client.get(
-        f"/projects/{project_id}/notification-requests/{intake.transaction_id}",
+        f"/v1/projects/{project_id}/notification-requests/{intake.transaction_id}",
         headers=AUTH,
     )
     assert status_response.status_code == 200
@@ -173,7 +173,7 @@ async def test_direct_html_requires_an_email_or_in_app_channel(
 ) -> None:
     """Do not accept HTML that cannot be attached to any selected channel."""
     response = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("direct-html-unsupported-channel"),
         json=request_body(
             email=None,
@@ -196,7 +196,7 @@ async def test_create_notification_topic_persists_project_topic(
 ) -> None:
     """Creating a topic returns its derived slug and persists it in the project."""
     response = await client.post(
-        f"/projects/{project.id}/topics",
+        f"/v1/projects/{project.id}/topics",
         headers=AUTH,
         json={"title": "Product Updates", "category": "informational"},
     )
@@ -214,7 +214,7 @@ async def test_create_notification_topic_persists_project_topic(
     assert body["topic_slug"] == "product-updates"
 
     duplicate = await client.post(
-        f"/projects/{project.id}/topics",
+        f"/v1/projects/{project.id}/topics",
         headers=AUTH,
         json={"title": "Product Updates", "category": "social"},
     )
@@ -225,12 +225,12 @@ async def test_create_notification_topic_persists_project_topic(
 async def test_same_key_and_body_replays_the_same_batch(client, project) -> None:
     """Retrying an identical request returns the original batch, not a second one."""
     first = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("replay-1"),
         json=request_body(),
     )
     second = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("replay-1"),
         json=request_body(),
     )
@@ -243,13 +243,13 @@ async def test_same_key_and_body_replays_the_same_batch(client, project) -> None
 async def test_same_key_with_a_different_body_is_rejected(client, project) -> None:
     """Reusing a key for a different payload is a conflict, not a silent replay."""
     await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("conflict-1"),
         json=request_body(),
     )
 
     response = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("conflict-1"),
         json=request_body(content={"title": "Changed", "body": "Different body"}),
     )
@@ -261,7 +261,7 @@ async def test_same_key_with_a_different_body_is_rejected(client, project) -> No
 async def test_missing_idempotency_key_is_rejected(client, project) -> None:
     """The header is part of the contract, so its absence fails before any write."""
     response = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=AUTH,
         json=request_body(),
     )
@@ -272,14 +272,14 @@ async def test_missing_idempotency_key_is_rejected(client, project) -> None:
 async def test_request_status_is_readable_before_fan_out(client, project) -> None:
     """The Location handle resolves to the accepted request and its empty child list."""
     accepted = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("status-1"),
         json=request_body(),
     )
     transaction_id = accepted.json()["transaction_id"]
 
     response = await client.get(
-        f"/projects/{project.id}/notification-requests/{transaction_id}",
+        f"/v1/projects/{project.id}/notification-requests/{transaction_id}",
         headers=AUTH,
     )
 
@@ -321,7 +321,7 @@ async def test_rate_limited_project_is_rejected(client, app, project) -> None:
     app.dependency_overrides[get_rate_limit_policies] = lambda: policies
 
     response = await client.post(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=headers("limited-1"),
         json=request_body(),
     )
@@ -337,7 +337,7 @@ async def test_rate_limited_project_is_rejected(client, app, project) -> None:
 async def test_list_notifications_is_scoped_to_the_project(client, project) -> None:
     """A project with no dispatched children lists an empty page, not another project's rows."""
     response = await client.get(
-        f"/projects/{project.id}/notifications",
+        f"/v1/projects/{project.id}/notifications",
         headers=AUTH,
     )
 
@@ -373,13 +373,13 @@ async def test_cancel_pending_notification_and_reject_repeat(
         await SQLAlchemyNotificationRepository(session).save(notification)
 
     cancellation_url = (
-        f"/projects/{project_id}/notifications/{notification.id}/cancellation"
+        f"/v1/projects/{project_id}/notifications/{notification.id}/cancellation"
     )
     cancelled = await client.put(cancellation_url, headers=AUTH)
     assert cancelled.status_code == 204
 
     fetched = await client.get(
-        f"/projects/{project_id}/notifications/{notification.id}",
+        f"/v1/projects/{project_id}/notifications/{notification.id}",
         headers=AUTH,
     )
     assert fetched.status_code == 200
@@ -390,7 +390,7 @@ async def test_cancel_pending_notification_and_reject_repeat(
 
     await session.refresh(project)
     missing = await client.put(
-        f"/projects/{project_id}/notifications/{uuid4()}/cancellation",
+        f"/v1/projects/{project_id}/notifications/{uuid4()}/cancellation",
         headers=AUTH,
     )
     assert missing.status_code == 404

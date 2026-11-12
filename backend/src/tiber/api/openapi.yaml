@@ -555,39 +555,44 @@ paths:
 
     delete:
       tags: [Projects]
-      summary: delete or permanently delete a project
+      summary: Delete a project
       operationId: deletev1projectsprojectid
       description: |
-        deletes the project by default and prevents new notifications from being accepted.
+        Soft-deletes the project and prevents new notifications from being accepted.
         Existing delivery history, engagement events, and audit records are retained.
 
-        To permanently delete a project, pass `?permanent=true`. This operation is irreversible,
-        requires the project to be soft-deleted first, and deletes all
-        project-owned operational data. A project that is not already deleted
-        is rejected with `409`.
-      parameters:
-        - name: permanent
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: false
-          description: |
-            When `true`, permanently deletes the project instead of archiving it.
-            If omitted or `false`, the project is deleted.
+        The project can be restored at any point during its 90-day grace period.
+        After that period, Tiber permanently deletes the project and its owned
+        operational data automatically. There is no API-triggered hard delete.
       responses:
         "204":
-          description: Project deleted or permanently deleted
+          description: Project soft-deleted
         "403":
           $ref: "#/components/responses/Forbidden"
-        "409":
-          description: |
-            The project cannot be deleted because it does not satisfy the server's
-            deletion policy.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/projects/{project_id}/restore:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    post:
+      tags: [Projects]
+      summary: Restore a deleted project
+      operationId: postv1projectsprojectidrestore
+      description: |
+        Clears the project's deletion timestamp during its 90-day grace period.
+        Restoring an active project is a no-op. Once the scheduled purge has
+        removed the project, this returns `404`.
+      responses:
+        "200":
+          description: Project restored
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/Project"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -926,14 +931,14 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /projects/{project_id}/topics:
+  /v1/projects/{project_id}/topics:
     parameters:
       - $ref: "#/components/parameters/ProjectId"
 
     post:
       tags: [Topics]
       summary: Create a topic
-      operationId: postprojectsprojectidtopics
+      operationId: postv1projectsprojectidtopics
       requestBody:
         required: true
         content:
@@ -957,7 +962,7 @@ paths:
     get:
       tags: [Topics]
       summary: List topics
-      operationId: getprojectsprojectidtopics
+      operationId: getv1projectsprojectidtopics
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
@@ -971,7 +976,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /projects/{project_id}/topics/{topic_id}:
+  /v1/projects/{project_id}/topics/{topic_id}:
     parameters:
       - $ref: "#/components/parameters/ProjectId"
       - name: topic_id
@@ -983,7 +988,7 @@ paths:
     get:
       tags: [Topics]
       summary: Get a topic
-      operationId: getprojectsprojectidtopicstopicid
+      operationId: getv1projectsprojectidtopicstopicid
       responses:
         "200":
           description: Topic found
@@ -999,7 +1004,7 @@ paths:
     patch:
       tags: [Topics]
       summary: Update a topic
-      operationId: patchprojectsprojectidtopicstopicid
+      operationId: patchv1projectsprojectidtopicstopicid
       requestBody:
         required: true
         content:
@@ -1025,7 +1030,7 @@ paths:
     delete:
       tags: [Topics]
       summary: Delete a topic
-      operationId: deleteprojectsprojectidtopicstopicid
+      operationId: deletev1projectsprojectidtopicstopicid
       responses:
         "204":
           description: Topic deleted

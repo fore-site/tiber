@@ -59,8 +59,8 @@ the topic slug from the title; titles and derived slugs must be unique within
 the project.
 
 Templates and brand profiles are project-scoped. Create a reusable design-token
-profile through `/projects/{project_id}/brand-profiles`, then attach it to a
-template created through `/projects/{project_id}/templates`. Each channel
+profile through `/v1/projects/{project_id}/brand-profiles`, then attach it to a
+template created through `/v1/projects/{project_id}/templates`. Each channel
 variant's `content` can provide `plain_text_body`, `html_body`, or both. Direct
 notification requests use the same content shape. Plain text is used by
 text-only channels; HTML is supported by email and in-app. Email still requires

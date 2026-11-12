@@ -22,7 +22,7 @@ from ..schemas.auth import (
     APIKeyWithSecretResponse,
 )
 
-router = APIRouter(prefix="/v1/projects/{project_id}/api-keys", tags=["API Keys"])
+router = APIRouter(prefix="/projects/{project_id}/api-keys", tags=["API Keys"])
 
 
 def _http_error(exc: APIKeyManagementError) -> HTTPException:

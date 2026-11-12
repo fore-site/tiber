@@ -22,7 +22,7 @@ from ..schemas.recipient import (
 )
 
 router = APIRouter(
-    prefix="/v1/projects/{project_id}/recipients",
+    prefix="/projects/{project_id}/recipients",
     tags=["Recipients"],
     dependencies=[Depends(enforce_authenticated_rate_limit)],
 )

@@ -26,7 +26,7 @@ async def test_brand_profile_template_persistence_and_preview(
     """Create reusable tokens and a styled template, then render safely."""
     project_id = project.id
     presets = await client.get(
-        f"/projects/{project_id}/template-presets",
+        f"/v1/projects/{project_id}/template-presets",
         headers=AUTH,
     )
     assert presets.status_code == 200
@@ -36,7 +36,7 @@ async def test_brand_profile_template_persistence_and_preview(
     }
 
     profile_response = await client.post(
-        f"/projects/{project_id}/brand-profiles",
+        f"/v1/projects/{project_id}/brand-profiles",
         headers=AUTH,
         json={"name": "Acme", "tokens": {"primary": "#123456"}},
     )
@@ -67,7 +67,7 @@ async def test_brand_profile_template_persistence_and_preview(
         ],
     }
     created = await client.post(
-        f"/projects/{project_id}/templates",
+        f"/v1/projects/{project_id}/templates",
         headers=AUTH,
         json=template_payload,
     )
@@ -88,14 +88,14 @@ async def test_brand_profile_template_persistence_and_preview(
 
     await session.refresh(project)
     listed = await client.get(
-        f"/projects/{project_id}/templates?channel=email",
+        f"/v1/projects/{project_id}/templates?channel=email",
         headers=AUTH,
     )
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()] == [str(template_id)]
 
     preview = await client.post(
-        f"/projects/{project_id}/templates/{template_id}/preview",
+        f"/v1/projects/{project_id}/templates/{template_id}/preview",
         headers=AUTH,
         json={"channel": "email", "variables": {"name": "<script>alert(1)</script>"}},
     )
@@ -108,7 +108,7 @@ async def test_brand_profile_template_persistence_and_preview(
     assert "color:#123456" in html_body
 
     duplicate = await client.post(
-        f"/projects/{project_id}/templates",
+        f"/v1/projects/{project_id}/templates",
         headers=AUTH,
         json=template_payload,
     )

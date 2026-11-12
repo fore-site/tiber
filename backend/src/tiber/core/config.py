@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "Tiber"
     app_version: str = "0.1.0"
+    api_prefix: str = "/v1"
     debug: bool = False
     cors_enabled: bool = True
     docs_enabled: bool = True
@@ -79,6 +80,10 @@ class Settings(BaseSettings):
     webhook_retry_base_delay_seconds: int = 30
     webhook_retry_backoff_factor: int = 2
     webhook_retry_max_delay_seconds: int = 3600
+
+    # Project deletion lifecycle
+    project_purge_interval_seconds: int = Field(default=86400, ge=1)
+    project_purge_batch_size: int = Field(default=100, ge=1)
 
     # Transactional outbox relay
     outbox_relay_interval_seconds: int = Field(default=1, ge=1)
