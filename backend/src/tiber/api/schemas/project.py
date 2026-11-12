@@ -53,3 +53,10 @@ class ProjectResponse(BaseModel):
     updated_at: datetime
 
     deleted_at: datetime | None = None
+
+
+class ProjectListResponse(BaseModel):
+    """One cursor page of the authenticated account's projects."""
+
+    data: list[ProjectResponse]
+    next_cursor: str | None = None

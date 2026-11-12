@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import Project
 from ...domain.exceptions import NameConflictError
@@ -97,17 +98,34 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         )
 
     async def list_by_account(
-        self, account_id: UUID, limit: int, offset: int
+        self,
+        account_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[Project]:
-        """List all projects owned by an account, newest first."""
+        """List a page of an account's projects, newest first."""
+        statement = select(ProjectModel).where(ProjectModel.account_id == account_id)
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         result = await self._session.scalars(
-            select(ProjectModel)
-            .where(ProjectModel.account_id == account_id)
-            .order_by(ProjectModel.created_at.desc(), ProjectModel.id.desc())
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(
+                ProjectModel.created_at.desc(), ProjectModel.id.desc()
+            ).limit(limit)
         )
         return [self._to_entity(model) for model in result.all()]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, project_id = cursor
+        return or_(
+            ProjectModel.created_at < created_at,
+            and_(
+                ProjectModel.created_at == created_at,
+                ProjectModel.id < project_id,
+            ),
+        )
 
     async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
         """Delete expired project data in FK-safe order inside one transaction."""

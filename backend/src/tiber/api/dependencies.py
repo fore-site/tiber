@@ -36,6 +36,7 @@ from ..application.services.notification_intake import NotificationIntakeService
 from ..application.services.notification_query import NotificationQueryService
 from ..application.services.notification_topic import NotificationTopicService
 from ..application.services.project_management import ProjectManagementService
+from ..application.services.recipient_query import RecipientQueryService
 from ..application.services.recipient_resolution import RecipientResolutionService
 from ..application.services.template_management import (
     BrandProfileManagementService,
@@ -528,6 +529,15 @@ def get_recipient_resolution_service(
 ) -> RecipientResolutionService:
     """Provide registered-recipient lookup and ad-hoc recipient matching."""
     return RecipientResolutionService(recipient_repository=recipient_repository)
+
+
+def get_recipient_query_service(
+    recipient_repository: Annotated[
+        SQLAlchemyRecipientRepository, Depends(get_recipient_repository)
+    ],
+) -> RecipientQueryService:
+    """Provide cursor-paginated recipient reads."""
+    return RecipientQueryService(recipient_repository=recipient_repository)
 
 
 def get_notification_intake_service(

@@ -1,8 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import NotificationTopic
 from ...domain.enums import NotificationCategory
@@ -92,16 +94,37 @@ class SQLAlchemyNotificationTopicRepository(NotificationTopicRepository):
         return [self._to_entity(model) for model in result.scalars().all()]
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[NotificationTopic]:
-        """List topics for a project with pagination."""
+        """List a page of a project's topics, newest first."""
+        statement = select(NotificationTopicModel).where(
+            NotificationTopicModel.project_id == project_id
+        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         result = await self._session.execute(
-            select(NotificationTopicModel)
-            .where(NotificationTopicModel.project_id == project_id)
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(
+                NotificationTopicModel.created_at.desc(),
+                NotificationTopicModel.id.desc(),
+            ).limit(limit)
         )
         return [self._to_entity(model) for model in result.scalars().all()]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, topic_id = cursor
+        return or_(
+            NotificationTopicModel.created_at < created_at,
+            and_(
+                NotificationTopicModel.created_at == created_at,
+                NotificationTopicModel.id < topic_id,
+            ),
+        )
 
     @staticmethod
     def _to_model(entity: NotificationTopic) -> NotificationTopicModel:

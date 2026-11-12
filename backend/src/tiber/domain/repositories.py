@@ -78,9 +78,13 @@ class ProjectRepository(Protocol):
         ...
 
     async def list_by_account(
-        self, account_id: UUID, limit: int, offset: int
+        self,
+        account_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[Project]:
-        """List projects owned by an account, newest first."""
+        """List a page of projects owned by an account, newest first."""
         ...
 
     async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
@@ -295,9 +299,17 @@ class RecipientRepository(Protocol):
         ...
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
+        external_id: str | None = None,
     ) -> list[Recipient]:
-        """List all recipients for a project with pagination."""
+        """List a page of a project's recipients, newest first.
+
+        ``external_id`` narrows the page to one exact identifier.
+        """
         ...
 
     async def get_many_for_update(
@@ -383,9 +395,13 @@ class NotificationTopicRepository(Protocol):
         ...
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[NotificationTopic]:
-        """List all notification topics for a project."""
+        """List a page of a project's notification topics, newest first."""
         ...
 
 

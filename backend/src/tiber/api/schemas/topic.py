@@ -46,3 +46,10 @@ class NotificationTopicResponse(BaseModel):
             created_at=topic.created_at,
             updated_at=topic.updated_at,
         )
+
+
+class NotificationTopicListResponse(BaseModel):
+    """One cursor page of project notification topics."""
+
+    data: list[NotificationTopicResponse]
+    next_cursor: str | None = None

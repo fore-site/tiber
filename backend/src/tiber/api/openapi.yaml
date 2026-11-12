@@ -44,8 +44,7 @@ info:
 
     ## Pagination
 
-    The notification, template, brand profile, API key, delivery attempt,
-    engagement event, and webhook endpoint lists use cursor-based pagination:
+    List endpoints use cursor-based pagination:
 
     ```json
     {
@@ -499,7 +498,7 @@ paths:
         Returns all projects within the authenticated user's account.
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
           description: List of projects
@@ -836,7 +835,7 @@ paths:
       operationId: getv1projectsprojectidrecipients
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
         - name: external_id
           in: query
           required: false
@@ -1664,15 +1663,6 @@ components:
       schema:
         $ref: "#/components/schemas/UUID"
 
-    Offset:
-      name: offset
-      in: query
-      required: false
-      schema:
-        type: integer
-        minimum: 0
-        default: 0
-
   # Reusable responses
 
   responses:
@@ -1822,21 +1812,6 @@ components:
         correlation_id:
           $ref: "#/components/schemas/UUID"
           description: Correlation identifier that can be supplied to support teams for debugging.
-
-    PaginationMeta:
-      type: object
-      required: [total, limit, offset]
-      properties:
-        total:
-          type: integer
-          description: Total number of matching resources
-          example: 142
-        limit:
-          type: integer
-          example: 20
-        offset:
-          type: integer
-          example: 0
 
     Channel:
       type: string
@@ -2096,14 +2071,17 @@ components:
 
     ProjectList:
       type: object
-      required: [data, meta]
+      required: [data]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/Project"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     # API Key
 
@@ -2319,14 +2297,17 @@ components:
 
     RecipientList:
       type: object
-      required: [data, meta]
+      required: [data]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/Recipient"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     # User Preference
 

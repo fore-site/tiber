@@ -30,6 +30,8 @@ from .routers.delivery_attempts import router as delivery_attempts_router
 from .routers.engagement_events import router as engagement_events_router
 from .routers.health import router as health_router
 from .routers.notification import router as notification_router
+from .routers.projects import router as projects_router
+from .routers.recipients import router as recipients_router
 from .routers.templates import router as templates_router
 from .routers.topics import router as topics_router
 from .routers.webhooks import router as webhooks_router
@@ -110,7 +112,9 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(api_key_router)
+    app.include_router(projects_router)
     app.include_router(notification_router)
+    app.include_router(recipients_router)
     app.include_router(topics_router)
     app.include_router(templates_router)
     app.include_router(delivery_attempts_router)

@@ -1,10 +1,12 @@
 import re
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Text, literal_column, or_, select
+from sqlalchemy import Text, and_, literal_column, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import Recipient
 from ...domain.enums import DeliveryChannel
@@ -170,19 +172,40 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         return [self._to_entity(model) for model in result.scalars().all()]
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
+        external_id: str | None = None,
     ) -> list[Recipient]:
-        """List a project's recipients, newest first, with pagination."""
+        """List a page of a project's recipients, newest first."""
+        statement = select(RecipientModel).where(
+            RecipientModel.project_id == project_id
+        )
+        if external_id is not None:
+            statement = statement.where(RecipientModel.external_id == external_id)
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         result = await self._session.execute(
-            select(RecipientModel)
-            .where(RecipientModel.project_id == project_id)
-            # Offset pagination needs a total order, or pages can repeat or skip rows.
-            .order_by(RecipientModel.created_at.desc(), RecipientModel.id.desc())
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(
+                RecipientModel.created_at.desc(), RecipientModel.id.desc()
+            ).limit(limit)
         )
         models = result.scalars().all()
         return [self._to_entity(model) for model in models]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, recipient_id = cursor
+        return or_(
+            RecipientModel.created_at < created_at,
+            and_(
+                RecipientModel.created_at == created_at,
+                RecipientModel.id < recipient_id,
+            ),
+        )
 
     # Mapping
 

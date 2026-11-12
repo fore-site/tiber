@@ -5,6 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from tiber.application.pagination import (
+    CursorPage,
+    decode_time_id_cursor,
+    encode_cursor,
+)
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import Project
 from tiber.domain.exceptions import (
@@ -41,9 +46,28 @@ class ProjectManagementService:
         async with self._uow:
             return await self._projects.save(project)
 
-    async def list(self, *, account_id: UUID, limit: int, offset: int) -> list[Project]:
-        """List all active and deleted projects owned by an account."""
-        return await self._projects.list_by_account(account_id, limit, offset)
+    async def list(
+        self, *, account_id: UUID, limit: int = 50, cursor: str | None = None
+    ) -> CursorPage[Project]:
+        """List one page of an account's projects, newest first.
+
+        Deleted projects are included: they stay readable during the deletion
+        grace period.
+        """
+        after = decode_time_id_cursor(cursor, time_field="created_at")
+        projects = await self._projects.list_by_account(
+            account_id, limit + 1, cursor=after
+        )
+        items = projects[:limit]
+        next_cursor = (
+            encode_cursor(
+                created_at=items[-1].created_at.isoformat(),
+                id=items[-1].id,
+            )
+            if len(projects) > limit
+            else None
+        )
+        return CursorPage(items=items, next_cursor=next_cursor)
 
     async def get(self, *, account_id: UUID, project_id: UUID) -> Project:
         """Get a project while hiding projects owned by another account."""
