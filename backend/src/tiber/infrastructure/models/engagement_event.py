@@ -116,7 +116,9 @@ class EngagementEventModel(Base):
 
     event_metadata: Mapped[dict | None] = mapped_column(
         "metadata",
-        JSONB,
+        # ``none_as_null`` is required: the default binds None as JSON
+        # ``null``, which fails the object-or-SQL-NULL check constraint.
+        JSONB(none_as_null=True),
         nullable=True,
     )
 
