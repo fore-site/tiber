@@ -128,3 +128,12 @@ class WebhookEndpointIssuedResponse(WebhookEndpointResponse):
         """Build the registration response from the issued endpoint and secret."""
         base = WebhookEndpointResponse.from_entity(endpoint)
         return cls(**base.model_dump(), signing_secret=signing_secret)
+
+
+class WebhookEndpointPageResponse(BaseModel):
+    """One cursor page of registered webhook endpoints."""
+
+    model_config = ConfigDict(frozen=True)
+
+    data: list[WebhookEndpointResponse]
+    next_cursor: str | None = None

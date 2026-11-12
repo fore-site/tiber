@@ -1,9 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import EngagementEvent
 from ...domain.enums import DeliveryChannel, EngagementEventType
@@ -74,8 +75,8 @@ class SQLAlchemyEngagementEventRepository(EngagementEventRepository):
         self,
         project_id: UUID,
         limit: int,
-        offset: int,
         *,
+        cursor: tuple[datetime, UUID] | None = None,
         event_type: EngagementEventType | None = None,
         recipient_id: UUID | None = None,
         notification_id: UUID | None = None,
@@ -83,7 +84,7 @@ class SQLAlchemyEngagementEventRepository(EngagementEventRepository):
         occurred_after: datetime | None = None,
         occurred_before: datetime | None = None,
     ) -> list[EngagementEvent]:
-        """List a project's events, newest first, with optional filters."""
+        """List a page of a project's events, newest first, with filters."""
         statement = select(EngagementEventModel).where(
             EngagementEventModel.project_id == project_id
         )
@@ -107,52 +108,72 @@ class SQLAlchemyEngagementEventRepository(EngagementEventRepository):
             statement = statement.where(
                 EngagementEventModel.occurred_at <= occurred_before
             )
-        statement = (
-            statement.order_by(
-                EngagementEventModel.occurred_at.desc(),
-                EngagementEventModel.id.desc(),
-            )
-            .limit(limit)
-            .offset(offset)
-        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
+        statement = statement.order_by(
+            EngagementEventModel.occurred_at.desc(),
+            EngagementEventModel.id.desc(),
+        ).limit(limit)
         models = (await self._session.scalars(statement)).all()
         return [self._to_entity(model) for model in models]
 
     async def list_by_notification(
-        self, notification_id: UUID, limit: int, offset: int
+        self,
+        notification_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[EngagementEvent]:
-        """List all engagement events for a notification."""
+        """List a page of engagement events for a notification, newest first."""
+        statement = select(EngagementEventModel).where(
+            EngagementEventModel.notification_id == notification_id
+        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         models = (
             await self._session.scalars(
-                select(EngagementEventModel)
-                .where(EngagementEventModel.notification_id == notification_id)
-                .order_by(
+                statement.order_by(
                     EngagementEventModel.occurred_at.desc(),
                     EngagementEventModel.id.desc(),
-                )
-                .limit(limit)
-                .offset(offset)
+                ).limit(limit)
             )
         ).all()
         return [self._to_entity(model) for model in models]
 
     async def list_by_recipient(
-        self, recipient_id: UUID, limit: int, offset: int
+        self,
+        recipient_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[EngagementEvent]:
-        """List all engagement events for a recipient."""
+        """List a page of engagement events for a recipient, newest first."""
+        statement = select(EngagementEventModel).where(
+            EngagementEventModel.recipient_id == recipient_id
+        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         models = (
             await self._session.scalars(
-                select(EngagementEventModel)
-                .where(EngagementEventModel.recipient_id == recipient_id)
-                .order_by(
+                statement.order_by(
                     EngagementEventModel.occurred_at.desc(),
                     EngagementEventModel.id.desc(),
-                )
-                .limit(limit)
-                .offset(offset)
+                ).limit(limit)
             )
         ).all()
         return [self._to_entity(model) for model in models]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        occurred_at, event_id = cursor
+        return or_(
+            EngagementEventModel.occurred_at < occurred_at,
+            and_(
+                EngagementEventModel.occurred_at == occurred_at,
+                EngagementEventModel.id < event_id,
+            ),
+        )
 
     @staticmethod
     def _values(entity: EngagementEvent) -> dict:

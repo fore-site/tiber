@@ -10,6 +10,11 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
+from tiber.application.pagination import (
+    CursorPage,
+    decode_time_id_cursor,
+    encode_cursor,
+)
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.core.encryption import encrypt_secret
 from tiber.core.security import generate_webhook_secret
@@ -69,10 +74,23 @@ class WebhookEndpointService:
         return IssuedWebhookEndpoint(endpoint=endpoint, signing_secret=secret)
 
     async def list(
-        self, project_id: UUID, *, limit: int = 50, offset: int = 0
-    ) -> list[WebhookEndpoint]:
-        """List a project's registered endpoints, newest first."""
-        return await self._endpoints.list_by_project(project_id, limit, offset)
+        self, project_id: UUID, *, limit: int = 50, cursor: str | None = None
+    ) -> CursorPage[WebhookEndpoint]:
+        """List a page of a project's registered endpoints, newest first."""
+        after = decode_time_id_cursor(cursor, time_field="created_at")
+        endpoints = await self._endpoints.list_by_project(
+            project_id, limit + 1, cursor=after
+        )
+        items = endpoints[:limit]
+        next_cursor = (
+            encode_cursor(
+                created_at=items[-1].created_at.isoformat(),
+                id=items[-1].id,
+            )
+            if len(endpoints) > limit
+            else None
+        )
+        return CursorPage(items=items, next_cursor=next_cursor)
 
     async def get(self, project_id: UUID, webhook_id: UUID) -> WebhookEndpoint:
         """Return one endpoint, scoped to the project."""

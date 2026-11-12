@@ -2,13 +2,13 @@
 
 The client is the source of truth only for push and in-app interactions, and
 only if a retried report cannot duplicate a training signal. These tests cover
-the trust boundary, the channel split, and idempotency semantics.
+the trust boundary, the channel split, idempotency, and page cursors.
 """
 
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -57,7 +57,7 @@ class _Notifications:
 
 
 class _Events:
-    """Append-only in-memory event store with the partial unique index."""
+    """Append-only in-memory store with the partial unique index and cursor."""
 
     def __init__(self) -> None:
         """Start empty."""
@@ -95,6 +95,29 @@ class _Events:
             None,
         )
 
+    async def list_by_project(
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
+        **_filters: object,
+    ) -> list[EngagementEvent]:
+        """Return rows newest first, applying the same keyset as the database."""
+        rows = sorted(
+            (event for event in self.rows if event.project_id == project_id),
+            key=lambda event: (event.occurred_at, event.id),
+            reverse=True,
+        )
+        if cursor is not None:
+            occurred_at, event_id = cursor
+            rows = [
+                event
+                for event in rows
+                if (event.occurred_at, event.id) < (occurred_at, event_id)
+            ]
+        return rows[:limit]
+
 
 def _notification(channel: DeliveryChannel) -> SimpleNamespace:
     """Build the fields the service reads from a notification."""
@@ -117,6 +140,19 @@ def _service(
         notification_repository=_Notifications(notification),
     )
     return service, events
+
+
+def _event(notification: SimpleNamespace, occurred_at: datetime) -> EngagementEvent:
+    """Build a stored event without going through the write path."""
+    return EngagementEvent.create(
+        notification_id=notification.id,
+        project_id=notification.project_id,
+        recipient_id=notification.recipient_id,
+        event_type=EngagementEventType.OPEN,
+        channel=DeliveryChannel.PUSH,
+        provider="client",
+        occurred_at=occurred_at,
+    )
 
 
 def _report(
@@ -213,6 +249,30 @@ def test_same_key_with_different_payload_conflicts():
 
     with pytest.raises(IdempotencyKeyConflictError):
         _report(service, notification, event_type=EngagementEventType.CLICK)
+
+
+def test_list_pages_with_an_opaque_cursor():
+    """Two pages cover the rows exactly once, newest first."""
+    notification = _notification(DeliveryChannel.PUSH)
+    service, events = _service(notification)
+    for minute in range(3):
+        events.rows.append(
+            _event(notification, OCCURRED_AT + timedelta(minutes=minute))
+        )
+
+    first = asyncio.run(service.list(notification.project_id, limit=2))
+    second = asyncio.run(
+        service.list(notification.project_id, limit=2, cursor=first.next_cursor)
+    )
+
+    assert len(first.items) == 2
+    assert first.next_cursor is not None
+    assert len(second.items) == 1
+    assert second.next_cursor is None
+    assert {event.id for event in first.items}.isdisjoint(
+        {event.id for event in second.items}
+    )
+    assert first.items[0].occurred_at > first.items[1].occurred_at
 
 
 def test_naive_occurred_at_is_rejected():

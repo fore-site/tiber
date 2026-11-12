@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 _TIBER_ERROR_STATUS: dict[str, int] = {
     "not_found_error": 404,
     "invalid_entity_attribute": 422,
+    "invalid_cursor": 422,
     "invalid_state_transition": 409,
     "conflict": 409,
     "idempotency_key_conflict": 409,

@@ -21,6 +21,7 @@ from ..dependencies import (
 from ..schemas.webhook import (
     WebhookEndpointCreateRequest,
     WebhookEndpointIssuedResponse,
+    WebhookEndpointPageResponse,
     WebhookEndpointResponse,
     WebhookEndpointUpdateRequest,
 )
@@ -51,17 +52,20 @@ async def register_webhook(
 
 @router.get(
     "/projects/{project_id}/webhooks",
-    response_model=list[WebhookEndpointResponse],
+    response_model=WebhookEndpointPageResponse,
 )
 async def list_webhooks(
     project: Annotated[ProjectModel, Depends(get_authenticated_project)],
     service: Annotated[WebhookEndpointService, Depends(get_webhook_endpoint_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[WebhookEndpointResponse]:
-    """List the project's registered webhook endpoints."""
-    endpoints = await service.list(project.id, limit=limit, offset=offset)
-    return [WebhookEndpointResponse.from_entity(endpoint) for endpoint in endpoints]
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> WebhookEndpointPageResponse:
+    """List a page of the project's registered webhook endpoints."""
+    page = await service.list(project.id, limit=limit, cursor=cursor)
+    return WebhookEndpointPageResponse(
+        data=[WebhookEndpointResponse.from_entity(endpoint) for endpoint in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.get(

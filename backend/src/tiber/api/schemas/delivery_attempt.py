@@ -44,3 +44,12 @@ class DeliveryAttemptResponse(BaseModel):
             error=attempt.error,
             created_at=attempt.created_at,
         )
+
+
+class DeliveryAttemptPageResponse(BaseModel):
+    """One cursor page of delivery attempts."""
+
+    model_config = ConfigDict(frozen=True)
+
+    data: list[DeliveryAttemptResponse]
+    next_cursor: str | None = None

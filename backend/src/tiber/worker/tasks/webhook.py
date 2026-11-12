@@ -176,7 +176,7 @@ async def _dispatch(notification_id: UUID, project_id: UUID) -> int:
             project_id,
             event_type,
             limit=SETTINGS.webhook_dispatch_max_endpoints,
-            offset=0,
+            cursor=None,
         )
         if not subscribed:
             return 0

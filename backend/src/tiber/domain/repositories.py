@@ -320,9 +320,18 @@ class DeliveryAttemptRepository(Protocol):
         ...
 
     async def list_by_notification(
-        self, notification_id: UUID, limit: int, offset: int
+        self,
+        notification_id: UUID,
+        limit: int,
+        *,
+        cursor: int | None = None,
     ) -> list[DeliveryAttempt]:
-        """List all delivery attempts for a notification, oldest first."""
+        """List a page of attempts for a notification, oldest first.
+
+        ``cursor`` is the last ``attempt_number`` already returned; None starts
+        at the first attempt. Keyset selection keeps the page stable even if
+        attempts are appended while a client walks the history.
+        """
         ...
 
 
@@ -376,9 +385,17 @@ class WebhookEndpointRepository(Protocol):
         ...
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[WebhookEndpoint]:
-        """List a project's endpoints, newest first."""
+        """List a page of a project's endpoints, newest first.
+
+        ``cursor`` is the ``(created_at, id)`` of the last endpoint already
+        returned; the id makes the ordering total for equal timestamps.
+        """
         ...
 
     async def list_by_event(
@@ -386,9 +403,10 @@ class WebhookEndpointRepository(Protocol):
         project_id: UUID,
         event_type: WebhookEventType,
         limit: int,
-        offset: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[WebhookEndpoint]:
-        """List the project's endpoints subscribed to one event type."""
+        """List a page of the project's endpoints subscribed to one event type."""
         ...
 
     async def delete(self, id: UUID, project_id: UUID) -> bool:
@@ -450,8 +468,8 @@ class EngagementEventRepository(Protocol):
         self,
         project_id: UUID,
         limit: int,
-        offset: int,
         *,
+        cursor: tuple[datetime, UUID] | None = None,
         event_type: EngagementEventType | None = None,
         recipient_id: UUID | None = None,
         notification_id: UUID | None = None,
@@ -459,19 +477,32 @@ class EngagementEventRepository(Protocol):
         occurred_after: datetime | None = None,
         occurred_before: datetime | None = None,
     ) -> list[EngagementEvent]:
-        """List a project's events, newest first, with optional filters."""
+        """List a page of a project's events, newest first, with filters.
+
+        ``cursor`` is the ``(occurred_at, id)`` of the last event already
+        returned. The id breaks ties between events sharing a timestamp, so
+        the ordering is total and pages cannot overlap.
+        """
         ...
 
     async def list_by_notification(
-        self, notification_id: UUID, limit: int, offset: int
+        self,
+        notification_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[EngagementEvent]:
-        """List all engagement events for a notification."""
+        """List a page of engagement events for a notification, newest first."""
         ...
 
     async def list_by_recipient(
-        self, recipient_id: UUID, limit: int, offset: int
+        self,
+        recipient_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[EngagementEvent]:
-        """List all engagement events for a recipient."""
+        """List a page of engagement events for a recipient, newest first."""
         ...
 
 

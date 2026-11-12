@@ -180,6 +180,12 @@ class InvalidEntityAttributeError(TiberError):
         super().__init__(f"{self.message}")
 
 
+class InvalidCursorError(TiberError):
+    """Raised when a pagination cursor cannot identify a page position."""
+
+    error_code = "invalid_cursor"
+
+
 class NameConflictError(ConflictError):
     """Raised when a name is already in use for an entity."""
 

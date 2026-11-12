@@ -1,9 +1,11 @@
+from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import WebhookEndpoint
 from ...domain.enums import WebhookEventType
@@ -32,19 +34,24 @@ class SQLAlchemyWebhookEndpointRepository(WebhookEndpointRepository):
         return self._to_entity(model) if model is not None else None
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[WebhookEndpoint]:
-        """List a project's endpoints, newest first."""
+        """List a page of a project's endpoints, newest first."""
+        statement = select(WebhookEndpointModel).where(
+            WebhookEndpointModel.project_id == project_id
+        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         models = (
             await self._session.scalars(
-                select(WebhookEndpointModel)
-                .where(WebhookEndpointModel.project_id == project_id)
-                .order_by(
+                statement.order_by(
                     WebhookEndpointModel.created_at.desc(),
                     WebhookEndpointModel.id.desc(),
-                )
-                .limit(limit)
-                .offset(offset)
+                ).limit(limit)
             )
         ).all()
         return [self._to_entity(model) for model in models]
@@ -54,20 +61,23 @@ class SQLAlchemyWebhookEndpointRepository(WebhookEndpointRepository):
         project_id: UUID,
         event_type: WebhookEventType,
         limit: int,
-        offset: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[WebhookEndpoint]:
-        """List the project's endpoints subscribed to one event type."""
+        """List a page of the project's endpoints subscribed to one event type."""
+        statement = (
+            select(WebhookEndpointModel)
+            .where(WebhookEndpointModel.project_id == project_id)
+            .where(WebhookEndpointModel.events.contains([event_type.value]))
+        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         models = (
             await self._session.scalars(
-                select(WebhookEndpointModel)
-                .where(WebhookEndpointModel.project_id == project_id)
-                .where(WebhookEndpointModel.events.contains([event_type.value]))
-                .order_by(
+                statement.order_by(
                     WebhookEndpointModel.created_at.desc(),
                     WebhookEndpointModel.id.desc(),
-                )
-                .limit(limit)
-                .offset(offset)
+                ).limit(limit)
             )
         ).all()
         return [self._to_entity(model) for model in models]
@@ -82,6 +92,18 @@ class SQLAlchemyWebhookEndpointRepository(WebhookEndpointRepository):
         )
         await self._session.flush()
         return bool(cast(CursorResult, result).rowcount)
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, endpoint_id = cursor
+        return or_(
+            WebhookEndpointModel.created_at < created_at,
+            and_(
+                WebhookEndpointModel.created_at == created_at,
+                WebhookEndpointModel.id < endpoint_id,
+            ),
+        )
 
     @staticmethod
     def _to_model(entity: WebhookEndpoint) -> WebhookEndpointModel:

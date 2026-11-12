@@ -12,6 +12,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from tiber.application.pagination import (
+    CursorPage,
+    decode_time_id_cursor,
+    encode_cursor,
+)
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import EngagementEvent, Notification
 from tiber.domain.enums import DeliveryChannel, EngagementEventType
@@ -169,19 +174,20 @@ class EngagementEventService:
         project_id: UUID,
         *,
         limit: int = 50,
-        offset: int = 0,
+        cursor: str | None = None,
         event_type: EngagementEventType | None = None,
         recipient_id: UUID | None = None,
         notification_id: UUID | None = None,
         channel: DeliveryChannel | None = None,
         occurred_after: datetime | None = None,
         occurred_before: datetime | None = None,
-    ) -> list[EngagementEvent]:
-        """List a project's events, newest first, with optional filters."""
-        return await self._events.list_by_project(
+    ) -> CursorPage[EngagementEvent]:
+        """List a page of a project's events, newest first, with filters."""
+        after = decode_time_id_cursor(cursor, time_field="occurred_at")
+        events = await self._events.list_by_project(
             project_id,
-            limit,
-            offset,
+            limit + 1,
+            cursor=after,
             event_type=event_type,
             recipient_id=recipient_id,
             notification_id=notification_id,
@@ -189,3 +195,13 @@ class EngagementEventService:
             occurred_after=occurred_after,
             occurred_before=occurred_before,
         )
+        items = events[:limit]
+        next_cursor = (
+            encode_cursor(
+                occurred_at=items[-1].occurred_at.isoformat(),
+                id=items[-1].id,
+            )
+            if len(events) > limit
+            else None
+        )
+        return CursorPage(items=items, next_cursor=next_cursor)

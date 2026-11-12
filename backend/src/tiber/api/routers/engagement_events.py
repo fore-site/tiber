@@ -22,6 +22,7 @@ from ..dependencies import (
     get_engagement_event_service,
 )
 from ..schemas.engagement_event import (
+    EngagementEventPageResponse,
     EngagementEventReportRequest,
     EngagementEventResponse,
 )
@@ -31,26 +32,26 @@ router = APIRouter(dependencies=[Depends(enforce_authenticated_rate_limit)])
 
 @router.get(
     "/projects/{project_id}/engagement-events",
-    response_model=list[EngagementEventResponse],
+    response_model=EngagementEventPageResponse,
 )
 async def list_engagement_events(
     project: Annotated[ProjectModel, Depends(get_authenticated_project)],
     service: Annotated[EngagementEventService, Depends(get_engagement_event_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     event_type: EngagementEventType | None = None,
     recipient_id: UUID | None = None,
     notification_id: UUID | None = None,
     channel: DeliveryChannel | None = None,
     occurred_after: datetime | None = None,
     occurred_before: datetime | None = None,
-) -> list[EngagementEventResponse]:
-    """List a project's engagement events, newest first."""
+) -> EngagementEventPageResponse:
+    """List a page of a project's engagement events, newest first."""
     _require_ordered_window(occurred_after, occurred_before)
-    events = await service.list(
+    page = await service.list(
         project.id,
         limit=limit,
-        offset=offset,
+        cursor=cursor,
         event_type=event_type,
         recipient_id=recipient_id,
         notification_id=notification_id,
@@ -58,7 +59,10 @@ async def list_engagement_events(
         occurred_after=occurred_after,
         occurred_before=occurred_before,
     )
-    return [EngagementEventResponse.from_entity(event) for event in events]
+    return EngagementEventPageResponse(
+        data=[EngagementEventResponse.from_entity(event) for event in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.get(
@@ -77,25 +81,28 @@ async def get_engagement_event(
 
 @router.get(
     "/projects/{project_id}/notifications/{notification_id}/engagement-events",
-    response_model=list[EngagementEventResponse],
+    response_model=EngagementEventPageResponse,
 )
 async def list_notification_engagement_events(
     notification_id: UUID,
     project: Annotated[ProjectModel, Depends(get_authenticated_project)],
     service: Annotated[EngagementEventService, Depends(get_engagement_event_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     event_type: EngagementEventType | None = None,
-) -> list[EngagementEventResponse]:
-    """List the engagement events recorded for one notification."""
-    events = await service.list(
+) -> EngagementEventPageResponse:
+    """List a page of the engagement events recorded for one notification."""
+    page = await service.list(
         project.id,
         limit=limit,
-        offset=offset,
+        cursor=cursor,
         event_type=event_type,
         notification_id=notification_id,
     )
-    return [EngagementEventResponse.from_entity(event) for event in events]
+    return EngagementEventPageResponse(
+        data=[EngagementEventResponse.from_entity(event) for event in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.post(

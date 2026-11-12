@@ -44,20 +44,21 @@ info:
 
     ## Pagination
 
-    List endpoints use offset-based pagination:
+    Delivery attempt, engagement event, and webhook endpoint lists use
+    cursor-based pagination:
 
     ```json
     {
       "data": [...],
-      "meta": {
-        "total": 142,
-        "limit": 20,
-        "offset": 0
-      }
+      "next_cursor": "eyJjcmVhdGVkX2F0IjoiLi4uIn0"
     }
     ```
 
-    Cursor-based pagination is a documented future upgrade path.
+    Pass `next_cursor` back as the `cursor` query parameter to fetch the next
+    page. A `null` cursor means the list is exhausted. Other list endpoints
+    still use offset pagination with `limit`, `offset`, and a `meta` object.
+
+    Cursors are opaque and scoped to the listing that produced them.
 
     ## Idempotency
 
@@ -1135,7 +1136,7 @@ paths:
       operationId: getv1projectsprojectidnotificationsnotificationiddeliveryattempts
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
       description: |
         Returns all delivery attempts for a notification in chronological order.
         Each attempt records the provider response, outcome, and any policy
@@ -1212,7 +1213,7 @@ paths:
       operationId: getv1projectsprojectidwebhooks
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
           description: List of webhook endpoints
@@ -1370,7 +1371,7 @@ paths:
         and auditing engagement activity.
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
         - name: event_type
           in: query
           required: false
@@ -1443,7 +1444,7 @@ paths:
         after the notification has been delivered.
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
         - name: event_type
           in: query
           required: false
@@ -1640,6 +1641,15 @@ components:
         minimum: 1
         maximum: 100
         default: 20
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor returned as `next_cursor` by the previous page.
+      schema:
+        type: string
+        maxLength: 512
 
     RecipientIdQuery:
       name: recipient_id
@@ -2565,14 +2575,17 @@ components:
 
     DeliveryAttemptList:
       type: object
-      required: [data, meta]
+      required: [data, next_cursor]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/DeliveryAttempt"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     # Engagement Event
 
@@ -2639,14 +2652,17 @@ components:
 
     EngagementEventList:
       type: object
-      required: [data, meta]
+      required: [data, next_cursor]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/EngagementEvent"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     EngagementEventReportRequest:
       type: object
@@ -2738,14 +2754,17 @@ components:
 
     WebhookEndpointList:
       type: object
-      required: [data, meta]
+      required: [data, next_cursor]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/WebhookEndpoint"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     CreateWebhookResponse:
       allOf:

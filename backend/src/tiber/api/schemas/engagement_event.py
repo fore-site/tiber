@@ -90,3 +90,12 @@ class EngagementEventResponse(BaseModel):
             is_synthetic=event.is_synthetic,
             created_at=event.created_at,
         )
+
+
+class EngagementEventPageResponse(BaseModel):
+    """One cursor page of engagement events."""
+
+    model_config = ConfigDict(frozen=True)
+
+    data: list[EngagementEventResponse]
+    next_cursor: str | None = None

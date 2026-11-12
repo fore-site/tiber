@@ -42,15 +42,20 @@ class SQLAlchemyDeliveryAttemptRepository(DeliveryAttemptRepository):
         return int(current or 0) + 1
 
     async def list_by_notification(
-        self, notification_id: UUID, limit: int, offset: int
+        self,
+        notification_id: UUID,
+        limit: int,
+        *,
+        cursor: int | None = None,
     ) -> list[DeliveryAttempt]:
-        """List all attempts for a notification, oldest first."""
+        """List a page of attempts for a notification, oldest first."""
+        statement = select(DeliveryAttemptModel).where(
+            DeliveryAttemptModel.notification_id == notification_id
+        )
+        if cursor is not None:
+            statement = statement.where(DeliveryAttemptModel.attempt_number > cursor)
         result = await self._session.execute(
-            select(DeliveryAttemptModel)
-            .where(DeliveryAttemptModel.notification_id == notification_id)
-            .order_by(DeliveryAttemptModel.attempt_number)
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(DeliveryAttemptModel.attempt_number).limit(limit)
         )
         models = result.scalars().all()
         return [self._to_entity(model) for model in models]

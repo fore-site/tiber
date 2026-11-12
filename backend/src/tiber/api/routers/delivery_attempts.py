@@ -19,14 +19,17 @@ from ..dependencies import (
     get_authenticated_project,
     get_delivery_attempt_query_service,
 )
-from ..schemas.delivery_attempt import DeliveryAttemptResponse
+from ..schemas.delivery_attempt import (
+    DeliveryAttemptPageResponse,
+    DeliveryAttemptResponse,
+)
 
 router = APIRouter(dependencies=[Depends(enforce_authenticated_rate_limit)])
 
 
 @router.get(
     "/projects/{project_id}/notifications/{notification_id}/delivery-attempts",
-    response_model=list[DeliveryAttemptResponse],
+    response_model=DeliveryAttemptPageResponse,
 )
 async def list_delivery_attempts(
     notification_id: UUID,
@@ -35,13 +38,14 @@ async def list_delivery_attempts(
         DeliveryAttemptQueryService, Depends(get_delivery_attempt_query_service)
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[DeliveryAttemptResponse]:
-    """List a notification's delivery attempts in attempt order."""
-    attempts = await service.list(
-        project.id, notification_id, limit=limit, offset=offset
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> DeliveryAttemptPageResponse:
+    """List a page of a notification's delivery attempts in attempt order."""
+    page = await service.list(project.id, notification_id, limit=limit, cursor=cursor)
+    return DeliveryAttemptPageResponse(
+        data=[DeliveryAttemptResponse.from_entity(attempt) for attempt in page.items],
+        next_cursor=page.next_cursor,
     )
-    return [DeliveryAttemptResponse.from_entity(attempt) for attempt in attempts]
 
 
 @router.get(
