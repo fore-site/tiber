@@ -1,8 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import BrandProfile
 from ...domain.exceptions import NameConflictError
@@ -46,17 +48,36 @@ class SQLAlchemyBrandProfileRepository(BrandProfileRepository):
         return self._to_entity(model)
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[BrandProfile]:
-        """List project brand profiles in a stable order."""
+        """List a page of project brand profiles, newest first."""
+        statement = select(BrandProfileModel).where(
+            BrandProfileModel.project_id == project_id
+        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         result = await self._session.execute(
-            select(BrandProfileModel)
-            .where(BrandProfileModel.project_id == project_id)
-            .order_by(BrandProfileModel.created_at.desc(), BrandProfileModel.id.desc())
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(
+                BrandProfileModel.created_at.desc(), BrandProfileModel.id.desc()
+            ).limit(limit)
         )
         return [self._to_entity(model) for model in result.scalars().all()]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, profile_id = cursor
+        return or_(
+            BrandProfileModel.created_at < created_at,
+            and_(
+                BrandProfileModel.created_at == created_at,
+                BrandProfileModel.id < profile_id,
+            ),
+        )
 
     async def delete(self, profile: BrandProfile) -> None:
         """Delete a profile and let template references become unstyled."""

@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import APIKey
 from ...domain.repositories import APIKeyRepository
@@ -66,17 +67,34 @@ class SQLAlchemyAPIKeyRepository(APIKeyRepository):
             await self._session.flush()
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[APIKey]:
-        """List a project's keys, newest first."""
+        """List a page of a project's keys, newest first."""
+        statement = select(APIKeyModel).where(APIKeyModel.project_id == project_id)
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         models = await self._session.scalars(
-            select(APIKeyModel)
-            .where(APIKeyModel.project_id == project_id)
-            .order_by(APIKeyModel.created_at.desc(), APIKeyModel.id)
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(
+                APIKeyModel.created_at.desc(), APIKeyModel.id.desc()
+            ).limit(limit)
         )
         return [self._to_entity(model) for model in models]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, key_id = cursor
+        return or_(
+            APIKeyModel.created_at < created_at,
+            and_(
+                APIKeyModel.created_at == created_at,
+                APIKeyModel.id < key_id,
+            ),
+        )
 
     async def count_by_project(self, project_id: UUID) -> int:
         """Count all keys for a project."""

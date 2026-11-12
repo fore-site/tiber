@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from uuid import UUID
 
 from redis.exceptions import RedisError
@@ -10,6 +9,7 @@ from redis.exceptions import RedisError
 from ...core.security import generate_api_key, hash_api_key
 from ...domain.entities import APIKey, Project
 from ...domain.repositories import APIKeyRepository, ProjectRepository
+from ..pagination import CursorPage, decode_time_id_cursor, encode_cursor
 from ..ports.api_key_auth_cache import ApiKeyAuthCache
 from ..ports.unit_of_work import UnitOfWork
 
@@ -21,16 +21,6 @@ class APIKeyManagementError(RuntimeError):
         """Store the stable application error code."""
         super().__init__(code)
         self.code = code
-
-
-@dataclass(frozen=True)
-class APIKeyPage:
-    """An API-key page and the total matching key count."""
-
-    keys: list[APIKey]
-    total: int
-    limit: int
-    offset: int
 
 
 class APIKeyManagementService:
@@ -76,14 +66,25 @@ class APIKeyManagementService:
         project_id: UUID,
         account_id: UUID,
         limit: int,
-        offset: int,
-    ) -> APIKeyPage:
-        """Return paginated key metadata for an account-owned project."""
+        cursor: str | None = None,
+    ) -> CursorPage[APIKey]:
+        """Return a page of key metadata for an account-owned project."""
+        after = decode_time_id_cursor(cursor, time_field="created_at")
         async with self._uow:
             await self._owned_project(project_id, account_id)
-            keys = await self._api_keys.list_by_project(project_id, limit, offset)
-            total = await self._api_keys.count_by_project(project_id)
-        return APIKeyPage(keys=keys, total=total, limit=limit, offset=offset)
+            keys = await self._api_keys.list_by_project(
+                project_id, limit + 1, cursor=after
+            )
+        items = keys[:limit]
+        next_cursor = (
+            encode_cursor(
+                created_at=items[-1].created_at.isoformat(),
+                id=items[-1].id,
+            )
+            if len(keys) > limit
+            else None
+        )
+        return CursorPage(items=items, next_cursor=next_cursor)
 
     async def get(
         self,

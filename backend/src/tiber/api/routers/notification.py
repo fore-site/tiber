@@ -31,6 +31,7 @@ from ..schemas.intake import IntakeStatusResponse
 from ..schemas.notification import (
     NotificationCreateRequest,
     NotificationCreateResponse,
+    NotificationPageResponse,
     NotificationResponse,
 )
 
@@ -151,7 +152,7 @@ async def get_notification(
 
 @router.get(
     "/projects/{project_id}/notifications",
-    response_model=list[NotificationResponse],
+    response_model=NotificationPageResponse,
     status_code=status.HTTP_200_OK,
 )
 async def list_notifications(
@@ -164,11 +165,14 @@ async def list_notifications(
         Depends(get_notification_query_service),
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[NotificationResponse]:
-    """List notifications for a project (most recent first is not yet ordered)."""
-    notifications = await service.list_notifications(project.id, limit, offset)
-    return [NotificationResponse.from_entity(n) for n in notifications]
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> NotificationPageResponse:
+    """List one page of project notifications, newest first."""
+    page = await service.list_notifications(project.id, limit, cursor=cursor)
+    return NotificationPageResponse(
+        data=[NotificationResponse.from_entity(n) for n in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.put(

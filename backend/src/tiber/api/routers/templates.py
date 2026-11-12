@@ -22,9 +22,11 @@ from ..dependencies import (
 from ..schemas.notification import NotificationContentModel
 from ..schemas.template import (
     BrandProfileCreateRequest,
+    BrandProfilePageResponse,
     BrandProfileResponse,
     BrandProfileUpdateRequest,
     TemplateCreateRequest,
+    TemplatePageResponse,
     TemplatePresetResponse,
     TemplatePreviewRequest,
     TemplatePreviewResponse,
@@ -79,7 +81,7 @@ async def create_template(
 
 @router.get(
     "/projects/{project_id}/templates",
-    response_model=list[TemplateResponse],
+    response_model=TemplatePageResponse,
 )
 async def list_templates(
     project: Annotated[ProjectModel, Depends(get_authenticated_project)],
@@ -87,17 +89,20 @@ async def list_templates(
         TemplateManagementService, Depends(get_template_management_service)
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     channel: DeliveryChannel | None = None,
-) -> list[TemplateResponse]:
-    """List project templates, optionally filtered by delivery channel."""
-    templates = await service.list(
+) -> TemplatePageResponse:
+    """List one page of project templates, optionally filtered by channel."""
+    page = await service.list(
         project.id,
         limit=limit,
-        offset=offset,
+        cursor=cursor,
         channel=channel,
     )
-    return [TemplateResponse.from_entity(template) for template in templates]
+    return TemplatePageResponse(
+        data=[TemplateResponse.from_entity(template) for template in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.get(
@@ -204,7 +209,7 @@ async def create_brand_profile(
 
 @router.get(
     "/projects/{project_id}/brand-profiles",
-    response_model=list[BrandProfileResponse],
+    response_model=BrandProfilePageResponse,
 )
 async def list_brand_profiles(
     project: Annotated[ProjectModel, Depends(get_authenticated_project)],
@@ -212,11 +217,14 @@ async def list_brand_profiles(
         BrandProfileManagementService, Depends(get_brand_profile_management_service)
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[BrandProfileResponse]:
-    """List project brand profiles."""
-    profiles = await service.list(project.id, limit=limit, offset=offset)
-    return [BrandProfileResponse.from_entity(profile) for profile in profiles]
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> BrandProfilePageResponse:
+    """List one page of project brand profiles, newest first."""
+    page = await service.list(project.id, limit=limit, cursor=cursor)
+    return BrandProfilePageResponse(
+        data=[BrandProfileResponse.from_entity(profile) for profile in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.get(

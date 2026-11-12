@@ -122,16 +122,8 @@ class APIKeyWithSecretResponse(APIKeyResponse):
     key: str
 
 
-class PaginationMeta(BaseModel):
-    """Offset pagination metadata."""
-
-    total: int
-    limit: int
-    offset: int
-
-
 class APIKeyListResponse(BaseModel):
-    """Paginated API key list."""
+    """One cursor page of API key metadata."""
 
     data: list[APIKeyResponse]
-    meta: PaginationMeta
+    next_cursor: str | None = None

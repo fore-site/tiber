@@ -44,8 +44,8 @@ info:
 
     ## Pagination
 
-    Delivery attempt, engagement event, and webhook endpoint lists use
-    cursor-based pagination:
+    The notification, template, brand profile, API key, delivery attempt,
+    engagement event, and webhook endpoint lists use cursor-based pagination:
 
     ```json
     {
@@ -55,8 +55,7 @@ info:
     ```
 
     Pass `next_cursor` back as the `cursor` query parameter to fetch the next
-    page. A `null` cursor means the list is exhausted. Other list endpoints
-    still use offset pagination with `limit`, `offset`, and a `meta` object.
+    page. A `null` cursor means the list is exhausted.
 
     Cursors are opaque and scoped to the listing that produced them.
 
@@ -633,7 +632,7 @@ paths:
       operationId: getv1projectsprojectidapikeys
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
           description: List of API keys
@@ -722,7 +721,7 @@ paths:
       description: Returns templates belonging to the project.
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
         - name: channel
           in: query
           required: false
@@ -1042,7 +1041,7 @@ paths:
       operationId: getv1projectsprojectidnotifications
       parameters:
         - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Cursor"
         - name: status
           in: query
           required: false
@@ -2159,14 +2158,17 @@ components:
 
     APIKeyList:
       type: object
-      required: [data, meta]
+      required: [data]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/APIKey"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     # Template
 
@@ -2223,14 +2225,17 @@ components:
 
     TemplateList:
       type: object
-      required: [data, meta]
+      required: [data]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/Template"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     # Recipient
 
@@ -2519,14 +2524,17 @@ components:
 
     NotificationList:
       type: object
-      required: [data, meta]
+      required: [data]
       properties:
         data:
           type: array
           items:
             $ref: "#/components/schemas/Notification"
-        meta:
-          $ref: "#/components/schemas/PaginationMeta"
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Pass as `cursor` to fetch the next page; null on the last page.
 
     # Delivery Attempt
 

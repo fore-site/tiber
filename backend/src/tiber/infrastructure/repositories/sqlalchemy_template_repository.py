@@ -1,8 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import Template
 from ...domain.enums import DeliveryChannel
@@ -69,23 +71,36 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
         self,
         project_id: UUID,
         limit: int,
-        offset: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
         channel: DeliveryChannel | None = None,
     ) -> list[Template]:
-        """List a project's templates, newest first, with pagination."""
+        """List a page of a project's templates, newest first."""
         statement = select(TemplateModel).where(TemplateModel.project_id == project_id)
         if channel is not None:
             statement = statement.join(TemplateVariantModel).where(
                 TemplateVariantModel.channel == channel.value
             )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         result = await self._session.execute(
-            statement
-            # Offset pagination needs a total order, or pages can repeat or skip rows.
-            .order_by(TemplateModel.created_at.desc(), TemplateModel.id.desc())
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(
+                TemplateModel.created_at.desc(), TemplateModel.id.desc()
+            ).limit(limit)
         )
         return [self._to_entity(model) for model in result.scalars().all()]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, template_id = cursor
+        return or_(
+            TemplateModel.created_at < created_at,
+            and_(
+                TemplateModel.created_at == created_at,
+                TemplateModel.id < template_id,
+            ),
+        )
 
     async def delete(self, template: Template) -> None:
         """Delete a template without committing its transaction."""

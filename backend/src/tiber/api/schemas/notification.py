@@ -345,6 +345,13 @@ class NotificationResponse(BaseModel):
         )
 
 
+class NotificationPageResponse(BaseModel):
+    """One cursor page of project notifications."""
+
+    data: list[NotificationResponse]
+    next_cursor: str | None = None
+
+
 class NotificationBatchResponse(BaseModel):
     """Fetch notifications linked by transaction_id: one per resolved channel."""
 

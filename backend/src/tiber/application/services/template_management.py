@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
+from tiber.application.pagination import (
+    CursorPage,
+    decode_time_id_cursor,
+    encode_cursor,
+)
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import BrandProfile, Template
 from tiber.domain.enums import DeliveryChannel
@@ -143,12 +148,25 @@ class TemplateManagementService:
         self,
         project_id: UUID,
         *,
-        limit: int,
-        offset: int,
+        limit: int = 50,
+        cursor: str | None = None,
         channel: DeliveryChannel | None = None,
-    ) -> list[Template]:
-        """List templates for a project."""
-        return await self._templates.list_by_project(project_id, limit, offset, channel)
+    ) -> CursorPage[Template]:
+        """List a page of templates for a project, newest first."""
+        after = decode_time_id_cursor(cursor, time_field="created_at")
+        templates = await self._templates.list_by_project(
+            project_id, limit + 1, cursor=after, channel=channel
+        )
+        items = templates[:limit]
+        next_cursor = (
+            encode_cursor(
+                created_at=items[-1].created_at.isoformat(),
+                id=items[-1].id,
+            )
+            if len(templates) > limit
+            else None
+        )
+        return CursorPage(items=items, next_cursor=next_cursor)
 
     async def update(
         self,
@@ -244,10 +262,27 @@ class BrandProfileManagementService:
         return profile
 
     async def list(
-        self, project_id: UUID, *, limit: int, offset: int
-    ) -> list[BrandProfile]:
-        """List a project's profiles."""
-        return await self._profiles.list_by_project(project_id, limit, offset)
+        self,
+        project_id: UUID,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> CursorPage[BrandProfile]:
+        """List a page of a project's brand profiles, newest first."""
+        after = decode_time_id_cursor(cursor, time_field="created_at")
+        profiles = await self._profiles.list_by_project(
+            project_id, limit + 1, cursor=after
+        )
+        items = profiles[:limit]
+        next_cursor = (
+            encode_cursor(
+                created_at=items[-1].created_at.isoformat(),
+                id=items[-1].id,
+            )
+            if len(profiles) > limit
+            else None
+        )
+        return CursorPage(items=items, next_cursor=next_cursor)
 
     async def update(
         self,

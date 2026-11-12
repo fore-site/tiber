@@ -20,7 +20,6 @@ from ..schemas.auth import (
     APIKeyListResponse,
     APIKeyResponse,
     APIKeyWithSecretResponse,
-    PaginationMeta,
 )
 
 router = APIRouter(prefix="/v1/projects/{project_id}/api-keys", tags=["API Keys"])
@@ -90,25 +89,21 @@ async def list_api_keys(
         APIKeyManagementService, Depends(get_api_key_management_service)
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> APIKeyListResponse:
-    """List project key metadata without exposing credential hashes."""
+    """List one page of project key metadata without credential hashes."""
     try:
         page = await service.list(
             project_id=project_id,
             account_id=account.id,
             limit=limit,
-            offset=offset,
+            cursor=cursor,
         )
     except APIKeyManagementError as exc:
         raise _http_error(exc) from exc
     return APIKeyListResponse(
-        data=[_response(key) for key in page.keys],
-        meta=PaginationMeta(
-            total=page.total,
-            limit=page.limit,
-            offset=page.offset,
-        ),
+        data=[_response(key) for key in page.items],
+        next_cursor=page.next_cursor,
     )
 
 

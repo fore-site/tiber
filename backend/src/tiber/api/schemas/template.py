@@ -184,3 +184,17 @@ class BrandProfileResponse(BaseModel):
             created_at=profile.created_at,
             updated_at=profile.updated_at,
         )
+
+
+class TemplatePageResponse(BaseModel):
+    """One cursor page of project templates."""
+
+    data: list[TemplateResponse]
+    next_cursor: str | None = None
+
+
+class BrandProfilePageResponse(BaseModel):
+    """One cursor page of project brand profiles."""
+
+    data: list[BrandProfileResponse]
+    next_cursor: str | None = None

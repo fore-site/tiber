@@ -2,9 +2,10 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities.notification import Notification
 from ...domain.enums import (
@@ -125,19 +126,37 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         return self._to_entity(model) if model else None
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[Notification]:
-        """List a project's notifications, newest first, with pagination."""
+        """List a page of a project's notifications, newest first."""
+        statement = select(NotificationModel).where(
+            NotificationModel.project_id == project_id
+        )
+        if cursor is not None:
+            statement = statement.where(self._before(cursor))
         result = await self._session.execute(
-            select(NotificationModel)
-            .where(NotificationModel.project_id == project_id)
-            # Offset pagination needs a total order, or pages can repeat or skip rows.
-            .order_by(NotificationModel.created_at.desc(), NotificationModel.id.desc())
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(
+                NotificationModel.created_at.desc(), NotificationModel.id.desc()
+            ).limit(limit)
         )
         models = result.scalars().all()
         return [self._to_entity(model) for model in models]
+
+    @staticmethod
+    def _before(cursor: tuple[datetime, UUID]) -> ColumnElement[bool]:
+        """Return the keyset predicate strictly before one ``(time, id)``."""
+        created_at, notification_id = cursor
+        return or_(
+            NotificationModel.created_at < created_at,
+            and_(
+                NotificationModel.created_at == created_at,
+                NotificationModel.id < notification_id,
+            ),
+        )
 
     async def list_by_transaction_id(
         self, transaction_id: UUID, project_id: UUID

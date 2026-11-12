@@ -19,6 +19,8 @@ from tiber.domain.repositories import (
     RecipientRepository,
 )
 
+from ..pagination import CursorPage, decode_time_id_cursor, encode_cursor
+
 
 @dataclass(frozen=True)
 class NotificationRequestView:
@@ -54,10 +56,23 @@ class NotificationQueryService:
         return notification
 
     async def list_notifications(
-        self, project_id: UUID, limit: int = 50, offset: int = 0
-    ) -> list[Notification]:
-        """List a project's notifications with pagination."""
-        return await self._notifications.list_by_project(project_id, limit, offset)
+        self, project_id: UUID, limit: int = 50, *, cursor: str | None = None
+    ) -> CursorPage[Notification]:
+        """List a page of a project's notifications, newest first."""
+        after = decode_time_id_cursor(cursor, time_field="created_at")
+        notifications = await self._notifications.list_by_project(
+            project_id, limit + 1, cursor=after
+        )
+        items = notifications[:limit]
+        next_cursor = (
+            encode_cursor(
+                created_at=items[-1].created_at.isoformat(),
+                id=items[-1].id,
+            )
+            if len(notifications) > limit
+            else None
+        )
+        return CursorPage(items=items, next_cursor=next_cursor)
 
     async def get_request_status(
         self, project_id: UUID, transaction_id: UUID

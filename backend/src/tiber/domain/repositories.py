@@ -120,9 +120,17 @@ class NotificationRepository(Protocol):
         ...
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[Notification]:
-        """List all notifications for a project with pagination."""
+        """List a page of a project's notifications, newest first.
+
+        ``cursor`` is the ``(created_at, id)`` of the last notification already
+        returned; the id makes the ordering total for equal timestamps.
+        """
         ...
 
     async def list_by_transaction_id(
@@ -165,9 +173,13 @@ class APIKeyRepository(Protocol):
         ...
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[APIKey]:
-        """List all API keys for a project."""
+        """List a page of a project's API keys, newest first."""
         ...
 
     async def count_by_project(self, project_id: UUID) -> int:
@@ -203,10 +215,11 @@ class TemplateRepository(Protocol):
         self,
         project_id: UUID,
         limit: int,
-        offset: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
         channel: DeliveryChannel | None = None,
     ) -> list[Template]:
-        """List all templates for a project."""
+        """List a page of a project's templates, newest first."""
         ...
 
     async def delete(self, template: Template) -> None:
@@ -226,9 +239,13 @@ class BrandProfileRepository(Protocol):
         ...
 
     async def list_by_project(
-        self, project_id: UUID, limit: int, offset: int
+        self,
+        project_id: UUID,
+        limit: int,
+        *,
+        cursor: tuple[datetime, UUID] | None = None,
     ) -> list[BrandProfile]:
-        """List brand profiles within a project."""
+        """List a page of brand profiles within a project, newest first."""
         ...
 
     async def delete(self, profile: BrandProfile) -> None:
