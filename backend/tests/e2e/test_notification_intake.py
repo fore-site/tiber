@@ -219,7 +219,7 @@ async def test_create_notification_topic_persists_project_topic(
         json={"title": "Product Updates", "category": "social"},
     )
     assert duplicate.status_code == 409
-    assert duplicate.json()["error"] == "notification_topic_name_conflict"
+    assert duplicate.json()["error"] == "name_conflict"
 
 
 async def test_same_key_and_body_replays_the_same_batch(client, project) -> None:
@@ -342,7 +342,8 @@ async def test_list_notifications_is_scoped_to_the_project(client, project) -> N
     )
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["data"] == []
+    assert response.json()["next_cursor"] is None
 
 
 async def test_cancel_pending_notification_and_reject_repeat(
