@@ -118,7 +118,6 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
         return TemplateModel(
             id=entity.id,
             project_id=entity.project_id,
-            brand_profile_id=entity.brand_profile_id,
             name=entity.name,
             template_slug=entity.template_slug,
             created_at=entity.created_at,
@@ -148,7 +147,6 @@ class SQLAlchemyTemplateRepository(TemplateRepository):
             id=model.id,
             project_id=model.project_id,
             name=model.name,
-            brand_profile_id=model.brand_profile_id,
             variants=[
                 TemplateVariant(
                     channel=DeliveryChannel(v.channel),

@@ -58,9 +58,8 @@ Notification topics are created with
 the topic slug from the title; titles and derived slugs must be unique within
 the project.
 
-Templates and brand profiles are project-scoped. Create a reusable design-token
-profile through `/v1/projects/{project_id}/brand-profiles`, then attach it to a
-template created through `/v1/projects/{project_id}/templates`. Each channel
+Templates are project-scoped and created through
+`/v1/projects/{project_id}/templates`. Each channel
 variant's `content` can provide `plain_text_body`, `html_body`, or both. Direct
 notification requests use the same content shape. Plain text is used by
 text-only channels; HTML is supported by email and in-app. Email still requires
@@ -125,7 +124,6 @@ notification feed and needs no external provider credentials.
 Set `DATABASE_URL` to the intended PostgreSQL database, then run
 `uv run alembic upgrade head` from `backend/`. The migration chain installs the
 required extensions, creates the core schema, adds authentication state and API
-keys, creates the notification outbox, and adds brand profiles and styled
-template content. The core-schema migration follows the existing
+keys, creates the notification outbox, and adds styled template content. The core-schema migration follows the existing
 `2d9adfec7c5d` extension-only revision, so databases already stamped at that
 revision can be migrated forward without dropping their data.

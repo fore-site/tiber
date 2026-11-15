@@ -126,6 +126,8 @@ class Notification:
         is classified here from the intake facts: EXPLICIT when send_at is
         supplied, IMMEDIATE for CRITICAL notifications, ML_PREDICTED otherwise.
         """
+        from ..services import content_for_channel
+
         return cls(
             project_id=project_id,
             recipient_id=recipient_id,
@@ -133,7 +135,7 @@ class Notification:
             channel=channel,
             category=category,
             topic_id=topic_id,
-            content=content,
+            content=content_for_channel(channel, content),
             template_id=template_id,
             template_variables=template_variables,
             group_key=group_key,
@@ -233,9 +235,11 @@ class Notification:
 
     def with_content(self, content: NotificationContent) -> Notification:
         """Return this notification with replaced rendered content."""
+        from ..services import content_for_channel
+
         return replace(
             self,
-            content=content,
+            content=content_for_channel(self.channel, content),
             updated_at=datetime.now(UTC),
         )
 

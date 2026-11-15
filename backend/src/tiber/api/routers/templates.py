@@ -1,4 +1,4 @@
-"""Project-scoped template and brand profile APIs."""
+"""Project-scoped template APIs."""
 
 from __future__ import annotations
 
@@ -7,24 +7,17 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from ...application.services.template_management import (
-    BrandProfileManagementService,
-    TemplateManagementService,
-)
+from ...application.services.template_management import TemplateManagementService
 from ...domain.enums import DeliveryChannel
 from ...infrastructure.models import ProjectModel
 from ..dependencies import (
     enforce_authenticated_rate_limit,
     get_authenticated_project,
-    get_brand_profile_management_service,
     get_template_management_service,
 )
 from ..schemas.notification import NotificationContentModel
 from ..schemas.template import (
-    BrandProfileCreateRequest,
-    BrandProfilePageResponse,
-    BrandProfileResponse,
-    BrandProfileUpdateRequest,
+    TemplateContentPreviewRequest,
     TemplateCreateRequest,
     TemplatePageResponse,
     TemplatePresetResponse,
@@ -74,9 +67,41 @@ async def create_template(
             else None
         ),
         preset_id=payload.preset_id,
-        brand_profile_id=payload.brand_profile_id,
     )
     return TemplateResponse.from_entity(template)
+
+
+@router.post(
+    "/projects/{project_id}/templates/preview",
+    response_model=TemplatePreviewResponse,
+)
+async def preview_template_content(
+    payload: TemplateContentPreviewRequest,
+    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
+    service: Annotated[
+        TemplateManagementService, Depends(get_template_management_service)
+    ],
+) -> TemplatePreviewResponse:
+    """Render unsaved editor content; nothing is persisted.
+
+    This is the draft counterpart to ``/templates/{template_id}/preview``: the
+    dashboard sends the content currently in the editor, the same Liquid engine
+    used for delivery renders it, and the result is returned.
+
+    Clients must still sandbox the returned HTML: templates are authored by the
+    project and are not sanitized server-side.
+    """
+    del project  # authenticated by the dependency; nothing project-scoped is read
+    preview = service.preview_content(
+        channel=payload.channel,
+        content=payload.content.to_domain(),
+        variables=payload.variables,
+    )
+    return TemplatePreviewResponse(
+        channel=payload.channel,
+        content=NotificationContentModel(**preview.content.to_dict()),
+        required_variables=sorted(preview.required_variables),
+    )
 
 
 @router.get(
@@ -133,13 +158,12 @@ async def update_template(
         TemplateManagementService, Depends(get_template_management_service)
     ],
 ) -> TemplateResponse:
-    """Replace a template's variants, name, and brand profile."""
+    """Replace a template's variants and name."""
     template = await service.update(
         project_id=project.id,
         template_id=template_id,
         name=payload.name,
         variants=[variant.to_domain() for variant in payload.variants],
-        brand_profile_id=payload.brand_profile_id,
     )
     return TemplateResponse.from_entity(template)
 
@@ -184,98 +208,3 @@ async def preview_template(
         content=NotificationContentModel(**preview.content.to_dict()),
         required_variables=sorted(preview.required_variables),
     )
-
-
-@router.post(
-    "/projects/{project_id}/brand-profiles",
-    response_model=BrandProfileResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_brand_profile(
-    payload: BrandProfileCreateRequest,
-    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
-    service: Annotated[
-        BrandProfileManagementService, Depends(get_brand_profile_management_service)
-    ],
-) -> BrandProfileResponse:
-    """Create reusable design tokens for a project."""
-    profile = await service.create(
-        project_id=project.id,
-        name=payload.name,
-        tokens=payload.tokens,
-    )
-    return BrandProfileResponse.from_entity(profile)
-
-
-@router.get(
-    "/projects/{project_id}/brand-profiles",
-    response_model=BrandProfilePageResponse,
-)
-async def list_brand_profiles(
-    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
-    service: Annotated[
-        BrandProfileManagementService, Depends(get_brand_profile_management_service)
-    ],
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    cursor: Annotated[str | None, Query(max_length=512)] = None,
-) -> BrandProfilePageResponse:
-    """List one page of project brand profiles, newest first."""
-    page = await service.list(project.id, limit=limit, cursor=cursor)
-    return BrandProfilePageResponse(
-        data=[BrandProfileResponse.from_entity(profile) for profile in page.items],
-        next_cursor=page.next_cursor,
-    )
-
-
-@router.get(
-    "/projects/{project_id}/brand-profiles/{profile_id}",
-    response_model=BrandProfileResponse,
-)
-async def get_brand_profile(
-    profile_id: UUID,
-    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
-    service: Annotated[
-        BrandProfileManagementService, Depends(get_brand_profile_management_service)
-    ],
-) -> BrandProfileResponse:
-    """Get one project brand profile."""
-    profile = await service.get(project.id, profile_id)
-    return BrandProfileResponse.from_entity(profile)
-
-
-@router.put(
-    "/projects/{project_id}/brand-profiles/{profile_id}",
-    response_model=BrandProfileResponse,
-)
-async def update_brand_profile(
-    profile_id: UUID,
-    payload: BrandProfileUpdateRequest,
-    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
-    service: Annotated[
-        BrandProfileManagementService, Depends(get_brand_profile_management_service)
-    ],
-) -> BrandProfileResponse:
-    """Replace a project's brand profile."""
-    profile = await service.update(
-        project_id=project.id,
-        profile_id=profile_id,
-        name=payload.name,
-        tokens=payload.tokens,
-    )
-    return BrandProfileResponse.from_entity(profile)
-
-
-@router.delete(
-    "/projects/{project_id}/brand-profiles/{profile_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_brand_profile(
-    profile_id: UUID,
-    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
-    service: Annotated[
-        BrandProfileManagementService, Depends(get_brand_profile_management_service)
-    ],
-) -> Response:
-    """Delete one profile; linked templates remain valid but unbranded."""
-    await service.delete(project.id, profile_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)

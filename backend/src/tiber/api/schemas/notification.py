@@ -198,12 +198,18 @@ class NotificationCreateRequest(BaseModel):
 
     template_variables: dict[str, Any] | None = Field(
         default=None,
-        description="Variables substituted into the template when `template_slug` is set.",
+        description=(
+            "Values for the Liquid variables in `template_slug`'s content, or in "
+            "direct `content` when no template is used."
+        ),
     )
 
     content: NotificationContentModel | None = Field(
         default=None,
-        description="Direct content; required when `template_slug` is not set.",
+        description=(
+            "Direct content, rendered as Liquid source with `template_variables`. "
+            "Required when `template_slug` is not set."
+        ),
     )
 
     send_at: datetime | None = Field(
@@ -262,8 +268,6 @@ class NotificationCreateRequest(BaseModel):
         # Content
         if (self.template_slug is None) == (self.content is None):
             raise ValueError("Provide exactly one of `template_slug` or `content`.")
-        if self.template_variables is not None and self.template_slug is None:
-            raise ValueError("`template_variables` requires `template_slug`.")
         # Category
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise ValueError(

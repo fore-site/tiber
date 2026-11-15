@@ -55,7 +55,6 @@ from tiber.domain.repositories import (
     NotificationTopicRepository,
     RecipientRepository,
 )
-from tiber.domain.services import validate_content
 from tiber.domain.services.plan_assembly import assemble_plan, wanted_decisions
 from tiber.domain.value_objects import NotificationContent
 from tiber.domain.value_objects.intake import (
@@ -293,8 +292,11 @@ class IntakeProcessor:
         else:
             if payload.content is None:
                 raise Exception("Payload content is None.")
-            validate_content(channel, payload.content)
             child = Notification.create(content=payload.content, **fields)
+            # Direct content is Liquid source too, so it goes through the same
+            # renderer as a saved template: `{{ variable }}` works without one.
+            rendered = await self._template_resolver.resolve(child)
+            child = child.with_content(rendered.content)
 
         # ML-predicted send time (client send_at and CRITICAL have their own basis).
         predicted = plan.send_at.get(channel)

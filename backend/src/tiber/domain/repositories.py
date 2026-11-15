@@ -15,7 +15,6 @@ from uuid import UUID
 from .entities import (
     Account,
     APIKey,
-    BrandProfile,
     DeliveryAttempt,
     DeliveryConstraint,
     EngagementEvent,
@@ -228,32 +227,6 @@ class TemplateRepository(Protocol):
 
     async def delete(self, template: Template) -> None:
         """Delete a project-scoped template."""
-        ...
-
-
-class BrandProfileRepository(Protocol):
-    """Contract for project-scoped brand profile data access."""
-
-    async def save(self, profile: BrandProfile) -> BrandProfile:
-        """Persist a brand profile."""
-        ...
-
-    async def get_by_id(self, id: UUID, project_id: UUID) -> BrandProfile | None:
-        """Load a brand profile within its project's scope."""
-        ...
-
-    async def list_by_project(
-        self,
-        project_id: UUID,
-        limit: int,
-        *,
-        cursor: tuple[datetime, UUID] | None = None,
-    ) -> list[BrandProfile]:
-        """List a page of brand profiles within a project, newest first."""
-        ...
-
-    async def delete(self, profile: BrandProfile) -> None:
-        """Delete a project-scoped brand profile."""
         ...
 
 

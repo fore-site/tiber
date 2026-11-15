@@ -1,10 +1,27 @@
-"""NotificationContent validation for each channel."""
+"""NotificationContent validation and channel-specific shaping."""
 
 from __future__ import annotations
+
+from dataclasses import replace
 
 from ..enums import DeliveryChannel
 from ..exceptions import InvalidEntityAttributeError
 from ..value_objects import NotificationContent
+
+
+def content_for_channel(
+    channel: DeliveryChannel, content: NotificationContent
+) -> NotificationContent:
+    """Drop the title on channels that do not persist a subject.
+
+    ``title`` is the email subject. The ``notifications_subject_check``
+    constraint stores no subject for any other channel, so a channel-agnostic
+    direct-content send (one ``title`` for email and in-app) must shed it on
+    the in-app child rather than fail at the persistence boundary.
+    """
+    if channel is DeliveryChannel.EMAIL or content.title is None:
+        return content
+    return replace(content, title=None)
 
 
 def validate_content(channel: DeliveryChannel, content: NotificationContent) -> None:

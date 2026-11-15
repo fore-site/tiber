@@ -29,6 +29,7 @@ _TIBER_ERROR_STATUS: dict[str, int] = {
     "project_scope_violated": 403,
     "channel_not_available": 422,
     "template_channel_mismatch": 422,
+    "template_render_failed": 422,
     "delivery_failed": 502,
     "provider_unavailable": 503,
     "rate_limiter_unavailable": 503,

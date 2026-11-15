@@ -17,8 +17,10 @@ from tiber.application.services.notification_intake import (
     AcceptNotificationCommand,
     NotificationIntakeService,
 )
-from tiber.domain.entities import Template
-from tiber.domain.enums import DeliveryChannel
+from tiber.application.services.template import NotificationTemplateResolver
+from tiber.application.services.template_management import TemplateManagementService
+from tiber.domain.entities import Notification, Template
+from tiber.domain.enums import DeliveryChannel, NotificationCategory, SendTimeBasis
 from tiber.domain.exceptions import (
     ChannelNotAvailableError,
     EntityNotFoundError,
@@ -167,6 +169,160 @@ def test_renderer_rejects_a_missing_variable_the_entity_counted():
 
     with pytest.raises(TemplateRenderError):
         TemplateRenderer().render(variant, {})
+
+
+# --- Liquid: the renderer is a Liquid engine, not placeholder substitution ---
+
+
+def test_liquid_filters_conditionals_and_loops_render():
+    """The syntax the dashboard editor exposes actually executes."""
+    variant = email_variant(
+        "Hello {{ name | upcase }}",
+        "{% if items %}{% for item in items %}{{ item }}"
+        "{% unless forloop.last %}, {% endunless %}"
+        "{% endfor %}{% else %}none{% endif %}",
+    )
+
+    rendered = TemplateRenderer().render(variant, {"name": "ada", "items": ["a", "b"]})
+
+    assert rendered.title == "Hello ADA"
+    assert rendered.plain_text_body == "a, b"
+
+
+def test_liquid_default_filter_handles_an_undefined_value():
+    """An author can opt out of the missing-value error explicitly."""
+    variant = sms_variant("Hi {{ name | default: 'there' }}")
+
+    assert TemplateRenderer().render(variant, {}).plain_text_body == "Hi there"
+
+
+def test_undefined_value_in_a_condition_is_falsy():
+    """Conditionals see undefined as false rather than raising."""
+    variant = sms_variant("{% if name %}Hi {{ name }}{% else %}Hello{% endif %}")
+
+    assert TemplateRenderer().render(variant, {}).plain_text_body == "Hello"
+
+
+def test_printing_an_undefined_value_names_the_field():
+    """A hole is still an error; the message says which field failed."""
+    variant = sms_variant("Hi {{ first_name }}")
+
+    with pytest.raises(TemplateRenderError, match="plain_text_body"):
+        TemplateRenderer().render(variant, {})
+
+
+def test_liquid_syntax_error_is_a_render_error():
+    """A malformed template is a 422-level domain error, not a crash."""
+    with pytest.raises(TemplateRenderError, match="plain_text_body"):
+        TemplateRenderer().render(sms_variant("{% if %}x{% endif %}"), {})
+
+
+def test_runaway_loop_hits_the_render_limit():
+    """Client-authored loops cannot exhaust the worker."""
+    variant = sms_variant("{% for i in (1..20000) %}x{% endfor %}")
+
+    with pytest.raises(TemplateRenderError, match="plain_text_body"):
+        TemplateRenderer().render(variant, {})
+
+
+def test_html_output_is_not_escaped_automatically():
+    """Liquid semantics: escaping is explicit, exactly like LiquidJS."""
+    variant = TemplateVariant(
+        channel=DeliveryChannel.EMAIL,
+        content=NotificationContent(
+            title="Hi",
+            html_body="<p>{{ name }}</p><p>{{ name | escape }}</p>",
+        ),
+    )
+
+    html_body = TemplateRenderer().render(variant, {"name": "<b>x</b>"}).html_body
+
+    assert "<p><b>x</b></p>" in html_body
+    assert "<p>&lt;b&gt;x&lt;/b&gt;</p>" in html_body
+
+
+def test_filtered_and_nested_output_report_their_root_variable():
+    """Required variables follow Liquid output expressions."""
+    variant = TemplateVariant(
+        channel=DeliveryChannel.EMAIL,
+        content=NotificationContent(
+            title="Hi {{ user.name }}",
+            plain_text_body="{{ greeting | escape }}",
+        ),
+    )
+
+    assert variant.variables == frozenset({"user", "greeting"})
+
+
+# --- Stateless draft preview ---
+
+
+def test_preview_content_renders_a_draft_without_persisting():
+    """A draft renders through the same engine and writes nothing."""
+    service = TemplateManagementService(
+        unit_of_work=None,
+        template_repository=None,
+    )
+
+    preview = service.preview_content(
+        channel=DeliveryChannel.EMAIL,
+        content=NotificationContent(
+            title="Hi {{ name }}",
+            html_body='<p style="color:#3157d5">{{ name | escape }}</p>',
+        ),
+        variables={"name": "<b>Ada</b>"},
+    )
+
+    assert preview.content.title == "Hi <b>Ada</b>"
+    assert "&lt;b&gt;Ada&lt;/b&gt;" in preview.content.html_body
+    assert preview.required_variables == frozenset({"name"})
+
+
+# --- Direct content ---
+
+
+def _direct_notification(content: NotificationContent, **kwargs):
+    """Build a notification carrying content instead of a template reference."""
+    return Notification.create(
+        project_id=uuid4(),
+        recipient_id=uuid4(),
+        transaction_id=uuid4(),
+        channel=DeliveryChannel.EMAIL,
+        category=NotificationCategory.INFORMATIONAL,
+        content=content,
+        send_time_basis=SendTimeBasis.IMMEDIATE,
+        **kwargs,
+    )
+
+
+async def test_resolver_renders_direct_content():
+    """Direct content is Liquid source, rendered with the request's variables."""
+    notification = _direct_notification(
+        NotificationContent(
+            title="Hi {{ name }}",
+            html_body="<p>{{ name | escape }}</p>",
+        ),
+        template_variables={"name": "<b>Ada</b>"},
+    )
+
+    resolved = await NotificationTemplateResolver(template_repository=None).resolve(
+        notification
+    )
+
+    assert resolved.content.title == "Hi <b>Ada</b>"
+    assert resolved.content.html_body == "<p>&lt;b&gt;Ada&lt;/b&gt;</p>"
+
+
+async def test_direct_content_without_a_variable_still_fails():
+    """Rendering direct content does not relax the missing-value policy."""
+    notification = _direct_notification(
+        NotificationContent(title="Hi {{ name }}", plain_text_body="Hi")
+    )
+
+    with pytest.raises(TemplateRenderError, match="title"):
+        await NotificationTemplateResolver(template_repository=None).resolve(
+            notification
+        )
 
 
 # --- Accept-time constraints use the same per-channel variables ---

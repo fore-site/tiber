@@ -1,20 +1,35 @@
-"""Pure template rendering for notification content.
+"""Pure template rendering with Liquid.
 
-Rendering is intentionally framework-free: given a ``Template`` and a flat
-mapping of template variables, it substitutes ``{{variable}}`` placeholders
-in the template content's title and body representations, returning a new
-``NotificationContent``.
+Rendering is intentionally framework-free: given a ``TemplateVariant`` and a
+flat mapping of template variables, it renders the title, plain text body and
+HTML body through one Liquid environment.
 
-Missing placeholders are an error, not empty text: see ``TemplateRenderer.render``.
+Policy
+------
+* Undefined variables are ``FalsyStrictUndefined``: absent names are falsy in
+  ``{% if %}`` and resolvable with ``| default``, but *printing* one raises
+  ``TemplateRenderError`` instead of silently leaving a hole in the message.
+* Autoescaping is OFF, matching LiquidJS. Content is authored by the client, not
+  by end users; a template that interpolates untrusted values must apply
+  ``| escape`` itself. This also lets ``{{ body }}`` inject HTML fragments,
+  which is the point of authoring HTML.
+* Rendering is bounded (``_RENDER_LIMITS``): a client-authored template cannot
+  exhaust a worker with a huge loop or a runaway output.
+* There is no template loader, so ``{% include %}`` and ``{% render %}`` fail
+  instead of reading files from the host.
 
+Direct notification content (``template_id`` is None) is rendered here too: a
+send may carry Liquid source without a saved template, and the same policies
+(undefined handling, escaping, resource bounds) must apply to it.
 """
 
 from __future__ import annotations
 
-import html
-import re
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
+
+from liquid import Environment, FalsyStrictUndefined, ResourceLimits
+from liquid.exceptions import LiquidError
 
 from ..exceptions import TemplateRenderError
 
@@ -22,113 +37,102 @@ from ..exceptions import TemplateRenderError
 # ``TemplateVariant``, which imports this package, so reaching for the package
 # here closes an import cycle that breaks every ``tiber.domain.entities`` import.
 from ..value_objects.notification_content import NotificationContent
-from ..value_objects.placeholders import TEMPLATE_PLACEHOLDER_RE, extract_placeholders
 
 if TYPE_CHECKING:
     from ..value_objects.template_variant import TemplateVariant
 
-_BRAND_TOKEN_RE = re.compile(r"\[\[([a-z][a-z0-9-]{0,62})\]\]")
+# Bounds applied to every render. ``max_render_size`` matches the API's
+# html_body limit, so a template cannot produce more than it could have carried
+# as source. The rest stop runaway loops and pathological nesting.
+_RENDER_LIMITS = ResourceLimits(
+    max_render_size=1_000_000,
+    max_loop_iterations=10_000,
+    max_context_depth=20,
+    max_block_depth=20,
+    max_expression_depth=50,
+)
 
 
 class TemplateRenderer:
-    """Renders ``{{variable}}`` placeholders in a template's content."""
+    """Render a template's content with Liquid."""
+
+    def __init__(self, environment: Environment | None = None) -> None:
+        """Initialize the renderer with a bounded, strict-output environment.
+
+        ``environment`` exists so tests (or a future engine swap) can inject
+        one; production always uses the bounded environment built here.
+        """
+        self._environment = environment or Environment(
+            undefined=FalsyStrictUndefined,
+            autoescape=False,
+            resource_limits=_RENDER_LIMITS,
+        )
 
     def render(
         self,
         template: TemplateVariant,
         variables: Mapping[str, Any] | None,
-        brand_tokens: Mapping[str, str] | None = None,
     ) -> NotificationContent:
-        """Render a template's content with the given variables.
+        """Render a template variant's content with ``variables``."""
+        return self.render_content(template.content, variables)
 
-        Every ``{{key}}`` placeholder in title and body fields must have a non-None
-        value in ``variables``. A placeholder with no value raises
-        ``TemplateRenderError`` rather than rendering as empty text: the usual
-        cause is that the template was edited after the request was accepted,
-        and a message with a silent hole in it is worse than a failed intake.
+    def render_content(
+        self,
+        content: NotificationContent,
+        variables: Mapping[str, Any] | None,
+    ) -> NotificationContent:
+        """Render one piece of notification content with ``variables``.
 
-        The template's ``actions`` / ``images`` pass through untouched: they are
-        opaque references (labels + URLs), not free text to interpolate.
+        Shared by saved templates and direct content: a send without a template
+        still carries Liquid source, and it must be rendered under the same
+        policies.
+
+        A placeholder with no value raises ``TemplateRenderError`` rather than
+        rendering as empty text: the usual cause is that the content was edited
+        after the request was accepted, and a message with a silent hole in it
+        is worse than a failed intake.
+
+        ``actions`` / ``images`` pass through untouched: they are opaque
+        references (labels + URLs), not free text to interpolate.
         """
         mapping = variables or {}
 
-        missing = tuple(
-            sorted(
-                name
-                for name in extract_placeholders(
-                    template.content.title,
-                    template.content.plain_text_body,
-                )
-                if mapping.get(name) is None
+        title = self._render_text(content.title, mapping, field="title")
+        plain_text_body = self._render_text(
+            content.plain_text_body, mapping, field="plain_text_body"
+        )
+        html_body = self._render_text(content.html_body, mapping, field="html_body")
+
+        try:
+            return NotificationContent(
+                title=title,
+                plain_text_body=plain_text_body,
+                html_body=html_body,
+                actions=content.actions,
+                images=content.images,
             )
-        )
-        if missing:
-            raise TemplateRenderError(missing)
-
-        def _substitute(text: str) -> str:
-            return TEMPLATE_PLACEHOLDER_RE.sub(lambda m: str(mapping[m.group(1)]), text)
-
-        template_content = template.content
-        title = _substitute(template_content.title) if template_content.title else None
-        plain_text_body = (
-            _substitute(template_content.plain_text_body)
-            if template_content.plain_text_body is not None
-            else None
-        )
-        html_body = self.render_html(template, variables, brand_tokens)
-        return NotificationContent(
-            title=title,
-            plain_text_body=plain_text_body,
-            html_body=html_body,
-            actions=template_content.actions,
-            images=template_content.images,
-        )
-
-    def render_html(
-        self,
-        template: TemplateVariant,
-        variables: Mapping[str, Any] | None,
-        brand_tokens: Mapping[str, str] | None = None,
-    ) -> str | None:
-        """Render a variant's HTML with escaped variables and brand tokens."""
-        template_html = template.content.html_body
-        if template_html is None:
-            return None
-
-        mapping = variables or {}
-        tokens = brand_tokens or {}
-        missing_variables = {
-            name
-            for name in extract_placeholders(template_html)
-            if mapping.get(name) is None
-        }
-        missing_tokens = set(_BRAND_TOKEN_RE.findall(template_html)) - set(tokens)
-        if missing_variables or missing_tokens:
+        except ValueError as exc:
+            # Liquid can render a body into nothing (e.g. a false conditional),
+            # leaving content that the value object rejects.
             raise TemplateRenderError(
-                tuple(
-                    sorted(
-                        [f"variable:{name}" for name in missing_variables]
-                        + [f"brand:{name}" for name in missing_tokens]
-                    )
-                )
-            )
+                (),
+                reason=f"Rendered content is not valid: {exc}",
+            ) from exc
 
-        rendered = TEMPLATE_PLACEHOLDER_RE.sub(
-            lambda match: html.escape(str(mapping[match.group(1)]), quote=True),
-            template_html,
-        )
-        rendered = _BRAND_TOKEN_RE.sub(
-            lambda match: html.escape(tokens[match.group(1)], quote=True),
-            rendered,
-        )
-        if tokens:
-            declarations = ";".join(
-                f"--tiber-{key}:{value}" for key, value in sorted(tokens.items())
-            )
-            style = f"<style>:root{{{declarations}}}</style>"
-            head = re.search(r"<head(?:\s[^>]*)?>", rendered, re.IGNORECASE)
-            if head:
-                rendered = rendered[: head.end()] + style + rendered[head.end() :]
-            else:
-                rendered = style + rendered
-        return rendered
+    def _render_text(
+        self, source: str | None, variables: Mapping[str, Any], *, field: str
+    ) -> str | None:
+        """Render one field, leaving a ``None`` field unset."""
+        if source is None:
+            return None
+        return self._render(source, variables, field=field)
+
+    def _render(self, source: str, variables: Mapping[str, Any], *, field: str) -> str:
+        """Render one field, translating Liquid failures into a domain error."""
+        try:
+            return self._environment.render(source, variables)
+        except LiquidError as exc:
+            # Liquid errors carry a multi-line source excerpt; the first line
+            # is the part worth showing an author or logging.
+            reason = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+            raise TemplateRenderError((), reason=f"{field}: {reason}") from exc

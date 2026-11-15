@@ -5,11 +5,11 @@ its content is a variable the sender must supply. Nothing is declared separately
 so there is nothing to keep in sync.
 
 IMPORTANT: ``VARIABLE_RE`` must recognise the same placeholders that
-``TemplateRenderer`` substitutes. Reuse the renderer's pattern if it exposes
-one. The regex below tolerates whitespace (``{{ name }}``), which is the safe
-direction: if the renderer is stricter, an extra variable is demanded and
-harmless; if it were looser, a variable would be missed and rendering would fail
-after the request was accepted.
+``TemplateRenderer`` substitutes. The regex below tolerates whitespace
+(``{{ name }}``) and Liquid filters (``{{ name | escape }}``), which is the safe
+direction: if it demands an extra variable the request is rejected early; if it
+were looser, a variable would be missed and rendering would fail after the
+request was accepted.
 
 Likewise ``content_variables`` must cover exactly the fields the renderer
 substitutes. If the renderer only touches title and body, drop the action and
@@ -25,7 +25,8 @@ if TYPE_CHECKING:
     from ..value_objects import NotificationContent
 
 # Flat identifiers only: template_variables is a flat mapping of names to values.
-VARIABLE_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+# Nested paths report their root; filtered output reports the head variable.
+VARIABLE_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*[^{}]*\}\}")
 
 
 def extract_variables(text: str | None) -> frozenset[str]:

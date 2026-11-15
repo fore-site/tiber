@@ -85,14 +85,12 @@ tags:
     description: Reusable notification content templates
   - name: Recipients
     description: Notification recipients and channel addresses
-  - name: Preferences
-    description: Recipient-level delivery preferences and quiet hours
+  - name: Topics
+    description: Notification topics that classify and route sends
   - name: Notifications
     description: Notification intake, status, and delivery history
   - name: Webhooks
     description: Outbound event callback endpoint registration
-  - name: Delivery Policies
-    description: Project-level delivery rules and compliance restrictions
   - name: Delivery Attempts
     description: Notification delivery attempt history and provider responses
   - name: Engagement Events
@@ -687,6 +685,29 @@ paths:
 
   # Templates
 
+  /v1/projects/{project_id}/template-presets:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      tags: [Templates]
+      summary: List template presets
+      operationId: getv1projectsprojectidtemplatepresets
+      description: >
+        Returns the built-in starter templates. A preset is not persisted: pass
+        its `id` as `preset_id` when creating a template.
+      responses:
+        "200":
+          description: Available presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TemplatePreset"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /v1/projects/{project_id}/templates:
     parameters:
       - $ref: "#/components/parameters/ProjectId"
@@ -696,8 +717,11 @@ paths:
       summary: Create a template
       operationId: postv1projectsprojectidtemplates
       description: >
-        Creates a reusable notification template
-        for a specific delivery channel.
+        Creates a reusable notification template holding one variant per
+        delivery channel. Supply `variants` directly, or `preset_id` to start
+        from a starter returned by GET /template-presets. Content is Liquid
+        source: `{{ variable }}` output is rendered at send time, and nothing is
+        escaped automatically.
       requestBody:
         required: true
         content:
@@ -762,11 +786,14 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-    patch:
+    put:
       tags: [Templates]
-      summary: Update a template
-      operationId: patchv1projectsprojectidtemplatestemplateid
-      description: Slug is immutable after creation.
+      summary: Replace a template
+      operationId: putv1projectsprojectidtemplatestemplateid
+      description: >
+        Replaces the whole template: `name` and the full `variants` list are
+        required. The slug is re-derived from the new name, so a rename can
+        change `template_slug`.
       requestBody:
         required: true
         content:
@@ -794,8 +821,10 @@ paths:
       description: |
         Permanently deletes the template.
 
-        Existing notifications that were created from this template are unaffected,
-        because rendered notification content is stored independently at creation time.
+        Notifications already dispatched are unaffected, but delivery re-resolves
+        the template before sending, so deleting a template (or removing a
+        channel variant) can fail notifications that were accepted and are still
+        pending.
       responses:
         "204":
           description: Template deleted.
@@ -803,6 +832,80 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /v1/projects/{project_id}/templates/preview:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    post:
+      tags: [Templates]
+      summary: Preview unsaved content
+      operationId: postv1projectsprojectidtemplatespreview
+      description: |
+        Renders editor content through the same Liquid engine used for delivery,
+        without persisting a template. This is the draft counterpart to
+        `POST /templates/{template_id}/preview`.
+
+        The response matches the shape the send path persists for the channel:
+        channels that do not support a subject return `title: null`.
+
+        The returned HTML is authored content and is not sanitized server-side:
+        clients must render it in a sandboxed frame.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateContentPreviewRequest"
+      responses:
+        "200":
+          description: Rendered draft content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplatePreviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /v1/projects/{project_id}/templates/{template_id}/preview:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TemplateId"
+
+    post:
+      tags: [Templates]
+      summary: Preview a template
+      operationId: postv1projectsprojectidtemplatestemplateidpreview
+      description: |
+        Renders the template's variant for the requested channel with supplied
+        variables, using the same Liquid engine as delivery. Nothing is persisted.
+
+        The response matches the shape the send path persists for the channel:
+        channels that do not support a subject return `title: null`.
+
+        The returned HTML is authored content and is not sanitized server-side:
+        clients must render it in a sandboxed frame.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplatePreviewRequest"
+      responses:
+        "200":
+          description: Rendered template content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplatePreviewResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
 
   # Recipients
 
@@ -1039,70 +1142,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  # User Preferences
-  # Singleton per recipient, PUT upserts, no POST or list endpoint.
-
-  /v1/projects/{project_id}/recipients/{recipient_id}/preferences:
-    parameters:
-      - $ref: "#/components/parameters/ProjectId"
-      - $ref: "#/components/parameters/RecipientId"
-
-    put:
-      tags: [Preferences]
-      summary: Upsert recipient preferences
-      operationId: putv1projectsprojectidrecipientsrecipientidpreferences
-      description: |
-        Creates or fully replaces preferences for this recipient.
-        Preferences are a singleton, there is no list endpoint.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpsertPreferencesRequest"
-      responses:
-        "200":
-          description: Preferences saved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserPreference"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-
-    get:
-      tags: [Preferences]
-      summary: Get recipient preferences
-      operationId: getv1projectsprojectidrecipientsrecipientidpreferences
-      responses:
-        "200":
-          description: Preferences found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserPreference"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    delete:
-      tags: [Preferences]
-      summary: Delete recipient preferences
-      operationId: deletev1projectsprojectidrecipientsrecipientidpreferences
-      description: Resets the recipient to platform defaults.
-      responses:
-        "204":
-          description: Preferences deleted.
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   # Notifications
 
   /v1/projects/{project_id}/notifications:
@@ -1114,17 +1153,19 @@ paths:
       summary: Send a notification
       operationId: postv1projectsprojectidnotifications
       description: |
-        Accepts a notification request, runs idempotency check,
-        resolves the template if provided, applies the Delivery Policy
-        Resolver (user preferences → blackout dates → compliance), persists
-        the notification and enqueues it for asynchronous processing.
+        Accepts a notification request, checks the idempotency key, resolves the
+        recipient and template, plans the channels, and enqueues the work. The
+        request is expanded asynchronously, so this returns immediately.
 
-        Supply `Idempotency-Key` to make client retries safe.
-        Duplicate keys within 24 hours return the original 201 response.
+        Supply `Idempotency-Key` to make client retries safe. Replaying a key
+        with the same payload returns the original transaction; the same key
+        with a different payload is a conflict.
+
+        Follow processing with GET /notification-requests/{transaction_id}.
       parameters:
         - name: Idempotency-Key
           in: header
-          required: false
+          required: true
           schema:
             type: string
             maxLength: 255
@@ -1136,14 +1177,16 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateNotificationRequest"
       responses:
-        "201":
-          description: Notification accepted and enqueued
+        "202":
+          description: Request accepted for asynchronous processing
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Notification"
+                $ref: "#/components/schemas/NotificationCreateResponse"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "429":
@@ -1156,22 +1199,6 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
-        - name: status
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/schemas/NotificationStatus"
-        - name: channel
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/schemas/Channel"
-        - name: recipient_id
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
       responses:
         "200":
           description: List of notifications
@@ -1287,6 +1314,39 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/projects/{project_id}/notification-requests/{transaction_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      tags: [Notifications]
+      summary: Get a notification request
+      operationId: getv1projectsprojectidnotificationrequeststransactionid
+      description: |
+        Status of an accepted request and the notifications it produced.
+
+        `status` is `received` or `processing` while the request is being
+        expanded (with `notifications` empty), `completed` once every planned
+        channel has its notification, and `failed` if processing could not
+        finish — in which case `failure_reason` is set.
+      parameters:
+        - name: transaction_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/UUID"
+      responses:
+        "200":
+          description: Request status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationRequestStatus"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # Webhooks
 
   /v1/projects/{project_id}/webhooks:
@@ -1302,6 +1362,10 @@ paths:
         subscribed notification lifecycle events occur. The Worker Service
         Webhook Dispatcher fires the callbacks — the API Service owns
         registration only.
+
+        The URL must use HTTPS on port 443 and resolve only to public internet
+        addresses. Localhost, private, link-local, and cloud metadata
+        destinations are rejected at registration and again at dispatch.
       requestBody:
         required: true
         content:
@@ -1391,78 +1455,6 @@ paths:
       responses:
         "204":
           description: Webhook endpoint deleted
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  # Delivery Policy
-  # Singleton per project — PUT upserts, no POST or list endpoint.
-
-  /v1/projects/{project_id}/delivery-policy:
-    parameters:
-      - $ref: "#/components/parameters/ProjectId"
-
-    put:
-      tags: [Delivery Policy]
-      summary: Upsert delivery policy
-      operationId: putv1projectsprojectiddeliverypolicy
-      description: |
-        Creates or fully replaces the delivery policy for this project.
-        A project has at most one delivery policy.
-
-        Constraints are evaluated in order at notification intake:
-        1. User preferences (soft — adjusts send time)
-        2. Blackout periods (soft — pushes past the blackout)
-        3. Compliance restrictions (hard — rejects the notification)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpsertDeliveryPolicyRequest"
-      responses:
-        "200":
-          description: Delivery policy saved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeliveryPolicy"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/UnprocessableEntity"
-
-    get:
-      tags: [Delivery Policy]
-      summary: Get delivery policy
-      operationId: getv1projectsprojectiddeliverypolicy
-      responses:
-        "200":
-          description: Delivery policy found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DeliveryPolicy"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    delete:
-      tags: [Delivery Policy]
-      summary: Delete delivery policy
-      operationId: deletev1projectsprojectiddeliverypolicy
-      description: |
-        Deletes the project's delivery policy.
-
-        Subsequent notifications are evaluated using Tiber's default delivery
-        behavior until a new project delivery policy is configured.
-      responses:
-        "204":
-          description: Delivery policy deleted
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -1645,34 +1637,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
         "503":
           description: One or more dependencies unhealthy
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
-
-  /metrics:
-    get:
-      tags: [Observability]
-      summary: Prometheus metrics
-      operationId: getmetrics
-      security: []
-      description: |
-        Exposes Prometheus metrics for internal monitoring.
-        This endpoint is intended for infrastructure use and should
-        not be publicly accessible.
-      responses:
-        "200":
-          description: Prometheus-format metrics
-          content:
-            text/plain:
-              schema:
-                type: string
-        "401":
-          $ref: "#/components/responses/Unauthorized"
 
 # Components
 
@@ -1930,7 +1900,7 @@ components:
 
     Channel:
       type: string
-      enum: [email, push, sms, webhook, in_app]
+      enum: [email, push, sms, in_app]
 
     NotificationStatus:
       type: string
@@ -1958,20 +1928,6 @@ components:
     DeliveryAttemptStatus:
       type: string
       enum: [success, fail]
-
-    TimeWindow:
-      type: object
-      required: [start, end]
-      properties:
-        start:
-          type: string
-          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
-          description: HH:MM in 24-hour format
-          example: "09:00"
-        end:
-          type: string
-          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
-          example: "17:00"
 
     AccountRole:
       type: string
@@ -2267,7 +2223,8 @@ components:
 
     Template:
       type: object
-      required: [id, project_id, name, channel, body, created_at, updated_at]
+      required:
+        [id, project_id, name, template_slug, variants, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -2275,46 +2232,126 @@ components:
           $ref: "#/components/schemas/UUID"
         name:
           type: string
-        channel:
-          $ref: "#/components/schemas/Channel"
-        subject:
-          type: [string, "null"]
-          description: Supports {{variable}} interpolation.
-        body:
+        template_slug:
           type: string
-          description: Supports {{variable}} interpolation.
+          description: Project-unique slug re-derived from the name on rename.
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateVariant"
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
 
+    TemplateVariantRequest:
+      type: object
+      required: [channel, content]
+      properties:
+        channel:
+          $ref: "#/components/schemas/Channel"
+        content:
+          $ref: "#/components/schemas/NotificationContent"
+
+    TemplateVariant:
+      type: object
+      required: [channel, content, required_variables]
+      properties:
+        channel:
+          $ref: "#/components/schemas/Channel"
+        content:
+          $ref: "#/components/schemas/NotificationContent"
+        required_variables:
+          type: array
+          items:
+            type: string
+          description: >
+            Variables the variant's content references, sorted. Supply all of
+            them as `template_variables` when sending.
+
+    TemplatePreset:
+      type: object
+      required: [id, name, variant]
+      properties:
+        id:
+          type: string
+          example: email-starter
+        name:
+          type: string
+        variant:
+          $ref: "#/components/schemas/TemplateVariant"
+
     CreateTemplateRequest:
       type: object
-      required: [name, channel, body]
+      required: [name]
       properties:
         name:
           type: string
           minLength: 1
-          maxLength: 100
-        channel:
-          $ref: "#/components/schemas/Channel"
-        subject:
-          type: string
-          maxLength: 500
-        body:
-          type: string
+          maxLength: 200
+        variants:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TemplateVariantRequest"
+          description: One variant per channel. Mutually exclusive with `preset_id`.
+        preset_id:
+          type: [string, "null"]
+          description: >
+            Starter id from GET /template-presets. Mutually exclusive with
+            `variants`.
 
     UpdateTemplateRequest:
       type: object
+      required: [name, variants]
       properties:
         name:
           type: string
           minLength: 1
-          maxLength: 100
-        subject:
-          type: [string, "null"]
-        body:
-          type: string
+          maxLength: 200
+        variants:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TemplateVariantRequest"
+
+    TemplatePreviewRequest:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          $ref: "#/components/schemas/Channel"
+        variables:
+          type: object
+          additionalProperties: true
+          description: Values for the template's required variables.
+
+    TemplateContentPreviewRequest:
+      type: object
+      required: [channel, content]
+      properties:
+        channel:
+          $ref: "#/components/schemas/Channel"
+        content:
+          $ref: "#/components/schemas/NotificationContent"
+        variables:
+          type: object
+          additionalProperties: true
+          description: Values for the variables the draft content references.
+
+    TemplatePreviewResponse:
+      type: object
+      required: [channel, content, required_variables]
+      properties:
+        channel:
+          $ref: "#/components/schemas/Channel"
+        content:
+          $ref: "#/components/schemas/NotificationContent"
+        required_variables:
+          type: array
+          items:
+            type: string
+          description: Variables the rendered content requires, sorted.
 
     TemplateList:
       type: object
@@ -2413,117 +2450,81 @@ components:
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
-    # User Preference
-
-    UserPreference:
-      type: object
-      required:
-        [
-          recipient_id,
-          project_id,
-          preferred_channels,
-          opted_out_channels,
-          timezone,
-          updated_at,
-        ]
-      properties:
-        recipient_id:
-          $ref: "#/components/schemas/UUID"
-        project_id:
-          $ref: "#/components/schemas/UUID"
-        preferred_channels:
-          type: array
-          items:
-            $ref: "#/components/schemas/Channel"
-          uniqueItems: true
-          description: |
-            Ordered preference. 
-            First channel is tried first.
-
-        quiet_hours:
-          allOf:
-            - $ref: "#/components/schemas/TimeWindow"
-          type: [object, "null"]
-          description: |
-            No notifications during this window. A send time inside the
-            window is rejected by the delivery policy, not rescheduled.
-        delivery_window:
-          allOf:
-            - $ref: "#/components/schemas/TimeWindow"
-          type: [object, "null"]
-          description: Notifications are only dispatched within this window.
-        timezone:
-          type: string
-          example: Africa/Lagos
-          description: IANA timezone for quiet hours and delivery window evaluation.
-        updated_at:
-          $ref: "#/components/schemas/Timestamp"
-
-    UpsertPreferencesRequest:
-      type: object
-      required: [preferred_channels, opted_out_channels, timezone]
-      properties:
-        preferred_channels:
-          type: array
-          items:
-            $ref: "#/components/schemas/Channel"
-        opted_out_channels:
-          type: array
-          items:
-            $ref: "#/components/schemas/Channel"
-        quiet_hours:
-          allOf:
-            - $ref: "#/components/schemas/TimeWindow"
-          type: [object, "null"]
-        delivery_window:
-          allOf:
-            - $ref: "#/components/schemas/TimeWindow"
-          type: [object, "null"]
-        timezone:
-          type: [string, "null"]
-          example: Africa/Lagos
-          description: May be `null` only when both `quiet_hours` and `delivery_window` are `null`.
-
     # Notification
+
+    ContentAction:
+      type: object
+      required: [label, url]
+      properties:
+        label:
+          type: string
+        url:
+          type: string
+          description: Target the action opens.
+
+    ContentImage:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+        alt:
+          type: [string, "null"]
 
     NotificationContent:
       type: object
-      required: [body]
+      description: >
+        Semantic content. Both saved-template content and direct content are
+        Liquid source, rendered with the request's variables at send time.
       properties:
-        subject:
+        title:
           type: [string, "null"]
-          description: |
-            Used by email-capable channels only.
-            Ignored for channels that do not support subjects.
-        body:
-          type: string
+          maxLength: 255
+          description: Title or subject; only channels that support one use it.
+        plain_text_body:
+          type: [string, "null"]
+          description: Plain-text representation, for text-only channels.
+        html_body:
+          type: [string, "null"]
+          maxLength: 1000000
+          description: >
+            Authored HTML, rendered as Liquid; only email and in-app accept it.
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentAction"
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContentImage"
 
-    NotificationIntelligence:
+    NotificationCategory:
+      type: string
+      enum: [critical, informational, social, promotional]
+
+    SendTimeBasis:
+      type: string
+      enum: [immediate, explicit, ml_predicted]
+
+    DecisionSummary:
       type: object
-      description: ML predictions attached by the API Service at intake.
+      required: [category, category_source, channel_source]
+      description: The plan the intake processor settled on.
       properties:
-        priority:
+        category:
+          $ref: "#/components/schemas/NotificationCategory"
+        category_source:
           type: string
-          enum: [low, medium, high]
-        channel_preference:
-          $ref: "#/components/schemas/Channel"
-        send_time_basis:
+          enum: [client, ml, default]
+        topic_slug:
+          type: [string, "null"]
+        topic_source:
+          type: [string, "null"]
+        channel_source:
           type: string
-          enum: [explicit, ml_predicted, immediate]
-        model_versions:
-          type: object
-          additionalProperties:
-            type: string
-          example:
-            priority_classifier: priority-2026-01-01.1
-            send_time_optimizer: send-time-2026-01-01.1
-        confidence:
-          type: object
-          additionalProperties:
-            type: number
-          example:
-            priority: 0.91
-            send_time: 0.74
+          enum: [client, ml, addresses, default]
+        model_version:
+          type: [string, "null"]
 
     Notification:
       type: object
@@ -2531,11 +2532,12 @@ components:
         [
           id,
           project_id,
-          recipient_id,
+          transaction_id,
           channel,
-          status,
+          category,
           content,
-          correlation_id,
+          status,
+          send_time_basis,
           created_at,
           updated_at,
         ]
@@ -2544,34 +2546,44 @@ components:
           $ref: "#/components/schemas/UUID"
         project_id:
           $ref: "#/components/schemas/UUID"
+        transaction_id:
+          $ref: "#/components/schemas/UUID"
+          description: The accepted request that produced this notification.
         recipient_id:
           $ref: "#/components/schemas/UUID"
+          nullable: true
         channel:
           $ref: "#/components/schemas/Channel"
-        status:
-          $ref: "#/components/schemas/NotificationStatus"
+        address:
+          type: [string, "null"]
+          description: Address actually used for this channel.
+        category:
+          $ref: "#/components/schemas/NotificationCategory"
+        template_slug:
+          type: [string, "null"]
+          description: Set when the request used a saved template.
+        topic_slug:
+          type: [string, "null"]
+        group_key:
+          type: [string, "null"]
         content:
           $ref: "#/components/schemas/NotificationContent"
-        intelligence:
-          $ref: "#/components/schemas/NotificationIntelligence"
-        template_id:
-          $ref: "#/components/schemas/UUID"
-          nullable: true
-        idempotency_key:
-          type: [string, "null"]
-          readOnly: true
-        correlation_id:
-          $ref: "#/components/schemas/UUID"
-          description: |
-            Trace ID propagated through all pipeline logs, the job payload,
-            delivery attempts, and webhook events. Use this to correlate
-            a notification's full lifecycle across services.
-        scheduled_at:
+        status:
+          $ref: "#/components/schemas/NotificationStatus"
+        send_at:
           $ref: "#/components/schemas/Timestamp"
           nullable: true
+        send_time_basis:
+          $ref: "#/components/schemas/SendTimeBasis"
         delivered_at:
           $ref: "#/components/schemas/Timestamp"
           nullable: true
+        suppression_reason:
+          type: [string, "null"]
+        cancellation_reason:
+          type: [string, "null"]
+        failure_reason:
+          type: [string, "null"]
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -2579,33 +2591,91 @@ components:
 
     CreateNotificationRequest:
       type: object
-      required: [recipient_id, channel]
+      description: >
+        One request targets one recipient, identified either by `recipient_id`
+        (the client's external id, not the Tiber UUID) or by a channel address
+        such as `email`. Supply either a saved template (`template_slug`) or
+        direct `content`, not both.
       properties:
         recipient_id:
-          $ref: "#/components/schemas/UUID"
-        channel:
-          $ref: "#/components/schemas/Channel"
-        template_id:
-          $ref: "#/components/schemas/UUID"
+          type: [string, "null"]
+          maxLength: 255
+          description: The recipient's external id, as registered by the client.
+        channels:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/Channel"
+          description: Requested channels; omit to let planning decide.
+        email:
+          type: [string, "null"]
+        sms:
+          type: [string, "null"]
+        push:
+          type: [string, "null"]
+        in_app:
+          type: [string, "null"]
+        category:
+          $ref: "#/components/schemas/NotificationCategory"
           nullable: true
-          description: |
-            Reference an existing template. Mutually exclusive with providing
-            content directly. If both are given, an error is raised.
+        group_key:
+          type: [string, "null"]
+          maxLength: 255
+        topic_slug:
+          type: [string, "null"]
+        template_slug:
+          type: [string, "null"]
+          description: Saved template to render. Mutually exclusive with `content`.
         template_variables:
-          type: object
-          additionalProperties:
-            type: string
-          description: Variables interpolated into the template at render time.
+          type: [object, "null"]
+          additionalProperties: true
+          description: >
+            Values for the Liquid variables in the template, or in direct
+            content when no template is used.
         content:
           $ref: "#/components/schemas/NotificationContent"
-          description: Required when template_id is not provided.
-        scheduled_at:
+          nullable: true
+          description: >
+            Direct content, rendered as Liquid source with `template_variables`.
+            Mutually exclusive with `template_slug`.
+        send_at:
           $ref: "#/components/schemas/Timestamp"
           nullable: true
-          description: |
-            Explicit send time in UTC. If omitted, the ML Send-Time Predictor
-            determines the optimal time based on recipient engagement history,
-            or sends immediately if no prediction is available.
+          description: >
+            Explicit send time in UTC. Omit to send immediately or let planning
+            choose the time.
+
+    NotificationCreateResponse:
+      type: object
+      required: [project_id, transaction_id]
+      properties:
+        project_id:
+          $ref: "#/components/schemas/UUID"
+        transaction_id:
+          $ref: "#/components/schemas/UUID"
+          description: Use this to poll GET /notification-requests/{transaction_id}.
+
+    NotificationRequestStatus:
+      type: object
+      required: [transaction_id, project_id, status]
+      properties:
+        transaction_id:
+          $ref: "#/components/schemas/UUID"
+        project_id:
+          $ref: "#/components/schemas/UUID"
+        status:
+          type: string
+          enum: [received, processing, completed, failed]
+        failure_reason:
+          type: [string, "null"]
+          description: Set only when processing failed.
+        decisions:
+          $ref: "#/components/schemas/DecisionSummary"
+          nullable: true
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+          description: Empty until processing completes.
 
     NotificationList:
       type: object
@@ -2714,13 +2784,12 @@ components:
             The provider's own reference ID for this message.
             Use this to cross-reference with provider logs or support.
             Null on failed attempts.
-        error_code:
+        recipient_address:
           type: [string, "null"]
-        error_message:
+          description: Address the attempt was made to, as resolved at dispatch.
+        error:
           type: [string, "null"]
-        latency_ms:
-          type: [integer, "null"]
-          format: int32
+          description: Provider or policy failure reason; null on success.
         created_at:
           $ref: "#/components/schemas/Timestamp"
 
@@ -2864,6 +2933,7 @@ components:
         url:
           type: string
           format: uri
+          description: Public HTTPS callback URL on port 443.
         events:
           type: array
           items:
@@ -2883,6 +2953,10 @@ components:
         url:
           type: string
           format: uri
+          description: >
+            HTTPS URL on port 443 that resolves only to public internet
+            addresses. Localhost, private, link-local, and metadata
+            destinations are rejected.
         events:
           type: array
           minItems: 1
@@ -2895,13 +2969,14 @@ components:
         url:
           type: string
           format: uri
+          description: >
+            Replacement HTTPS URL on port 443 that resolves only to public
+            internet addresses.
         events:
           type: array
           minItems: 1
           items:
             $ref: "#/components/schemas/WebhookEventType"
-        is_active:
-          type: boolean
 
     WebhookEndpointList:
       type: object
@@ -2921,89 +2996,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/WebhookEndpoint"
         - type: object
-          required: [secret]
+          required: [signing_secret]
           properties:
-            secret:
+            signing_secret:
               type: string
               description: >
-                Shown only once. Store securely.
-
-    # Delivery Policy
-
-    BlackoutPeriod:
-      type: object
-      required: [name, start_date, end_date]
-      description: |
-        Calendar dates during which notifications are not dispatched.
-        Dates are interpreted in UTC.
-      properties:
-        name:
-          type: string
-          example: Christmas Holiday
-        start_date:
-          type: string
-          format: date
-          example: "2026-12-24"
-        end_date:
-          type: string
-          format: date
-          example: "2026-12-26"
-
-    ComplianceRule:
-      type: object
-      required: [name, allowed_window]
-      properties:
-        name:
-          type: string
-          example: Financial Services Communication Window
-        description:
-          type: string
-          example: SMS prohibited after 8PM
-        allowed_window:
-          $ref: "#/components/schemas/TimeWindow"
-        channels:
-          type: array
-          items:
-            $ref: "#/components/schemas/Channel"
-          description: |
-            Channels this rule applies to.
-            Empty array means the rule applies to all channels.
-
-    DeliveryPolicy:
-      type: object
-      required:
-        [project_id, created_at, updated_at, blackout_periods, compliance_rules]
-      properties:
-        project_id:
-          $ref: "#/components/schemas/UUID"
-        blackout_periods:
-          type: array
-          items:
-            $ref: "#/components/schemas/BlackoutPeriod"
-          default: []
-        compliance_rules:
-          type: array
-          items:
-            $ref: "#/components/schemas/ComplianceRule"
-          default: []
-        created_at:
-          $ref: "#/components/schemas/Timestamp"
-        updated_at:
-          $ref: "#/components/schemas/Timestamp"
-
-    UpsertDeliveryPolicyRequest:
-      type: object
-      properties:
-        blackout_periods:
-          type: array
-          items:
-            $ref: "#/components/schemas/BlackoutPeriod"
-          default: []
-        compliance_rules:
-          type: array
-          items:
-            $ref: "#/components/schemas/ComplianceRule"
-          default: []
+                Shown only once. Store securely; it cannot be retrieved again.
 
     # Health
 

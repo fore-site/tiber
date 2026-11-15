@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import re
 
-# Matches the placeholder syntax the renderer substitutes. Kept here so the
-# accept-time variable check and the renderer can never disagree about what a
-# placeholder is.
-TEMPLATE_PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
+# Matches the variable at the head of a Liquid output expression, including
+# filtered output such as ``{{ name | escape }}``. Nested paths
+# (``{{ user.name }}``) report their root (``user``), because
+# ``template_variables`` is a flat mapping. Expressions that do not start with
+# an identifier (``{{ 1 | plus: 2 }}``) declare no variable.
+TEMPLATE_PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*[^{}]*\}\}")
 
 
 def extract_placeholders(*texts: str | None) -> frozenset[str]:

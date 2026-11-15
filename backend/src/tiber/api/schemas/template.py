@@ -1,4 +1,4 @@
-"""API schemas for templates, brand profiles, and template rendering."""
+"""API schemas for templates and template rendering."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from ...application.services.template_management import TemplatePreset
-from ...domain.entities import BrandProfile, Template
+from ...domain.entities import Template
 from ...domain.enums import DeliveryChannel
 from ...domain.value_objects import TemplateVariant
 from .notification import NotificationContentModel
@@ -41,7 +41,6 @@ class TemplateCreateRequest(BaseModel):
         default=None,
         description="Select a starter variant returned by GET /template-presets.",
     )
-    brand_profile_id: UUID | None = None
 
 
 class TemplateUpdateRequest(BaseModel):
@@ -51,7 +50,6 @@ class TemplateUpdateRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     variants: list[TemplateVariantRequest] = Field(min_length=1)
-    brand_profile_id: UUID | None = None
 
 
 class TemplateVariantResponse(BaseModel):
@@ -82,7 +80,6 @@ class TemplateResponse(BaseModel):
     project_id: UUID
     name: str
     template_slug: str
-    brand_profile_id: UUID | None
     variants: list[TemplateVariantResponse]
     created_at: datetime
     updated_at: datetime
@@ -95,7 +92,6 @@ class TemplateResponse(BaseModel):
             project_id=template.project_id,
             name=template.name,
             template_slug=template.template_slug,
-            brand_profile_id=template.brand_profile_id,
             variants=[
                 TemplateVariantResponse.from_entity(variant)
                 for _, variant in sorted(
@@ -135,6 +131,21 @@ class TemplatePreviewRequest(BaseModel):
     variables: dict[str, object] = Field(default_factory=dict)
 
 
+class TemplateContentPreviewRequest(BaseModel):
+    """Unsaved editor content rendered through the same path as a send.
+
+    Nothing is persisted: the dashboard can preview a draft before saving it as
+    a template or sending it directly. Liquid syntax is rendered with the server
+    engine, so the preview matches delivery exactly.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel: DeliveryChannel
+    content: NotificationContentModel
+    variables: dict[str, object] = Field(default_factory=dict)
+
+
 class TemplatePreviewResponse(BaseModel):
     """Rendered output for dashboard/API previews."""
 
@@ -145,56 +156,8 @@ class TemplatePreviewResponse(BaseModel):
     required_variables: list[str]
 
 
-class BrandProfileCreateRequest(BaseModel):
-    """Fields accepted when creating a brand profile."""
-
-    model_config = ConfigDict(
-        extra="forbid",
-        str_strip_whitespace=True,
-    )
-
-    name: str = Field(min_length=1, max_length=100)
-    tokens: dict[str, str] = Field(max_length=64)
-
-
-class BrandProfileUpdateRequest(BrandProfileCreateRequest):
-    """Replacement fields for a brand profile."""
-
-
-class BrandProfileResponse(BaseModel):
-    """Persisted project brand profile."""
-
-    model_config = ConfigDict(frozen=True)
-
-    id: UUID
-    project_id: UUID
-    name: str
-    tokens: dict[str, str]
-    created_at: datetime
-    updated_at: datetime
-
-    @classmethod
-    def from_entity(cls, profile: BrandProfile) -> BrandProfileResponse:
-        """Build the response from a domain profile."""
-        return cls(
-            id=profile.id,
-            project_id=profile.project_id,
-            name=profile.name,
-            tokens=profile.tokens,
-            created_at=profile.created_at,
-            updated_at=profile.updated_at,
-        )
-
-
 class TemplatePageResponse(BaseModel):
     """One cursor page of project templates."""
 
     data: list[TemplateResponse]
-    next_cursor: str | None = None
-
-
-class BrandProfilePageResponse(BaseModel):
-    """One cursor page of project brand profiles."""
-
-    data: list[BrandProfileResponse]
     next_cursor: str | None = None

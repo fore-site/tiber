@@ -46,16 +46,6 @@ class TemplateModel(Base):
         nullable=False,
     )
 
-    brand_profile_id: Mapped[UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey(
-            "brand_profiles.id",
-            ondelete="SET NULL",
-            name="templates_brand_profile_id_fkey",
-        ),
-        nullable=True,
-    )
-
     name: Mapped[str] = mapped_column(Text, nullable=False)
 
     template_slug: Mapped[str] = mapped_column(Text, nullable=False)

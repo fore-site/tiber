@@ -38,10 +38,7 @@ from ..application.services.notification_topic import NotificationTopicService
 from ..application.services.project_management import ProjectManagementService
 from ..application.services.recipient_management import RecipientManagementService
 from ..application.services.recipient_resolution import RecipientResolutionService
-from ..application.services.template_management import (
-    BrandProfileManagementService,
-    TemplateManagementService,
-)
+from ..application.services.template_management import TemplateManagementService
 from ..application.services.webhook_endpoint import WebhookEndpointService
 from ..core.config import get_settings
 from ..core.database import AsyncSessionFactory
@@ -59,9 +56,6 @@ from ..infrastructure.repositories.sqlalchemy_api_key_repository import (
 )
 from ..infrastructure.repositories.sqlalchemy_auth_account_repository import (
     SQLAlchemyAuthAccountRepository,
-)
-from ..infrastructure.repositories.sqlalchemy_brand_profile_repository import (
-    SQLAlchemyBrandProfileRepository,
 )
 from ..infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (
     SQLAlchemyDeliveryAttemptRepository,
@@ -350,13 +344,6 @@ def get_template_repository(
 ) -> SQLAlchemyTemplateRepository:
     """Provide the SQLAlchemy template repository bound to the request session."""
     return SQLAlchemyTemplateRepository(db)
-
-
-def get_brand_profile_repository(
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> SQLAlchemyBrandProfileRepository:
-    """Provide the SQLAlchemy brand profile repository for this request."""
-    return SQLAlchemyBrandProfileRepository(db)
 
 
 def get_intake_repository(
@@ -670,26 +657,9 @@ def get_template_management_service(
     template_repository: Annotated[
         SQLAlchemyTemplateRepository, Depends(get_template_repository)
     ],
-    brand_profile_repository: Annotated[
-        SQLAlchemyBrandProfileRepository, Depends(get_brand_profile_repository)
-    ],
 ) -> TemplateManagementService:
     """Provide project-scoped template CRUD and preview use cases."""
     return TemplateManagementService(
         unit_of_work=unit_of_work,
         template_repository=template_repository,
-        brand_profile_repository=brand_profile_repository,
-    )
-
-
-def get_brand_profile_management_service(
-    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
-    brand_profile_repository: Annotated[
-        SQLAlchemyBrandProfileRepository, Depends(get_brand_profile_repository)
-    ],
-) -> BrandProfileManagementService:
-    """Provide project-scoped brand profile CRUD use cases."""
-    return BrandProfileManagementService(
-        unit_of_work=unit_of_work,
-        brand_profile_repository=brand_profile_repository,
     )

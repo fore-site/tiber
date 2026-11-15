@@ -1,6 +1,5 @@
 from .account import AccountModel
 from .api_key import APIKeyModel
-from .brand_profile import BrandProfileModel
 from .delivery_attempt import DeliveryAttemptModel
 from .delivery_constraint import DeliveryConstraintModel
 from .engagement_event import EngagementEventModel
@@ -16,7 +15,6 @@ from .webhook_endpoint import WebhookEndpointModel
 __all__ = [
     "APIKeyModel",
     "AccountModel",
-    "BrandProfileModel",
     "DeliveryAttemptModel",
     "DeliveryConstraintModel",
     "EngagementEventModel",

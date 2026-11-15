@@ -139,17 +139,18 @@ class NotificationDeliveryProcessor:
                     await self._notifications.save(updated)
                     return updated
 
+            # Only a template is re-resolved here, so an edit between intake and
+            # delivery is picked up. Direct content was already rendered at
+            # intake; rendering it again would reinterpret its own output.
             rendered = (
                 await self._template_resolver.resolve(notification)
                 if self._template_resolver is not None
+                and notification.template_id is not None
                 else None
             )
-            content = rendered.content if rendered is not None else notification.content
-            if (
-                self._template_resolver is not None
-                and notification.template_id is not None
-            ):
-                notification = notification.with_content(content)
+            if rendered is not None:
+                notification = notification.with_content(rendered.content)
+            content = notification.content
 
             processing = (
                 notification.reclaim_processing()

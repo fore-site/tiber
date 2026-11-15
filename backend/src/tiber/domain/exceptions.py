@@ -50,20 +50,28 @@ class TemplateChannelMismatchError(TiberError):
 
 
 class TemplateRenderError(TiberError):
-    """A template placeholder has no value in the variables supplied for it.
+    """A template could not be rendered.
 
-    Raised instead of rendering the placeholder as empty text: silently sending
-    a message with a hole in it is worse than failing the request, and the usual
-    cause is that the template was edited after the request was accepted.
+    Covers an undefined placeholder, a Liquid syntax error, a resource limit,
+    and a render that produces invalid content. Raised instead of emitting empty
+    text: silently sending a message with a hole in it is worse than failing the
+    request, and the usual cause is that the template was edited after the
+    request was accepted.
+
+    ``missing`` names the unresolved placeholders when that is the cause;
+    ``reason`` carries the engine's message for every other failure.
     """
 
     error_code = "template_render_failed"
 
-    def __init__(self, missing: tuple[str, ...]) -> None:
+    def __init__(
+        self, missing: tuple[str, ...] = (), *, reason: str | None = None
+    ) -> None:
         """Initialize a TemplateRenderError."""
         self.missing = missing
         super().__init__(
-            "No value supplied for template placeholder(s): " + ", ".join(missing)
+            reason
+            or "No value supplied for template placeholder(s): " + ", ".join(missing)
         )
 
 
