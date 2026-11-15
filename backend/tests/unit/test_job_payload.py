@@ -8,7 +8,7 @@ from uuid import uuid4
 from tiber.domain.entities import Notification
 from tiber.domain.enums import DeliveryChannel, NotificationCategory, SendTimeBasis
 from tiber.domain.value_objects import NotificationContent
-from tiber.events.job_payload import (
+from tiber.worker.job_payload import (
     SCHEMA_VERSION,
     NotificationJobPayload,
     RetryState,

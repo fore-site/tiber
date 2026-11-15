@@ -2,8 +2,8 @@ from uuid import UUID
 
 from ...application.ports.message_publisher import MessagePublisher
 from ...domain.entities import Notification
-from ...events.job_payload import NotificationJobPayload
 from ...worker.celery_app import celery_app
+from ...worker.job_payload import NotificationJobPayload
 from ...worker.queues import INTERNAL_QUEUE
 
 

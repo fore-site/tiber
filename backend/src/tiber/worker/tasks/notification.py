@@ -25,11 +25,7 @@ from ...domain.exceptions import (
     TemplateChannelMismatchError,
 )
 from ...domain.policies import PolicyResolver
-from ...events.job_payload import NotificationJobPayload
 from ...infrastructure.providers.factory import build_provider_manager
-from ...infrastructure.repositories.sqlalchemy_brand_profile_repository import (
-    SQLAlchemyBrandProfileRepository,
-)
 from ...infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (
     SQLAlchemyDeliveryAttemptRepository,
 )
@@ -48,6 +44,7 @@ from ...infrastructure.repositories.sqlalchemy_template_repository import (
 from ...infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
 from ..async_runtime import run_async
 from ..celery_app import celery_app
+from ..job_payload import NotificationJobPayload
 from ..queues import WEBHOOK_QUEUE
 from ..retry import exponential_backoff
 
@@ -109,7 +106,6 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
             policy_guard=DeliveryPolicyGuard(PolicyResolver()),
             template_resolver=NotificationTemplateResolver(
                 template_repository=templates,
-                brand_profile_repository=SQLAlchemyBrandProfileRepository(session),
             ),
             constraint_repository=constraints,
             processing_lease_seconds=SETTINGS.notification_processing_lease_seconds,
