@@ -205,3 +205,18 @@ class NameConflictError(ConflictError):
         super().__init__(
             f"{self.entity_name} with this name or title is already in use."
         )
+
+
+class WebhookDestinationError(InvalidEntityAttributeError):
+    """A client-registered webhook URL is not a safe public HTTPS destination.
+
+    Raised for non-HTTPS URLs, alternate ports, credentials or fragments in the
+    URL, internal hostnames, and any address outside public internet space. It is
+    a security decision, not a transient network failure, but dispatch treats it
+    as a rejected callback so it cannot bypass the endpoint's retry accounting.
+
+    Subclasses ``InvalidEntityAttributeError`` because registration surfaces it
+    as a client-input error: the tenant supplied a URL Tiber will not contact.
+    """
+
+    error_code = "webhook_destination_invalid"

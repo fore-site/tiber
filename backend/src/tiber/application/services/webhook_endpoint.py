@@ -16,6 +16,7 @@ from tiber.application.pagination import (
     encode_cursor,
 )
 from tiber.application.ports.unit_of_work import UnitOfWork
+from tiber.application.ports.webhook_destination import WebhookDestinationPolicy
 from tiber.core.encryption import encrypt_secret
 from tiber.core.security import generate_webhook_secret
 from tiber.domain.entities import WebhookEndpoint
@@ -44,10 +45,12 @@ class WebhookEndpointService:
         *,
         unit_of_work: UnitOfWork,
         endpoint_repository: WebhookEndpointRepository,
+        destination_policy: WebhookDestinationPolicy,
     ) -> None:
-        """Initialize the service with its transaction boundary and repository."""
+        """Initialize the service with its transaction boundary and repositories."""
         self._unit_of_work = unit_of_work
         self._endpoints = endpoint_repository
+        self._destinations = destination_policy
 
     async def create(
         self,
@@ -61,6 +64,7 @@ class WebhookEndpointService:
             raise InvalidEntityAttributeError(
                 "A webhook endpoint must subscribe to at least one event."
             )
+        await self._destinations.resolve(url)
         secret, prefix = generate_webhook_secret()
         endpoint = WebhookEndpoint.create(
             project_id=project_id,
@@ -118,6 +122,8 @@ class WebhookEndpointService:
             raise InvalidEntityAttributeError(
                 "A webhook endpoint must subscribe to at least one event."
             )
+        if url is not None:
+            await self._destinations.resolve(url)
         updated = replace(
             endpoint,
             url=url if url is not None else endpoint.url,

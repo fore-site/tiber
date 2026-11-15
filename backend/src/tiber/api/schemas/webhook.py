@@ -31,9 +31,9 @@ class WebhookEndpointCreateRequest(BaseModel):
 
     url: HttpUrl = Field(
         description=(
-            "Absolute http(s) URL Tiber POSTs callbacks to. Tiber does not yet "
-            "block private-network destinations, so do not point this at an "
-            "address you do not control."
+            "Absolute HTTPS URL on port 443 that resolves only to public "
+            "internet addresses. Tiber rejects localhost, private, link-local, "
+            "and metadata destinations."
         )
     )
     events: list[WebhookEventType] = Field(
@@ -57,7 +57,10 @@ class WebhookEndpointUpdateRequest(BaseModel):
 
     url: HttpUrl | None = Field(
         default=None,
-        description="Replacement callback URL.",
+        description=(
+            "Replacement HTTPS callback URL on port 443 that resolves only to "
+            "public internet addresses."
+        ),
     )
     events: list[WebhookEventType] | None = Field(
         default=None,

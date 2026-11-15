@@ -75,6 +75,7 @@ class Settings(BaseSettings):
 
     # Outbound webhooks (client-registered callbacks)
     webhook_endpoint_timeout_seconds: float = Field(default=10.0, gt=0)
+    webhook_destination_resolve_timeout_seconds: float = Field(default=5.0, gt=0)
     webhook_dispatch_max_endpoints: int = Field(default=100, ge=1)
     webhook_retry_max_attempts: int = 4
     webhook_retry_base_delay_seconds: int = 30

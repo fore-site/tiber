@@ -29,6 +29,7 @@ from ...core.config import get_settings
 from ...core.database import AsyncSessionFactory
 from ...core.encryption import decrypt_secret
 from ...domain.enums import NotificationStatus, WebhookEventType
+from ...domain.exceptions import WebhookDestinationError
 from ...domain.repositories import NotificationRepository, WebhookEndpointRepository
 from ...infrastructure.repositories.sqlalchemy_notification_repository import (
     SQLAlchemyNotificationRepository,
@@ -37,6 +38,8 @@ from ...infrastructure.repositories.sqlalchemy_webhook_endpoint_repository impor
     SQLAlchemyWebhookEndpointRepository,
 )
 from ...infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
+from ...infrastructure.webhooks.destination import HttpxWebhookDestinationPolicy
+from ...infrastructure.webhooks.transport import build_webhook_client
 from ..async_runtime import run_async
 from ..celery_app import celery_app
 from ..retry import exponential_backoff
@@ -44,6 +47,9 @@ from ..retry import exponential_backoff
 logger = get_task_logger(__name__)
 
 SETTINGS = get_settings()
+WEBHOOK_DESTINATION_POLICY = HttpxWebhookDestinationPolicy(
+    resolve_timeout_seconds=SETTINGS.webhook_destination_resolve_timeout_seconds
+)
 
 _STATUS_EVENTS: dict[NotificationStatus, WebhookEventType] = {
     NotificationStatus.DELIVERED: WebhookEventType.NOTIFICATION_DELIVERED,
@@ -112,7 +118,10 @@ async def _post_one(
 
     signature = sign_payload(secret, timestamp, payload)
     try:
-        response = await client.post(
+        # Stream and discard the response body: only the status matters, and a
+        # client-controlled body must not be buffered into worker memory.
+        async with client.stream(
+            "POST",
             endpoint.url,
             content=payload,
             headers={
@@ -122,18 +131,24 @@ async def _post_one(
                 "X-Tiber-Delivery": str(uuid4()),
                 "X-Tiber-Signature": f"t={timestamp},v1={signature}",
             },
-        )
-    except httpx.HTTPError:
-        logger.warning(
-            "Webhook callback failed webhook_id=%s url=%s", endpoint.id, endpoint.url
-        )
+        ) as response:
+            status_code = response.status_code
+    except WebhookDestinationError:
+        # The endpoint points somewhere the SSRF policy refuses (private,
+        # loopback, metadata, non-443, ...). Never log the URL: it can contain
+        # client-supplied credentials or query strings. The endpoint id is
+        # enough to trace the rejection.
+        logger.warning("Webhook destination rejected webhook_id=%s", endpoint.id)
+        return False
+    except httpx.HTTPError, httpx.InvalidURL:
+        logger.warning("Webhook callback failed webhook_id=%s", endpoint.id)
         return False
 
-    if response.is_error:
+    if not 200 <= status_code < 300:
         logger.warning(
             "Webhook endpoint rejected callback webhook_id=%s status=%s",
             endpoint.id,
-            response.status_code,
+            status_code,
         )
         return False
 
@@ -183,8 +198,9 @@ async def _dispatch(notification_id: UUID, project_id: UUID) -> int:
 
         payload = _event_payload(notification, event_type)
         failures = 0
-        async with httpx.AsyncClient(
-            timeout=SETTINGS.webhook_endpoint_timeout_seconds
+        async with build_webhook_client(
+            policy=WEBHOOK_DESTINATION_POLICY,
+            timeout=SETTINGS.webhook_endpoint_timeout_seconds,
         ) as client:
             for endpoint in subscribed:
                 accepted = await _post_one(
@@ -210,7 +226,11 @@ async def _dispatch(notification_id: UUID, project_id: UUID) -> int:
     max_retries=SETTINGS.webhook_retry_max_attempts,
     default_retry_delay=SETTINGS.webhook_retry_base_delay_seconds,
 )
-def dispatch_notification_webhooks(self, notification_id: str, project_id: str) -> None:
+def dispatch_notification_webhooks(
+    self,
+    notification_id: str,
+    project_id: str,
+) -> None:
     """Deliver lifecycle callbacks for one terminal notification.
 
     A retry repeats the whole fan-out, so an endpoint that already accepted the

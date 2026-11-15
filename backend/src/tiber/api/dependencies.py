@@ -18,6 +18,7 @@ from ..application.ports.api_key_auth_cache import ApiKeyAuthCache
 from ..application.ports.auth_email_sender import AuthEmailSender
 from ..application.ports.intake import Outbox
 from ..application.ports.unit_of_work import UnitOfWork
+from ..application.ports.webhook_destination import WebhookDestinationPolicy
 from ..application.services.api_key_authenticator import (
     ApiKeyAuthenticator,
     looks_like_api_key,
@@ -86,6 +87,7 @@ from ..infrastructure.repositories.sqlalchemy_webhook_endpoint_repository import
     SQLAlchemyWebhookEndpointRepository,
 )
 from ..infrastructure.repositories.unit_of_work import SqlAlchemyUnitOfWork
+from ..infrastructure.webhooks.destination import HttpxWebhookDestinationPolicy
 
 settings = get_settings()
 
@@ -381,6 +383,13 @@ def get_webhook_endpoint_repository(
     return SQLAlchemyWebhookEndpointRepository(db)
 
 
+def get_webhook_destination_policy() -> WebhookDestinationPolicy:
+    """Provide the public-HTTPS destination policy for webhook registration."""
+    return HttpxWebhookDestinationPolicy(
+        resolve_timeout_seconds=settings.webhook_destination_resolve_timeout_seconds
+    )
+
+
 def get_delivery_attempt_repository(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SQLAlchemyDeliveryAttemptRepository:
@@ -612,11 +621,15 @@ def get_webhook_endpoint_service(
     endpoint_repository: Annotated[
         SQLAlchemyWebhookEndpointRepository, Depends(get_webhook_endpoint_repository)
     ],
+    destination_policy: Annotated[
+        WebhookDestinationPolicy, Depends(get_webhook_destination_policy)
+    ],
 ) -> WebhookEndpointService:
     """Provide project-scoped webhook endpoint registration."""
     return WebhookEndpointService(
         unit_of_work=unit_of_work,
         endpoint_repository=endpoint_repository,
+        destination_policy=destination_policy,
     )
 
 
