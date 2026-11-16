@@ -19,11 +19,13 @@ from ..core.logging import (
     reset_correlation_id,
     set_correlation_id,
 )
+from ..core.telemetry import configure_telemetry
 from .exception_handlers import (
     tiber_error_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from .metrics import RequestMetricsMiddleware, render_metrics
 from .routers.api_keys import router as api_key_router
 from .routers.auth import router as auth_router
 from .routers.delivery_attempts import router as delivery_attempts_router
@@ -58,6 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
+    configure_telemetry("tiber-api")
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
@@ -108,6 +111,16 @@ def create_app() -> FastAPI:
             raise
         finally:
             reset_correlation_id(token)
+
+    # Add last so this middleware wraps the request-context middleware and sees
+    # every response, including errors.
+    app.add_middleware(RequestMetricsMiddleware)
+
+    # Metrics are intentionally unversioned and unauthenticated: Prometheus
+    # scrapes this path over the internal network.
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return render_metrics()
 
     # Health is intentionally unversioned: infrastructure probes should not
     # need to change when the API version does.
