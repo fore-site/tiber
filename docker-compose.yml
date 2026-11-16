@@ -62,8 +62,18 @@ services:
     networks:
       - tiber
 
+  minio-permissions:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: tiber-minio-permissions
+    user: "0:0"
+    entrypoint: ["/usr/bin/chown", "-R", "65532:65532", "/data"]
+    volumes:
+      - minio_data:/data
+    network_mode: none
+    restart: "no"
+
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    image: cgr.dev/chainguard/minio:latest
     container_name: tiber-minio
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
@@ -75,8 +85,11 @@ services:
       - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - minio_data:/data
+    depends_on:
+      minio-permissions:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "mc alias set local http://127.0.0.1:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\" >/dev/null && mc ready local"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -85,7 +98,7 @@ services:
       - tiber
 
   minio-init:
-    image: minio/mc:latest
+    image: cgr.dev/chainguard/minio:latest
     container_name: tiber-minio-init
     restart: "no"
     depends_on:
@@ -96,6 +109,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_MODELS_BUCKET: ${MINIO_MODELS_BUCKET:-tiber-models}
+      MINIO_DATASETS_BUCKET: ${MINIO_DATASETS_BUCKET:-tiber-datasets}
       MINIO_ALIAS: ${MINIO_ALIAS}
     volumes:
       - ./backend/src/tiber/infrastructure/minio/init.sh:/init.sh:ro
