@@ -31,13 +31,15 @@ Included:
 * Redis
 * RabbitMQ
 * MinIO
-
-Deferred until implementation exists:
-
 * API Service
 * Worker Service
+* Prometheus
+* Grafana
+
+Deferred:
+
 * Reverse proxy
-* Monitoring stack
+* Production alerting
 * ML serving infrastructure
 
 ---
@@ -227,6 +229,89 @@ Console:
 ```
 9001
 ```
+
+---
+
+## Prometheus
+
+### Purpose
+
+Scrapes the API Service's Prometheus exposition endpoint and stores the
+resulting time series.
+
+### Persistence
+
+Persistent Docker volume named `prometheus_data`. The local instance retains
+15 days of data.
+
+### Access
+
+Internal hostname:
+
+```
+prometheus
+```
+
+Port:
+
+```
+9090
+```
+
+Scrape target:
+
+```
+http://api:8000/metrics
+```
+
+### Scrape Configuration
+
+`monitoring/prometheus/prometheus.yml`
+
+---
+
+## Grafana
+
+### Purpose
+
+Visualisation layer for the Prometheus time series. Datasources and dashboards
+are provisioned from files so a fresh volume still starts with the Tiber API
+dashboard.
+
+### Persistence
+
+Persistent Docker volume named `grafana_data`.
+
+### Access
+
+Internal hostname:
+
+```
+grafana
+```
+
+Port:
+
+```
+3000
+```
+
+Host UI:
+
+```
+http://localhost:3000
+```
+
+### Provisioning
+
+```
+monitoring/grafana/provisioning/
+monitoring/grafana/dashboards/
+```
+
+The provisioned datasource points at `http://prometheus:9090`. The default
+dashboard shows request rate, p95 latency, active requests, and 5xx ratio for
+the API Service.
 
 ---
 
@@ -426,29 +511,30 @@ Because MinIO implements the S3 API, production migration requires only configur
 
 ---
 
-## Deferred Application Containers
+## Deferred Production Concerns
 
-The API Service and Worker Service are intentionally excluded from the initial Docker Compose stack because executable application code does not yet exist.
-
-They will be introduced once the FastAPI application and Celery worker have been implemented.
-
-This keeps the deployment environment aligned with the current maturity of the project and avoids maintaining placeholder containers.
+The local stack does not include a reverse proxy, TLS termination, production alerting, or dedicated ML serving infrastructure. Those concerns are deferred until there is a concrete requirement rather than being added speculatively.
 
 ---
 
-# Phase 1 Deliverable
+# Current Local Deliverable
 
-At the completion of this phase, running:
+Running:
 
 ```
 docker compose up
 ```
 
-will provision a fully operational local infrastructure consisting of:
+provisions the local stack:
 
 * durable database
 * Redis
 * RabbitMQ
 * MinIO
+* API Service
+* Worker Service
+* Prometheus
+* Grafana
 
-This environment forms the foundation upon which the API Service and Worker Service will be developed in subsequent phases.
+Prometheus scrapes the API Service, and Grafana is provisioned with the
+Prometheus datasource and the Tiber API dashboard.
