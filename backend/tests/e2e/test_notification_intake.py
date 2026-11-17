@@ -189,6 +189,65 @@ async def test_direct_html_requires_an_email_or_in_app_channel(
     assert response.json()["error"] == "channel_not_available"
 
 
+async def test_sms_address_field_is_not_accepted(client, project) -> None:
+    """The API rejects an SMS address because the field is disabled."""
+    response = await client.post(
+        f"/v1/projects/{project.id}/notifications",
+        headers=headers("sms-address-1"),
+        json=request_body(email=None, sms="+15551234567"),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "validation_error"
+    assert any(detail["field"] == "sms" for detail in response.json()["details"])
+
+
+async def test_explicit_sms_channel_is_rejected_as_coming_soon(client, project) -> None:
+    """An explicit SMS channel selection fails before any intake work."""
+    response = await client.post(
+        f"/v1/projects/{project.id}/notifications",
+        headers=headers("sms-channel-1"),
+        json={
+            "recipient_id": "external-1",
+            "channels": ["sms"],
+            "content": {"body": "Hello"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "validation_error"
+    assert any(
+        "SMS delivery is coming soon." in detail["message"]
+        for detail in response.json()["details"]
+    )
+
+
+async def test_ml_cannot_select_sms_for_an_sms_only_recipient(
+    client, project, session
+) -> None:
+    """A recipient with only an SMS address cannot reach SMS delivery."""
+    recipient = RecipientModel(
+        project_id=project.id,
+        external_id="sms-only-1",
+        addresses={"sms": "+15551234567"},
+    )
+    session.add(recipient)
+    await session.commit()
+
+    response = await client.post(
+        f"/v1/projects/{project.id}/notifications",
+        headers=headers("sms-ml-1"),
+        json={
+            "recipient_id": "sms-only-1",
+            "content": {"body": "Hello"},
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"] == "channel_not_available"
+    assert "SMS delivery is coming soon." in response.json()["message"]
+
+
 async def test_create_notification_topic_persists_project_topic(
     client,
     project,

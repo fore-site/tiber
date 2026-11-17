@@ -13,6 +13,7 @@ from tiber.infrastructure.models import (  # noqa: F401  # register models into 
     NotificationIntakeModel,
     NotificationModel,
     ProjectModel,
+    SenderIdentityModel,
     TemplateModel,
     TemplateVariantModel,
 )

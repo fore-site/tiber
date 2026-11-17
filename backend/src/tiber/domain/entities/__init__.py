@@ -7,6 +7,7 @@ from .notification import Notification
 from .notification_intake import NotificationIntake
 from .project import Project
 from .recipient import Recipient
+from .sender_identity import SenderIdentity
 from .template import Template
 from .topic import NotificationTopic
 from .webhook_endpoint import WebhookEndpoint
@@ -22,6 +23,7 @@ __all__ = [
     "NotificationTopic",
     "Project",
     "Recipient",
+    "SenderIdentity",
     "Template",
     "WebhookEndpoint",
 ]

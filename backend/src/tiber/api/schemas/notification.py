@@ -29,11 +29,7 @@ from ...domain.value_objects import (
     NotificationContent,
 )
 
-_ADDRESS_FIELDS = ("email", "sms", "push", "in_app")
-
-# E.164. Recipient matching compares address strings, so '0803...' and
-# '+234803...' must not both be accepted or they become two recipients.
-_E164_PATTERN = r"^\+[1-9]\d{6,14}$"
+_ADDRESS_FIELDS = ("email", "push", "in_app")
 
 
 def mask_address(channel: str, address: str | None) -> str | None:
@@ -172,11 +168,6 @@ class NotificationCreateRequest(BaseModel):
     # Address-based delivery: every address provided is delivered to. To skip a
     # channel, omit its address.
     email: EmailStr | None = None
-    sms: str | None = Field(
-        default=None,
-        pattern=_E164_PATTERN,
-        description="Phone number in international E.164 format, e.g. +2348031234567.",
-    )
     push: str | None = Field(default=None)
     in_app: str | None = Field(default=None)
 
@@ -223,14 +214,14 @@ class NotificationCreateRequest(BaseModel):
     @property
     def adhoc_channels(self) -> set[str]:
         """Get a set of client-provided addresses."""
-        return {c for c in _ADDRESS_FIELDS if getattr(self, c) is not None}
+        return {c for c in _ADDRESS_FIELDS if getattr(self, c, None) is not None}
 
     def address_map(self) -> dict[DeliveryChannel, str]:
         """Supplied addresses keyed by channel name (route maps to DeliveryChannel)."""
         return {
             DeliveryChannel(c): getattr(self, c)
             for c in _ADDRESS_FIELDS
-            if getattr(self, c) is not None
+            if getattr(self, c, None) is not None
         }
 
     # Channel selection (registered recipients only)
@@ -264,6 +255,9 @@ class NotificationCreateRequest(BaseModel):
             )
         if not self.recipient_id and not adhoc:
             raise ValueError("Provide `recipient_id` or at least one channel address.")
+
+        if self.channels is not None and DeliveryChannel.SMS in self.channels:
+            raise ValueError("SMS delivery is coming soon.")
 
         # Content
         if (self.template_slug is None) == (self.content is None):

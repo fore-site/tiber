@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
@@ -89,6 +90,48 @@ def test_provider_factory_wires_twilio_and_internal_feed():
 
     assert type(sms_manager.get(DeliveryChannel.SMS)).__name__ == "TwilioSMSProvider"
     assert type(in_app_manager.get(DeliveryChannel.IN_APP)).__name__ == "InAppProvider"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_email_provider_uses_sender_override_and_tiber_fallback():
+    """Per-project senders override the configured Tiber From identity."""
+    route = respx.post("https://api.resend.com/emails").mock(
+        return_value=httpx.Response(200, json={"id": "email-1"})
+    )
+    settings = Settings.model_construct(
+        email_provider="resend",
+        resend_api_key="re_placeholder",
+        email_sender="Tiber <notifications@tiber.test>",
+    )
+
+    project_provider = build_provider_manager(
+        settings,
+        channels=(DeliveryChannel.EMAIL,),
+        email_sender="Acme <notifications@acme.test>",
+    ).get(DeliveryChannel.EMAIL)
+    fallback_provider = build_provider_manager(
+        settings,
+        channels=(DeliveryChannel.EMAIL,),
+    ).get(DeliveryChannel.EMAIL)
+
+    await project_provider.send(
+        recipient_address="jane@example.test",
+        title="Hi",
+        body="Hello",
+    )
+    assert json.loads(route.calls.last.request.content)["from"] == (
+        "Acme <notifications@acme.test>"
+    )
+
+    await fallback_provider.send(
+        recipient_address="jane@example.test",
+        title="Hi",
+        body="Hello",
+    )
+    assert json.loads(route.calls.last.request.content)["from"] == (
+        "Tiber <notifications@tiber.test>"
+    )
 
 
 @pytest.mark.asyncio

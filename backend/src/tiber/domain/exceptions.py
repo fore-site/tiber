@@ -194,6 +194,16 @@ class InvalidCursorError(TiberError):
     error_code = "invalid_cursor"
 
 
+class SenderIdentityConflictError(ConflictError):
+    """Raised when a sender identity or its domain is already registered."""
+
+    error_code = "sender_identity_conflict"
+
+    def __init__(self, message: str) -> None:
+        """Initialize a SenderIdentityConflictError."""
+        super().__init__(message)
+
+
 class NameConflictError(ConflictError):
     """Raised when a name is already in use for an entity."""
 

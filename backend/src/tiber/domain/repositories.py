@@ -23,6 +23,7 @@ from .entities import (
     NotificationTopic,
     Project,
     Recipient,
+    SenderIdentity,
     Template,
     WebhookEndpoint,
 )
@@ -88,6 +89,36 @@ class ProjectRepository(Protocol):
 
     async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
         """Permanently remove deleted projects older than the cutoff."""
+        ...
+
+
+class SenderIdentityRepository(Protocol):
+    """Contract for project-owned sender identity data access."""
+
+    async def save(self, identity: SenderIdentity) -> SenderIdentity:
+        """Persist a sender identity."""
+        ...
+
+    async def get_by_id(self, id: UUID, project_id: UUID) -> SenderIdentity | None:
+        """Get a sender identity by ID within a project's scope."""
+        ...
+
+    async def get_for_project(
+        self, project_id: UUID, channel: DeliveryChannel
+    ) -> SenderIdentity | None:
+        """Get the project's sender identity for one channel."""
+        ...
+
+    async def get_by_domain(self, domain: str, provider: str) -> SenderIdentity | None:
+        """Get the identity already owning a provider domain, if any."""
+        ...
+
+    async def list_by_project(self, project_id: UUID) -> list[SenderIdentity]:
+        """List a project's sender identities, oldest first."""
+        ...
+
+    async def delete(self, id: UUID, project_id: UUID) -> bool:
+        """Delete a project-scoped sender identity."""
         ...
 
 

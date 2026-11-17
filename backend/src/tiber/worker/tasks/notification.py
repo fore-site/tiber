@@ -13,11 +13,13 @@ from ...application.services import (
     NotificationDeliveryProcessor,
     NotificationTemplateResolver,
 )
+from ...application.services.sender_identity import SenderIdentityService
 from ...core.config import get_settings
 from ...core.database import AsyncSessionFactory
 from ...domain.entities import Notification
-from ...domain.enums import NotificationStatus
+from ...domain.enums import DeliveryChannel, NotificationStatus
 from ...domain.exceptions import (
+    ChannelNotAvailableError,
     EntityNotFoundError,
     InvalidEntityAttributeError,
     InvalidStateTransitionError,
@@ -38,6 +40,9 @@ from ...infrastructure.repositories.sqlalchemy_notification_repository import (
 from ...infrastructure.repositories.sqlalchemy_recipient_repository import (
     SQLAlchemyRecipientRepository,
 )
+from ...infrastructure.repositories.sqlalchemy_sender_identity_repository import (
+    SQLAlchemySenderIdentityRepository,
+)
 from ...infrastructure.repositories.sqlalchemy_template_repository import (
     SQLAlchemyTemplateRepository,
 )
@@ -53,6 +58,7 @@ logger = get_task_logger(__name__)
 SETTINGS = get_settings()
 
 PERMANENT_DELIVERY_ERRORS = (
+    ChannelNotAvailableError,
     EntityNotFoundError,
     InvalidEntityAttributeError,
     InvalidStateTransitionError,
@@ -90,9 +96,22 @@ async def _process(notification_id: UUID, project_id: UUID) -> Notification | No
             return None
 
         was_terminal = notification.status in TERMINAL_STATUSES
+        if notification.channel is DeliveryChannel.SMS and not was_terminal:
+            raise ChannelNotAvailableError("SMS delivery is coming soon.")
+
+        sender_identities = SenderIdentityService(
+            unit_of_work=unit_of_work,
+            sender_repository=SQLAlchemySenderIdentityRepository(session),
+            domain_provider=None,
+        )
+        email_sender = await sender_identities.resolve_for_delivery(
+            notification.project_id, notification.channel
+        )
 
         provider = build_provider_manager(
-            SETTINGS, channels=(notification.channel,)
+            SETTINGS,
+            channels=(notification.channel,),
+            email_sender=email_sender,
         ).get(notification.channel)
 
         processor = NotificationDeliveryProcessor(

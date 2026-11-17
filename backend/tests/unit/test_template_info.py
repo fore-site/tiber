@@ -54,6 +54,14 @@ def sms_variant(body: str) -> TemplateVariant:
     )
 
 
+def push_variant(body: str) -> TemplateVariant:
+    """Build a push variant with a plain-text body."""
+    return TemplateVariant(
+        channel=DeliveryChannel.PUSH,
+        content=NotificationContent(plain_text_body=body),
+    )
+
+
 # --- extract_placeholders ---
 
 
@@ -331,21 +339,52 @@ async def test_direct_content_without_a_variable_still_fails():
 def test_constraints_accept_a_channel_whose_variables_are_provided():
     """Feasibility is judged per channel, using only that variant's variables."""
     constraints = compute_constraints(
-        available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.SMS}),
+        available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.PUSH}),
         adhoc=False,
         requested_channels=None,
         opted_out=frozenset(),
         client_category=None,
         template=make_template(
             email_variant("Hi {{first_name}}", "Body"),
-            sms_variant("Code: {{code}}"),
+            push_variant("Code: {{code}}"),
         ),
-        # Only the variables SMS needs: email stays infeasible, SMS does not.
+        # Only the variables push needs: email stays infeasible, push does not.
         template_variables={"code": "1234"},
         content=None,
     )
 
-    assert constraints.feasible_channels == frozenset({DeliveryChannel.SMS})
+    assert constraints.feasible_channels == frozenset({DeliveryChannel.PUSH})
+
+
+def test_constraints_remove_sms_from_ml_candidates():
+    """SMS is not offered to the ML ranker while delivery is disabled."""
+    constraints = compute_constraints(
+        available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.SMS}),
+        adhoc=False,
+        requested_channels=None,
+        opted_out=frozenset(),
+        client_category=None,
+        template=None,
+        template_variables=None,
+        content=NotificationContent(title="Hello", plain_text_body="Hello"),
+    )
+
+    assert constraints.feasible_channels == frozenset({DeliveryChannel.EMAIL})
+
+
+def test_constraints_reject_an_sms_only_ml_choice():
+    """An SMS-only recipient gets a clear coming-soon rejection."""
+    with pytest.raises(ChannelNotAvailableError, match="SMS delivery is coming soon"):
+        compute_constraints(
+            available_channels=frozenset({DeliveryChannel.SMS}),
+            adhoc=False,
+            requested_channels=None,
+            opted_out=frozenset(),
+            client_category=None,
+            template=None,
+            template_variables=None,
+            content=NotificationContent(title="Hello", plain_text_body="Hello"),
+        )
 
 
 def test_constraints_reject_a_channel_the_template_has_no_variant_for():

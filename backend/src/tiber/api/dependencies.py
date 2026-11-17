@@ -17,6 +17,7 @@ from ..application.auth import ApiKeyAuthenticationError, AuthAccount, AuthConte
 from ..application.ports.api_key_auth_cache import ApiKeyAuthCache
 from ..application.ports.auth_email_sender import AuthEmailSender
 from ..application.ports.intake import Outbox
+from ..application.ports.sender_domain import SenderDomainProvider
 from ..application.ports.unit_of_work import UnitOfWork
 from ..application.ports.webhook_destination import WebhookDestinationPolicy
 from ..application.services.api_key_authenticator import (
@@ -39,6 +40,7 @@ from ..application.services.notification_topic import NotificationTopicService
 from ..application.services.project_management import ProjectManagementService
 from ..application.services.recipient_management import RecipientManagementService
 from ..application.services.recipient_resolution import RecipientResolutionService
+from ..application.services.sender_identity import SenderIdentityService
 from ..application.services.template_management import TemplateManagementService
 from ..application.services.webhook_endpoint import WebhookEndpointService
 from ..core.config import get_settings
@@ -50,6 +52,7 @@ from ..infrastructure.cache.api_keys import RedisApiKeyAuthCache
 from ..infrastructure.cache.jwt import JWTBlocklistStore
 from ..infrastructure.models import ProjectModel
 from ..infrastructure.providers.auth_email import HttpAuthEmailSender
+from ..infrastructure.providers.email.resend_domains import ResendDomainProvider
 from ..infrastructure.providers.github_oauth import HttpGitHubOAuthProvider
 from ..infrastructure.rate_limit.policies import RateLimitPolicies
 from ..infrastructure.repositories.sqlalchemy_api_key_repository import (
@@ -79,6 +82,9 @@ from ..infrastructure.repositories.sqlalchemy_project_repository import (
 )
 from ..infrastructure.repositories.sqlalchemy_recipient_repository import (
     SQLAlchemyRecipientRepository,
+)
+from ..infrastructure.repositories.sqlalchemy_sender_identity_repository import (
+    SQLAlchemySenderIdentityRepository,
 )
 from ..infrastructure.repositories.sqlalchemy_template_repository import (
     SQLAlchemyTemplateRepository,
@@ -324,6 +330,38 @@ def get_project_management_service(
     return ProjectManagementService(
         unit_of_work=unit_of_work,
         project_repository=project_repository,
+    )
+
+
+def get_sender_identity_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemySenderIdentityRepository:
+    """Provide the sender identity repository bound to the request session."""
+    return SQLAlchemySenderIdentityRepository(db)
+
+
+def get_sender_domain_provider() -> SenderDomainProvider | None:
+    """Provide the provider that owns sending-domain verification, when configured."""
+    if settings.email_provider != "resend" or not settings.resend_api_key:
+        return None
+    return ResendDomainProvider(api_key=settings.resend_api_key)
+
+
+def get_sender_identity_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+    sender_repository: Annotated[
+        SQLAlchemySenderIdentityRepository,
+        Depends(get_sender_identity_repository),
+    ],
+    domain_provider: Annotated[
+        SenderDomainProvider | None, Depends(get_sender_domain_provider)
+    ],
+) -> SenderIdentityService:
+    """Provide project-scoped sender identity management."""
+    return SenderIdentityService(
+        unit_of_work=unit_of_work,
+        sender_repository=sender_repository,
+        domain_provider=domain_provider,
     )
 
 

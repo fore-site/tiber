@@ -17,6 +17,7 @@ from ..models.notification import NotificationModel
 from ..models.notification_intake import NotificationIntakeModel
 from ..models.outbox import OutboxModel
 from ..models.project import ProjectModel
+from ..models.sender_identity import SenderIdentityModel
 from ..models.template import TemplateModel
 from ..models.webhook_endpoint import WebhookEndpointModel
 from .sqlalchemy_errors import get_constraint_name
@@ -186,6 +187,11 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         )
         await self._session.execute(
             delete(TemplateModel).where(TemplateModel.project_id.in_(project_ids))
+        )
+        await self._session.execute(
+            delete(SenderIdentityModel).where(
+                SenderIdentityModel.project_id.in_(project_ids)
+            )
         )
         await self._session.execute(
             delete(WebhookEndpointModel).where(

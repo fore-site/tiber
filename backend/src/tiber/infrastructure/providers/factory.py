@@ -22,12 +22,13 @@ def build_provider_manager(
     settings: Settings,
     *,
     channels: Collection[DeliveryChannel] | None = None,
+    email_sender: str | None = None,
 ) -> ProviderManager:
     """Create configured providers for the requested channels."""
     selected = set(channels) if channels is not None else set(DeliveryChannel)
     registry: dict[DeliveryChannel, ChannelProvider] = {}
     if DeliveryChannel.EMAIL in selected:
-        registry[DeliveryChannel.EMAIL] = _email_provider(settings)
+        registry[DeliveryChannel.EMAIL] = _email_provider(settings, sender=email_sender)
     if DeliveryChannel.PUSH in selected:
         registry[DeliveryChannel.PUSH] = _push_provider(settings)
     if DeliveryChannel.SMS in selected:
@@ -37,11 +38,13 @@ def build_provider_manager(
     return ProviderManager(registry)
 
 
-def _email_provider(settings: Settings) -> ChannelProvider:
+def _email_provider(
+    settings: Settings, *, sender: str | None = None
+) -> ChannelProvider:
     if settings.email_provider == "resend":
         return ResendEmailProvider(
             api_key=settings.resend_api_key,
-            sender=settings.email_sender,
+            sender=sender or settings.email_sender,
         )
     return MockProvider(DeliveryChannel.EMAIL)
 

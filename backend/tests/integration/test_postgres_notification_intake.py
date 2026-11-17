@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tiber.domain.entities.notification_intake import NotificationIntake
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
-from tiber.domain.exceptions import IntakeAlreadyExistsError
+from tiber.domain.exceptions import ConflictError
 from tiber.domain.value_objects import NotificationContent
 from tiber.domain.value_objects.intake import DecisionConstraints, IntakePayload
 from tiber.infrastructure.models import AccountModel, ProjectModel, RecipientModel
@@ -78,7 +78,7 @@ async def test_notification_intake_persists_and_enforces_project_idempotency(
         request_fingerprint="different-fingerprint",
         idempotency_key="same-key",
     )
-    with pytest.raises(IntakeAlreadyExistsError):
+    with pytest.raises(ConflictError):
         await repository.add(duplicate)
 
     assert (

@@ -34,6 +34,7 @@ from .routers.health import router as health_router
 from .routers.notification import router as notification_router
 from .routers.projects import router as projects_router
 from .routers.recipients import router as recipients_router
+from .routers.sender_identities import router as sender_identities_router
 from .routers.templates import router as templates_router
 from .routers.topics import router as topics_router
 from .routers.webhooks import router as webhooks_router
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
         projects_router,
         notification_router,
         recipients_router,
+        sender_identities_router,
         topics_router,
         templates_router,
         delivery_attempts_router,

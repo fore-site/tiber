@@ -8,6 +8,7 @@ from .notification_intake import NotificationIntakeModel
 from .outbox import OutboxModel
 from .project import ProjectModel
 from .recipient import RecipientModel
+from .sender_identity import SenderIdentityModel
 from .template import TemplateModel, TemplateVariantModel
 from .topic import NotificationTopicModel
 from .webhook_endpoint import WebhookEndpointModel
@@ -24,6 +25,7 @@ __all__ = [
     "OutboxModel",
     "ProjectModel",
     "RecipientModel",
+    "SenderIdentityModel",
     "TemplateModel",
     "TemplateVariantModel",
     "WebhookEndpointModel",

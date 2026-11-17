@@ -79,6 +79,13 @@ def compute_constraints(
     else:
         candidates, mode = set(available_channels), "ml"
 
+    if DeliveryChannel.SMS in candidates:
+        if mode != "ml":
+            raise ChannelNotAvailableError("SMS delivery is coming soon.")
+        candidates.discard(DeliveryChannel.SMS)
+        if not candidates:
+            raise ChannelNotAvailableError("SMS delivery is coming soon.")
+
     # 2. Which candidates can actually be rendered and delivered?
     provided = set(template_variables or {})
     problems: dict[DeliveryChannel, str] = {}
