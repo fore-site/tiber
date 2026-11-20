@@ -34,6 +34,9 @@ from ...domain.repositories import NotificationRepository, WebhookEndpointReposi
 from ...infrastructure.repositories.sqlalchemy_notification_repository import (
     SQLAlchemyNotificationRepository,
 )
+from ...infrastructure.repositories.sqlalchemy_recipient_repository import (
+    SQLAlchemyRecipientRepository,
+)
 from ...infrastructure.repositories.sqlalchemy_webhook_endpoint_repository import (
     SQLAlchemyWebhookEndpointRepository,
 )
@@ -73,7 +76,9 @@ def sign_payload(secret: str, timestamp: int, payload: str) -> str:
     return hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
 
 
-def _event_payload(notification, event_type: WebhookEventType) -> str:
+def _event_payload(
+    notification, event_type: WebhookEventType, *, recipient: str | None
+) -> str:
     """Serialize one lifecycle event; stable ordering keeps signatures repeatable."""
     return json.dumps(
         {
@@ -84,6 +89,7 @@ def _event_payload(notification, event_type: WebhookEventType) -> str:
                 "notification_id": str(notification.id),
                 "transaction_id": str(notification.transaction_id),
                 "project_id": str(notification.project_id),
+                "recipient": recipient,
                 "channel": notification.channel.value,
                 "status": notification.status.value,
                 "delivered_at": (
@@ -166,11 +172,17 @@ async def _dispatch(notification_id: UUID, project_id: UUID) -> int:
         notifications: NotificationRepository = SQLAlchemyNotificationRepository(
             session
         )
+        recipients = SQLAlchemyRecipientRepository(session)
         endpoints: WebhookEndpointRepository = SQLAlchemyWebhookEndpointRepository(
             session
         )
         async with SqlAlchemyUnitOfWork(session):
             notification = await notifications.get_by_id(notification_id, project_id)
+            recipient = (
+                await recipients.get_by_id(notification.recipient_id, project_id)
+                if notification is not None
+                else None
+            )
 
         if notification is None:
             logger.warning(
@@ -196,7 +208,11 @@ async def _dispatch(notification_id: UUID, project_id: UUID) -> int:
         if not subscribed:
             return 0
 
-        payload = _event_payload(notification, event_type)
+        payload = _event_payload(
+            notification,
+            event_type,
+            recipient=recipient.external_id if recipient is not None else None,
+        )
         failures = 0
         async with build_webhook_client(
             policy=WEBHOOK_DESTINATION_POLICY,
