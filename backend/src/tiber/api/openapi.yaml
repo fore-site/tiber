@@ -60,10 +60,10 @@ info:
 
     ## Idempotency
 
-    `POST /v1/projects/{project_id}/notifications` accepts an optional
-    `Idempotency-Key` header. Duplicate submissions with the same key
-    within 24 hours return the original persisted 201 response,
-    not a 409.
+    `POST /v1/projects/{project_id}/notifications` requires an
+    `Idempotency-Key` header. Replaying a key with the same body returns the
+    original `202` and the same `transaction_id`; reusing it with a different
+    body is rejected with `409`.
 
 servers:
   - url: http://api.tiber.local:8000
@@ -944,13 +944,14 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
-        - name: external_id
+        - name: recipient
           in: query
           required: false
           description: >
-            Filter recipients by an exact external identifier match.
+            Narrow the page to one exact external identifier.
           schema:
             type: string
+            maxLength: 255
       responses:
         "200":
           description: List of recipients
@@ -961,31 +962,17 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /v1/projects/{project_id}/recipients/{recipient_id}:
-    parameters:
-      - $ref: "#/components/parameters/ProjectId"
-      - $ref: "#/components/parameters/RecipientId"
-
-    get:
-      tags: [Recipients]
-      summary: Get a recipient
-      operationId: getv1projectsprojectidrecipientsrecipientid
-      responses:
-        "200":
-          description: Recipient found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Recipient"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
     patch:
       tags: [Recipients]
       summary: Update a recipient
-      operationId: patchv1projectsprojectidrecipientsrecipientid
+      operationId: patchv1projectsprojectidrecipients
+      description: |
+        Replaces the recipient's whole address book, addressed by the
+        `recipient` query parameter (an external id). An omitted channel is
+        removed; the request cannot leave an opted-out channel without an
+        address.
+      parameters:
+        - $ref: "#/components/parameters/RecipientExternalId"
       requestBody:
         required: true
         content:
@@ -1008,31 +995,70 @@ paths:
 
     delete:
       tags: [Recipients]
-      summary: delete or permanently delete a Recipient
-      operationId: deletev1projectsprojectidrecipientsrecipientid
+      summary: Delete a recipient
+      operationId: deletev1projectsprojectidrecipients
       description: |
-        deletes the recipient by default and prevents it from receiving new notifications.
+        Deletes the recipient named by the `recipient` query parameter (an
+        external id).
 
-        To permanently delete a recipient, pass `?permanent=true`. This operation is irreversible
-        and requires the recipient to be soft-deleted first. A recipient with
-        delivery history that still references it is rejected with `409`.
+        Deletion takes effect immediately: the recipient stops resolving for
+        new requests, and its personal data - external id, addresses, locale -
+        is scrubbed in the same transaction. Delivery history is retained,
+        because notifications, engagement events and intake records reference
+        the recipient record.
+
+        Irreversible: the scrubbed identity cannot be recovered. Deleting an
+        already-deleted recipient returns `404`.
       parameters:
-        - name: permanent
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: false
-          description: |
-            When `true`, permanently deletes the recipient instead of archiving it.
-            If omitted or `false`, the recipient is deleted.
+        - $ref: "#/components/parameters/RecipientExternalId"
       responses:
         "204":
-          description: Recipient deleted or permanently deleted
+          description: Recipient deleted
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /v1/projects/{project_id}/recipients/preferences:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    put:
+      tags: [Recipients]
+      summary: Update a recipient's consent state
+      operationId: putv1projectsprojectidrecipientspreferences
+      description: >
+        Applies opt-outs and unsubscribes for the recipient named by the
+        `recipient` query parameter (an external id). Partial semantics: an
+        omitted list keeps its stored value, while an explicit empty list
+        clears it. Repeating an identical request is therefore idempotent.
+      parameters:
+        - name: recipient
+          in: query
+          required: true
+          description: The recipient's external id.
+          schema:
+            type: string
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecipientPreferencesRequest"
+      responses:
+        "200":
+          description: Consent state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipient"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
 
   /v1/projects/{project_id}/topics:
     parameters:
@@ -1199,6 +1225,23 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - name: recipient
+          in: query
+          required: false
+          description: Narrow to one recipient by external id.
+          schema:
+            type: string
+            maxLength: 255
+        - name: channel
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Channel"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/NotificationStatus"
       responses:
         "200":
           description: List of notifications
@@ -1694,12 +1737,14 @@ components:
       schema:
         $ref: "#/components/schemas/UUID"
 
-    RecipientId:
-      name: recipient_id
-      in: path
+    RecipientExternalId:
+      name: recipient
+      in: query
       required: true
+      description: The recipient's external id.
       schema:
-        $ref: "#/components/schemas/UUID"
+        type: string
+        maxLength: 255
 
     NotificationId:
       name: notification_id
@@ -1723,7 +1768,7 @@ components:
         type: integer
         minimum: 1
         maximum: 100
-        default: 20
+        default: 50
 
     Cursor:
       name: cursor
@@ -1800,7 +1845,7 @@ components:
             correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
             details:
               - field: channel
-                message: Value must be one of email, push, sms, webhook, in_app
+                message: "Input should be 'email', 'push', 'sms' or 'in_app'"
 
     TooManyRequests:
       description: Rate limit exceeded
@@ -1893,7 +1938,7 @@ components:
                 example: channel
               message:
                 type: string
-                example: Value must be one of email, push, sms, webhook, in_app
+                example: "Input should be 'email', 'push', 'sms' or 'in_app'"
         correlation_id:
           $ref: "#/components/schemas/UUID"
           description: Correlation identifier that can be supplied to support teams for debugging.
@@ -2372,26 +2417,34 @@ components:
     RecipientAddresses:
       type: object
       description: |
-        Channel-specific addressing. At least one address must be provided.
-        A recipient has exactly one address per configured channel.
-      minProperties: 1
+        Channel-specific addressing. At most one address per channel.
+
+        The object may be empty for a recipient identified only by
+        `external_id`; such a recipient can be targeted by id, but a request
+        must still name the channels it wants.
       additionalProperties: false
       properties:
         email:
           type: string
           format: email
-        sms:
-          type: string
-          example: "+2348012345678"
         push:
           type: string
           description: FCM push token.
         in_app:
           type: string
+          description: Client-side in-app user identifier used as the feed destination.
 
     Recipient:
       type: object
-      required: [id, project_id, addresses, created_at, updated_at]
+      required:
+        - id
+        - project_id
+        - addresses
+        - opted_out_channels
+        - unsubscribed_categories
+        - unsubscribed_topics
+        - created_at
+        - updated_at
       properties:
         id:
           $ref: "#/components/schemas/UUID"
@@ -2408,33 +2461,74 @@ components:
             $ref: "#/components/schemas/Channel"
           uniqueItems: true
           description: |
-            Channels this recipient has opted out of entirely.
-            Explicit opt-out takes precedence over preferred channels.
+            Channels this recipient has opted out of entirely. A notification
+            on an opted-out channel is accepted and recorded as suppressed.
+        unsubscribed_categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationCategory"
+          uniqueItems: true
+          description: |
+            Categories this recipient has unsubscribed from. CRITICAL is never
+            present: it is always deliverable.
+        unsubscribed_topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/UUID"
+          uniqueItems: true
+          description: Topics this recipient has unsubscribed from.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
           $ref: "#/components/schemas/Timestamp"
-        deleted_at:
-          oneOf:
-            - $ref: "#/components/schemas/Timestamp"
-            - type: "null"
 
     CreateRecipientRequest:
       type: object
-      required: [addresses]
+      required: [external_id]
       properties:
         external_id:
           type: string
+          minLength: 1
           maxLength: 255
+          description: Your system's stable identifier for this recipient.
         addresses:
           $ref: "#/components/schemas/RecipientAddresses"
+          description: >
+            Optional. Omitting it registers the recipient by external id only;
+            no channel can deliver until an address exists.
 
     UpdateRecipientRequest:
       type: object
       required: [addresses]
+      description: >
+        The full replacement address book. Sending `{}` removes every address,
+        which is only valid for a recipient that has an external id.
       properties:
         addresses:
           $ref: "#/components/schemas/RecipientAddresses"
+
+    RecipientPreferencesRequest:
+      type: object
+      description: >
+        Partial consent state. An omitted list is left untouched; an explicit
+        empty list clears it. CRITICAL cannot be unsubscribed from, and an
+        opted-out channel must have a registered address.
+      properties:
+        opted_out_channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/Channel"
+          uniqueItems: true
+        unsubscribed_categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationCategory"
+          uniqueItems: true
+        unsubscribed_topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/UUID"
+          uniqueItems: true
 
     RecipientList:
       type: object
@@ -2520,9 +2614,13 @@ components:
           type: [string, "null"]
         topic_source:
           type: [string, "null"]
+          enum: [client, ml, default, null]
         channel_source:
           type: string
-          enum: [client, ml, addresses, default]
+          enum: [client, addresses]
+          description: >
+            How the channel set was chosen: `client` listed `channels`, or
+            `addresses` supplied the addresses, which are the set.
         model_version:
           type: [string, "null"]
 
@@ -2549,14 +2647,20 @@ components:
         transaction_id:
           $ref: "#/components/schemas/UUID"
           description: The accepted request that produced this notification.
-        recipient_id:
-          $ref: "#/components/schemas/UUID"
-          nullable: true
+        recipient:
+          type: [string, "null"]
+          description: >
+            The recipient's external id, when it has one. Null when the
+            recipient was created by an address-based send, and also once the
+            recipient has been deleted: the notification is still returned
+            because it was still sent, but it no longer names anyone.
         channel:
           $ref: "#/components/schemas/Channel"
         address:
           type: [string, "null"]
-          description: Address actually used for this channel.
+          description: >
+            Masked destination (for example `j***@example.com`). Returned only
+            for address-based requests; registered-recipient sends omit it.
         category:
           $ref: "#/components/schemas/NotificationCategory"
         template_slug:
@@ -2592,28 +2696,36 @@ components:
     CreateNotificationRequest:
       type: object
       description: >
-        One request targets one recipient, identified either by `recipient_id`
-        (the client's external id, not the Tiber UUID) or by a channel address
-        such as `email`. Supply either a saved template (`template_slug`) or
-        direct `content`, not both.
+        One request targets one recipient, identified either by `recipient`
+        (the client's external id, not the Tiber UUID) or by supplying channel
+        addresses such as `email`. Supply either a saved template
+        (`template_slug`) or direct `content`, not both.
       properties:
-        recipient_id:
+        recipient:
           type: [string, "null"]
           maxLength: 255
-          description: The recipient's external id, as registered by the client.
+          description: >
+            The recipient's external id, as registered by the client. Unknown
+            ids are rejected with `404`.
         channels:
           type: [array, "null"]
+          minItems: 1
           items:
             $ref: "#/components/schemas/Channel"
-          description: Requested channels; omit to let planning decide.
+          description: >
+            Channels to deliver on. Required with `recipient`: channel
+            selection is explicit and never inferred. Every listed channel must
+            have a registered destination (`in_app` needs an `in_app` address,
+            like any other channel). `sms` is rejected until SMS delivery is
+            enabled.
         email:
           type: [string, "null"]
-        sms:
-          type: [string, "null"]
+          description: Supplying an address selects address-based delivery.
         push:
           type: [string, "null"]
         in_app:
           type: [string, "null"]
+          description: Client-side in-app user identifier used as the feed destination.
         category:
           $ref: "#/components/schemas/NotificationCategory"
           nullable: true
@@ -2841,6 +2953,10 @@ components:
           $ref: "#/components/schemas/UUID"
         recipient_id:
           $ref: "#/components/schemas/UUID"
+          nullable: true
+          description: >
+            Null once the recipient has been erased. The event is still
+            recorded; only its attribution to a person is gone.
         event_type:
           $ref: "#/components/schemas/EngagementEventType"
         channel:
