@@ -78,10 +78,11 @@ class EngagementEventModel(Base):
         nullable=False,
     )
 
-    recipient_id: Mapped[UUID] = mapped_column(
+    # NULL once the recipient has been purged: the event outlives it.
+    recipient_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("recipients.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("recipients.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     event_type: Mapped[EngagementEventType] = mapped_column(

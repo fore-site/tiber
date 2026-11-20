@@ -18,6 +18,7 @@ from ...application.services.notification_cancellation import (
 )
 from ...application.services.notification_intake import NotificationIntakeService
 from ...application.services.notification_query import NotificationQueryService
+from ...domain.enums import DeliveryChannel, NotificationStatus
 from ...infrastructure.models import ProjectModel
 from ..dependencies import (
     enforce_authenticated_rate_limit,
@@ -145,9 +146,9 @@ async def get_notification(
     ],
 ) -> NotificationResponse:
     """Retrieve a notification by its ID."""
-    notification = await service.get_notification(project.id, notification_id)
-    # recipient_id and the template/topic slugs are not resolved on this path yet.
-    return NotificationResponse.from_entity(notification)
+    view = await service.get_notification_view(project.id, notification_id)
+    # Template/topic slugs are not resolved on this path yet.
+    return NotificationResponse.from_entity(view.notification, recipient=view.recipient)
 
 
 @router.get(
@@ -166,11 +167,28 @@ async def list_notifications(
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
+    recipient: Annotated[str | None, Query(max_length=255)] = None,
+    channel: DeliveryChannel | None = None,
+    notification_status: Annotated[
+        NotificationStatus | None, Query(alias="status")
+    ] = None,
 ) -> NotificationPageResponse:
-    """List one page of project notifications, newest first."""
-    page = await service.list_notifications(project.id, limit, cursor=cursor)
+    """List project notifications, filtered by recipient/channel/status."""
+    page = await service.list_notifications(
+        project.id,
+        limit,
+        cursor=cursor,
+        recipient=recipient,
+        channel=channel,
+        status=notification_status,
+    )
     return NotificationPageResponse(
-        data=[NotificationResponse.from_entity(n) for n in page.items],
+        data=[
+            NotificationResponse.from_entity(
+                item.notification, recipient=item.recipient
+            )
+            for item in page.items
+        ],
         next_cursor=page.next_cursor,
     )
 

@@ -19,7 +19,9 @@ class EngagementEvent:
     id: UUID = field(default_factory=uuid4)
     notification_id: UUID
     project_id: UUID
-    recipient_id: UUID
+    # NULL once the recipient has been purged. The interaction still happened,
+    # and the row is still a training signal, but it no longer names anyone.
+    recipient_id: UUID | None
     event_type: EngagementEventType
     channel: DeliveryChannel
     provider: str
@@ -49,7 +51,7 @@ class EngagementEvent:
         *,
         notification_id: UUID,
         project_id: UUID,
-        recipient_id: UUID,
+        recipient_id: UUID | None,
         event_type: EngagementEventType,
         channel: DeliveryChannel,
         provider: str,
@@ -79,7 +81,7 @@ class EngagementEvent:
         id: UUID,
         notification_id: UUID,
         project_id: UUID,
-        recipient_id: UUID,
+        recipient_id: UUID | None,
         event_type: EngagementEventType,
         channel: DeliveryChannel,
         provider: str,

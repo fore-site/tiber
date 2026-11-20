@@ -17,8 +17,6 @@ from ...domain.enums import IntakeStatus, NotificationCategory
 from ...domain.value_objects.intake import ChannelSource, DecisionSource
 from .notification import NotificationResponse
 
-_PUBLIC_FAILURE_MESSAGE = "Processing failed. Contact support with the transaction_id."
-
 
 class DecisionSummary(BaseModel):
     """What was decided for the fields the client left open, and where each came from."""
@@ -59,9 +57,14 @@ class IntakeStatusResponse(BaseModel):
         cls,
         intake: NotificationIntake,
         notifications: Sequence[Notification],
-        recipient: Recipient,
+        recipient: Recipient | None,
     ) -> IntakeStatusResponse:
-        """Build the IntakeStatusResponse."""
+        """Build the IntakeStatusResponse.
+
+        ``recipient`` is None once it has been erased. The request still
+        happened, so the status is still answered: the recipient's external id
+        and its addresses are reported as null rather than failing the read.
+        """
         plan = intake.plan
         payload = intake.payload
         topic = (plan.topic if plan is not None else None) or payload.topic
@@ -92,9 +95,9 @@ class IntakeStatusResponse(BaseModel):
                     n,
                     # Each child has its own channel, so each gets its own address.
                     address=recipient.addresses.get(n.channel)
-                    if expose_addresses
+                    if expose_addresses and recipient is not None
                     else None,
-                    recipient_id=recipient.external_id,
+                    recipient=recipient.external_id if recipient is not None else None,
                     template_slug=(
                         payload.template_slug
                         if n.template_id is not None

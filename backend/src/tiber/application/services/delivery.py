@@ -110,6 +110,10 @@ class NotificationDeliveryProcessor:
             if notification.send_at is not None and notification.send_at > now:
                 return notification
 
+            if notification.recipient_id is None:
+                # The recipient was purged, so there is no destination left to
+                # resolve. Fail closed rather than guess one.
+                raise EntityNotFoundError(Recipient, "erased")
             recipient = await self._recipients.get_by_id(
                 notification.recipient_id, notification.project_id
             )
@@ -173,7 +177,7 @@ class NotificationDeliveryProcessor:
         if not address:
             return await self._fail(
                 processing,
-                error=f"no {notification.channel.value} address for recipient",
+                error=f"no {notification.channel.value} destination for recipient",
             )
 
         try:

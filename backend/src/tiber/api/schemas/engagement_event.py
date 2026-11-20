@@ -63,7 +63,12 @@ class EngagementEventResponse(BaseModel):
     id: UUID
     notification_id: UUID
     project_id: UUID
-    recipient_id: UUID
+    recipient_id: UUID | None = Field(
+        description=(
+            "Null once the recipient has been erased. The event itself is "
+            "still recorded; only the attribution to a person is gone."
+        ),
+    )
     event_type: EngagementEventType
     channel: DeliveryChannel
     provider: str

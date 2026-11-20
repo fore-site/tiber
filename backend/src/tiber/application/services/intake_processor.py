@@ -148,6 +148,14 @@ class IntakeProcessor:
             return claimed
 
     async def _load_recipient(self, intake: NotificationIntake) -> Recipient:
+        """Resolve the intake's recipient, failing when it has been erased.
+
+        An intake only outlives its recipient if it sat unprocessed past the
+        deletion grace period, which is a real fault: nothing can be planned
+        for a person who no longer exists.
+        """
+        if intake.recipient_id is None:
+            raise EntityNotFoundError(Recipient, "erased")
         recipient = await self._recipients.get_by_id(
             intake.recipient_id, intake.project_id
         )

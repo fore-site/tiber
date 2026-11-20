@@ -131,11 +131,20 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         limit: int,
         *,
         cursor: tuple[datetime, UUID] | None = None,
+        recipient_id: UUID | None = None,
+        channel: DeliveryChannel | None = None,
+        status: NotificationStatus | None = None,
     ) -> list[Notification]:
         """List a page of a project's notifications, newest first."""
         statement = select(NotificationModel).where(
             NotificationModel.project_id == project_id
         )
+        if recipient_id is not None:
+            statement = statement.where(NotificationModel.recipient_id == recipient_id)
+        if channel is not None:
+            statement = statement.where(NotificationModel.channel == channel)
+        if status is not None:
+            statement = statement.where(NotificationModel.status == status)
         if cursor is not None:
             statement = statement.where(self._before(cursor))
         result = await self._session.execute(

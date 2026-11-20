@@ -12,6 +12,7 @@ from uuid import UUID
 
 from tiber.domain.entities import Notification, Recipient
 from tiber.domain.entities.notification_intake import NotificationIntake
+from tiber.domain.enums import DeliveryChannel, NotificationStatus
 from tiber.domain.exceptions import EntityNotFoundError
 from tiber.domain.repositories import (
     NotificationIntakeRepository,
@@ -28,7 +29,17 @@ class NotificationRequestView:
 
     intake: NotificationIntake
     notifications: list[Notification]  # empty until processing completes
-    recipient: Recipient
+    # None once the recipient is erased: the request still happened, so its
+    # status stays readable instead of turning into a 404.
+    recipient: Recipient | None
+
+
+@dataclass(frozen=True)
+class NotificationView:
+    """One notification plus the client-facing identity of its recipient."""
+
+    notification: Notification
+    recipient: str | None
 
 
 class NotificationQueryService:
@@ -55,15 +66,57 @@ class NotificationQueryService:
             raise EntityNotFoundError(Notification, str(notification_id))
         return notification
 
+    async def get_notification_view(
+        self, project_id: UUID, notification_id: UUID
+    ) -> NotificationView:
+        """Return one notification with its recipient's external identifier."""
+        notification = await self.get_notification(project_id, notification_id)
+        recipient = (
+            await self._recipients.get_by_id(notification.recipient_id, project_id)
+            if notification.recipient_id is not None
+            else None
+        )
+        return NotificationView(
+            notification=notification,
+            recipient=recipient.external_id if recipient is not None else None,
+        )
+
     async def list_notifications(
-        self, project_id: UUID, limit: int = 50, *, cursor: str | None = None
-    ) -> CursorPage[Notification]:
+        self,
+        project_id: UUID,
+        limit: int = 50,
+        *,
+        cursor: str | None = None,
+        recipient: str | None = None,
+        channel: DeliveryChannel | None = None,
+        status: NotificationStatus | None = None,
+    ) -> CursorPage[NotificationView]:
         """List a page of a project's notifications, newest first."""
+        recipient_id: UUID | None = None
+        if recipient is not None:
+            owner = await self._recipients.get_by_external_id(recipient, project_id)
+            if owner is None:
+                raise EntityNotFoundError(Recipient, recipient)
+            recipient_id = owner.id
+
         after = decode_time_id_cursor(cursor, time_field="created_at")
         notifications = await self._notifications.list_by_project(
-            project_id, limit + 1, cursor=after
+            project_id,
+            limit + 1,
+            cursor=after,
+            recipient_id=recipient_id,
+            channel=channel,
+            status=status,
         )
         items = notifications[:limit]
+        # Sorted, because a stable key set keeps the batch lookup deterministic;
+        # erased recipients contribute no id, and ``None`` is not orderable
+        # against a UUID, so they are dropped rather than mixed in.
+        recipients = await self._recipients.get_many_by_ids(
+            project_id,
+            sorted({n.recipient_id for n in items if n.recipient_id is not None}),
+        )
+        external_ids = {r.id: r.external_id for r in recipients}
         next_cursor = (
             encode_cursor(
                 created_at=items[-1].created_at.isoformat(),
@@ -72,19 +125,35 @@ class NotificationQueryService:
             if len(notifications) > limit
             else None
         )
-        return CursorPage(items=items, next_cursor=next_cursor)
+        return CursorPage(
+            items=[
+                NotificationView(
+                    notification=n,
+                    recipient=external_ids.get(n.recipient_id),
+                )
+                for n in items
+            ],
+            next_cursor=next_cursor,
+        )
 
     async def get_request_status(
         self, project_id: UUID, transaction_id: UUID
     ) -> NotificationRequestView:
-        """Status of one accepted request, scoped to the project."""
+        """Status of one accepted request, scoped to the project.
+
+        The recipient is reported when it can still be resolved. An erased
+        recipient is not an error: the request was accepted and the
+        notifications were sent, so the status answers with what it has.
+        """
         intake = await self._intakes.get_by_transaction_id(transaction_id, project_id)
         if intake is None:
             raise EntityNotFoundError(NotificationIntake, str(transaction_id))
 
-        recipient = await self._recipients.get_by_id(intake.recipient_id, project_id)
-        if recipient is None:
-            raise EntityNotFoundError(Recipient, str(intake.recipient_id))
+        recipient = (
+            await self._recipients.get_by_id(intake.recipient_id, project_id)
+            if intake.recipient_id is not None
+            else None
+        )
 
         notifications = await self._notifications.list_by_transaction_id(
             transaction_id, project_id

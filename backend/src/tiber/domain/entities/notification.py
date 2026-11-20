@@ -18,7 +18,10 @@ class Notification:
 
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
-    recipient_id: UUID
+    # NULL only once the recipient has been purged: the record of what was
+    # sent outlives the person it was sent to. Every new notification names a
+    # live recipient, so this is nullable for reconstitution, not for creation.
+    recipient_id: UUID | None
     transaction_id: UUID
     channel: DeliveryChannel
     category: NotificationCategory
@@ -150,7 +153,7 @@ class Notification:
         *,
         id: UUID,
         project_id: UUID,
-        recipient_id: UUID,
+        recipient_id: UUID | None,
         transaction_id: UUID,
         channel: DeliveryChannel,
         category: NotificationCategory,

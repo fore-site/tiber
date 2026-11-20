@@ -51,6 +51,16 @@ class NotificationModel(Base):
             name="notifications_project_transaction_channel_unique",
         ),
         Index("ix_notifications_project_created", "project_id", "created_at"),
+        Index(
+            "ix_notifications_project_recipient_channel_created",
+            "project_id",
+            "recipient_id",
+            "channel",
+            "created_at",
+        ),
+        # Serves the ON DELETE SET NULL lookup when a recipient is purged; the
+        # composite index above is led by project_id and cannot.
+        Index("ix_notifications_recipient", "recipient_id"),
         CheckConstraint(
             """
             template_variables IS NULL
@@ -140,10 +150,11 @@ class NotificationModel(Base):
         nullable=False,
     )
 
-    recipient_id: Mapped[UUID] = mapped_column(
+    # NULL once the recipient has been purged: the notification outlives it.
+    recipient_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("recipients.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("recipients.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     template_id: Mapped[UUID | None] = mapped_column(

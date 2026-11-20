@@ -29,9 +29,10 @@ class NotificationIntake:
     id: UUID = field(default_factory=uuid4)
     project_id: UUID
     transaction_id: UUID = field(default_factory=uuid4)
-    recipient_id: (
-        UUID  # internal id of the resolved (registered, matched or new) recipient
-    )
+    # Internal id of the resolved (registered, matched or new) recipient. NULL
+    # once that recipient has been purged: the intake outlives it so the request
+    # it records stays readable.
+    recipient_id: UUID | None
     payload: IntakePayload
     constraints: DecisionConstraints
     request_fingerprint: (
@@ -128,7 +129,7 @@ class NotificationIntake:
         id: UUID,
         project_id: UUID,
         transaction_id: UUID,
-        recipient_id: UUID,
+        recipient_id: UUID | None,
         payload: IntakePayload,
         constraints: DecisionConstraints,
         request_fingerprint: str,

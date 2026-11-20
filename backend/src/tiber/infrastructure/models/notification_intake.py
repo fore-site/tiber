@@ -47,6 +47,8 @@ class NotificationIntakeModel(Base):
             "project_id",
             "created_at",
         ),
+        # Serves the ON DELETE SET NULL lookup when a recipient is purged.
+        Index("ix_notification_intakes_recipient", "recipient_id"),
         CheckConstraint(
             "jsonb_typeof(payload) = 'object'",
             name="notification_intakes_payload_check",
@@ -133,10 +135,11 @@ class NotificationIntakeModel(Base):
         nullable=False,
     )
 
-    recipient_id: Mapped[UUID] = mapped_column(
+    # NULL once the recipient has been purged: the intake outlives it.
+    recipient_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("recipients.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("recipients.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     request_fingerprint: Mapped[str] = mapped_column(Text, nullable=False)

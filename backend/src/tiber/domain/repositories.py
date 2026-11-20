@@ -159,11 +159,15 @@ class NotificationRepository(Protocol):
         limit: int,
         *,
         cursor: tuple[datetime, UUID] | None = None,
+        recipient_id: UUID | None = None,
+        channel: DeliveryChannel | None = None,
+        status: NotificationStatus | None = None,
     ) -> list[Notification]:
         """List a page of a project's notifications, newest first.
 
         ``cursor`` is the ``(created_at, id)`` of the last notification already
         returned; the id makes the ordering total for equal timestamps.
+        The optional filters narrow the same keyset ordering.
         """
         ...
 
@@ -299,7 +303,7 @@ class RecipientRepository(Protocol):
     async def find_by_addresses(
         self, project_id: UUID, addresses: Mapping[DeliveryChannel, str]
     ) -> list[Recipient]:
-        """Return distinct, NON-deleted recipients holding any of the ``(channel, address)`` pairs."""
+        """Return distinct recipients holding any of the ``(channel, address)`` pairs."""
         ...
 
     async def list_by_project(
@@ -318,6 +322,12 @@ class RecipientRepository(Protocol):
 
     async def delete(self, recipient: Recipient) -> None:
         """Permanently delete a recipient; conflicts when history references it."""
+        ...
+
+    async def get_many_by_ids(
+        self, project_id: UUID, ids: Sequence[UUID]
+    ) -> list[Recipient]:
+        """Load recipients by ID in one query, scoped to the project."""
         ...
 
     async def get_many_for_update(
