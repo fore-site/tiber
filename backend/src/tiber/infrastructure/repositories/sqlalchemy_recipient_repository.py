@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from ...domain.entities import Recipient
-from ...domain.enums import DeliveryChannel
+from ...domain.enums import DeliveryChannel, NotificationCategory
 from ...domain.exceptions import ConflictError
 from ...domain.repositories import RecipientRepository
 from ...domain.services.addresses import normalize_addresses
@@ -38,6 +38,43 @@ def _address_expr(channel: DeliveryChannel):
         raise ValueError(f"Unexpected channel value: {key!r}")
     return RecipientModel.addresses.op("->>", return_type=Text)(
         literal_column(f"'{key}'")
+    )
+
+
+def _preferences_to_json(preferences: RecipientPreferences) -> dict[str, list[str]]:
+    """Serialize consent state under stable keys.
+
+    Quiet hours and blackout periods belong to the project's delivery
+    constraints, not to the recipient, so they are not stored here.
+    """
+    return {
+        "opted_out_channels": sorted(
+            channel.value for channel in preferences.opted_out_channels
+        ),
+        "unsubscribed_categories": sorted(
+            category.value for category in preferences.unsubscribed_categories
+        ),
+        "unsubscribed_topics": sorted(
+            str(topic_id) for topic_id in preferences.unsubscribed_topics
+        ),
+    }
+
+
+def _preferences_from_json(value: object) -> RecipientPreferences:
+    """Rebuild consent state from the stored object (empty when absent)."""
+    data = value if isinstance(value, Mapping) else {}
+    return RecipientPreferences(
+        opted_out_channels=frozenset(
+            DeliveryChannel(str(channel))
+            for channel in data.get("opted_out_channels", ())
+        ),
+        unsubscribed_categories=frozenset(
+            NotificationCategory(str(category))
+            for category in data.get("unsubscribed_categories", ())
+        ),
+        unsubscribed_topics=frozenset(
+            UUID(str(topic_id)) for topic_id in data.get("unsubscribed_topics", ())
+        ),
     )
 
 
@@ -102,20 +139,25 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
     # Reads
 
     async def get_by_id(self, id: UUID, project_id: UUID) -> Recipient | None:
-        """Get a recipient by its ID."""
-        model = await self._session.get(RecipientModel, id)
-        if model is not None and model.project_id != project_id:
-            return None
+        """Get a live recipient by its ID."""
+        result = await self._session.execute(
+            select(RecipientModel)
+            .where(RecipientModel.id == id)
+            .where(RecipientModel.project_id == project_id)
+            .where(RecipientModel.deleted_at.is_(None))
+        )
+        model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
 
     async def get_by_external_id(
         self, external_id: str, project_id: UUID
     ) -> Recipient | None:
-        """Get a recipient by its external ID."""
+        """Get a live recipient by its external ID."""
         result = await self._session.execute(
             select(RecipientModel)
             .where(RecipientModel.project_id == project_id)
             .where(RecipientModel.external_id == external_id)
+            .where(RecipientModel.deleted_at.is_(None))
         )
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
@@ -123,13 +165,13 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
     async def find_by_addresses(
         self, project_id: UUID, addresses: Mapping[DeliveryChannel, str]
     ) -> list[Recipient]:
-        """Return distinct, NON-deleted recipients holding any of the given pairs.
+        """Return distinct live recipients holding any of the given pairs.
 
         One row-level OR over the ``(channel, address)`` pairs, so a recipient matching several of them
         still appears once. ``addresses`` must already be normalized; stored
         addresses are canonical because every write goes through ``_to_model``.
-        deleted recipients (for example the absorbed side of a merge) keep their
-        addresses but never match.
+        Deleted recipients are excluded: their addresses are scrubbed, and they
+        must never be matched, extended or claimed.
         """
         if not addresses:
             return []
@@ -153,9 +195,23 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
     async def get_by_address(
         self, project_id: UUID, channel: DeliveryChannel, address: str
     ) -> Recipient | None:
-        """Get the active recipient that owns a channel address within a project."""
+        """Get the recipient that owns a channel address within a project."""
         found = await self.find_by_addresses(project_id, {channel: address})
         return found[0] if found else None
+
+    async def get_many_by_ids(
+        self, project_id: UUID, ids: Sequence[UUID]
+    ) -> list[Recipient]:
+        """Load recipients by ID in one query, scoped to the project."""
+        if not ids:
+            return []
+        result = await self._session.execute(
+            select(RecipientModel)
+            .where(RecipientModel.project_id == project_id)
+            .where(RecipientModel.id.in_(list(ids)))
+            .order_by(RecipientModel.id)
+        )
+        return [self._to_entity(model) for model in result.scalars().all()]
 
     async def get_many_for_update(
         self, project_id: UUID, ids: Sequence[UUID]
@@ -177,7 +233,12 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         return [self._to_entity(model) for model in result.scalars().all()]
 
     async def delete(self, recipient: Recipient) -> None:
-        """Permanently delete a recipient, unless delivery history references it."""
+        """Purge the recipient row, unless delivery history references it.
+
+        Not the delete use case: ``RecipientManagementService.delete`` scrubs
+        and hides the recipient with ``save``. This is the hard-delete path for
+        the scheduled purge, once history no longer blocks it.
+        """
         model = await self._session.get(RecipientModel, recipient.id)
         if model is None or model.project_id != recipient.project_id:
             return
@@ -199,8 +260,10 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         external_id: str | None = None,
     ) -> list[Recipient]:
         """List a page of a project's recipients, newest first."""
-        statement = select(RecipientModel).where(
-            RecipientModel.project_id == project_id
+        statement = (
+            select(RecipientModel)
+            .where(RecipientModel.project_id == project_id)
+            .where(RecipientModel.deleted_at.is_(None))
         )
         if external_id is not None:
             statement = statement.where(RecipientModel.external_id == external_id)
@@ -234,7 +297,6 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         # lowercase channel keys. Matching and the unique indexes compare these
         # strings, so every write must pass through here. Note that an email read
         # back is therefore lower-case even if it was supplied in mixed case.
-        # Preferences are not written: see the note in ``_to_entity``.
         return RecipientModel(
             id=entity.id,
             project_id=entity.project_id,
@@ -243,6 +305,7 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
                 channel.value: address
                 for channel, address in normalize_addresses(entity.addresses).items()
             },
+            preferences=_preferences_to_json(entity.preferences),
             timezone=entity.timezone,
             language=entity.language,
             created_at=entity.created_at,
@@ -258,16 +321,12 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
             DeliveryChannel(key.lower()): value
             for key, value in model.addresses.items()
         }
-        # Preferences are not persisted yet - rehydrate with the empty default
-        # (fully subscribed) until the persistence pass adds the columns.
-        # CONSEQUENCE: until then no opt-out is ever honored, because every
-        # loaded recipient looks fully subscribed.
         return Recipient.reconstitute(
             id=model.id,
             project_id=model.project_id,
             external_id=model.external_id,
             addresses=addresses,
-            preferences=RecipientPreferences(),
+            preferences=_preferences_from_json(model.preferences),
             timezone=model.timezone,
             language=model.language,
             created_at=model.created_at,

@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -33,9 +34,16 @@ class RecipientModel(Base):
             "jsonb_typeof(addresses) = 'object'",
             name="recipients_address_type_check",
         ),
+        # A live recipient needs an identity or an address; a deleted one is a
+        # scrubbed tombstone that keeps only its id and its history links.
         CheckConstraint(
-            "addresses != '{}'::jsonb",
-            name="recipients_addresses_not_empty",
+            "external_id IS NOT NULL OR addresses != '{}'::jsonb "
+            "OR deleted_at IS NOT NULL",
+            name="recipients_identity_or_addresses",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(preferences) = 'object'",
+            name="recipients_preferences_type_check",
         ),
     )
 
@@ -61,6 +69,16 @@ class RecipientModel(Base):
         nullable=False,
     )
 
+    # Consent state: opted-out channels and unsubscribed categories/topics.
+    # Stored as an object rather than columns because it is one value object
+    # and queries never filter on it. Quiet hours and blackout periods are
+    # project-level delivery constraints, not recipient state.
+    preferences: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+
     # Static profile facts (doc 08, D1). Nullable: facts are unknown until
     # the client sets them, and ownerless auto-created profiles ship bare.
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -79,6 +97,8 @@ class RecipientModel(Base):
         onupdate=func.now(),
     )
 
+    # Soft delete: the row outlives the personal data because delivery history
+    # references it. A scheduled purge removes it once history no longer blocks.
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

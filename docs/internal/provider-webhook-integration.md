@@ -7,7 +7,15 @@
 
 ## Purpose
 
-Delivery providers (Resend, FCM) send inbound HTTP callbacks to Tiber when engagement events occur — a recipient opens an email, clicks a link, a message bounces, a recipient unsubscribes, or a recipient reports a message as spam. This document describes how Tiber receives, validates, and processes those callbacks.
+Delivery providers (Resend, FCM) send inbound HTTP callbacks to Tiber when engagement events occur — a recipient opens an email, clicks a link, a message bounces, or a recipient reports a message as spam. This document describes how Tiber receives, validates, and processes those callbacks.
+
+**Consent does not arrive this way.** Resend's transactional API does not
+emit an unsubscribe event: the caller renders its own opt-out control and
+calls `PUT /v1/projects/{project_id}/recipients/preferences`, which writes the
+recipient's consent state directly. `unsubscribe` remains a valid
+`EngagementEventType` for integrations that do report it, but the Resend
+integration never produces one. Engagement events are observational — nothing
+in this flow writes recipient preferences.
 
 This is distinct from outbound webhook callbacks, which Tiber fires to *client applications* when notification lifecycle events occur. That flow is documented in the customer-facing OpenAPI spec under the Webhooks tag.
 

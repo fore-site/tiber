@@ -14,6 +14,9 @@ Pins:
   update_addresses() enforces the non-empty invariant explicitly.
 - claim_addresses() attaches a human identity: merges addresses
   (incoming wins), rejects empty/duplicate claims, stamps updated_at.
+- delete() is the doc-less twin of claim(): it hides the row and scrubs the
+  personal data (identity, addresses, locale) in one copy, keeping consent
+  state, because the row outlives the person for history's sake.
 - Facts survive persistence round-trips (model column <-> entity field).
 """
 
@@ -261,3 +264,49 @@ def test_model_columns_exist_with_nullable_facts():
 
     assert RecipientModel.__table__.c.timezone.nullable is True
     assert RecipientModel.__table__.c.language.nullable is True
+
+
+# --- delete(): deactivate and scrub in one step ---
+
+
+def test_delete_scrubs_personal_data_and_keeps_consent():
+    """A deleted recipient keeps no personal data but keeps its opt-outs."""
+    recipient = make_recipient(
+        external_id="user_12345",
+        timezone="Europe/Lisbon",
+        language="pt-BR",
+        preferences=RecipientPreferences(unsubscribed_categories=["promotional"]),
+    )
+    before = recipient.updated_at
+
+    deleted = recipient.delete()
+
+    assert deleted.deleted_at is not None
+    assert deleted.external_id is None
+    assert deleted.addresses == {}
+    assert deleted.timezone is None
+    assert deleted.language is None
+    # Consent is the record that this person opted out; it is not personal data.
+    assert deleted.preferences.unsubscribed_categories == frozenset({"promotional"})
+    assert deleted.updated_at > before
+    assert deleted.id == recipient.id
+    # Frozen entity: the live original is untouched.
+    assert recipient.deleted_at is None
+    assert recipient.external_id == "user_12345"
+
+
+def test_deleted_tombstone_round_trips_through_the_model():
+    """A scrubbed row rehydrates: deleted_at exempts it from the identity rule."""
+    from tiber.infrastructure.repositories.sqlalchemy_recipient_repository import (
+        SQLAlchemyRecipientRepository,
+    )
+
+    deleted = make_recipient(external_id="user_12345").delete()
+
+    rehydrated = SQLAlchemyRecipientRepository._to_entity(
+        SQLAlchemyRecipientRepository._to_model(deleted)
+    )
+
+    assert rehydrated.deleted_at == deleted.deleted_at
+    assert rehydrated.external_id is None
+    assert rehydrated.addresses == {}

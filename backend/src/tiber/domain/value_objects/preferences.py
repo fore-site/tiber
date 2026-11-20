@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from ..enums import DeliveryChannel, NotificationCategory
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from ..entities import NotificationTopic
     from .blackout_period import BlackoutPeriod
     from .quiet_hours import QuietHours
@@ -41,6 +43,40 @@ class RecipientPreferences:
                 "CRITICAL notifications are always deliverable and cannot "
                 "be unsubscribed from"
             )
+
+    def merged_with(
+        self,
+        *,
+        opted_out_channels: Collection[DeliveryChannel] | None = None,
+        unsubscribed_categories: Collection[NotificationCategory] | None = None,
+        unsubscribed_topics: Collection[UUID] | None = None,
+    ) -> RecipientPreferences:
+        """Return a copy with only the supplied sets replaced.
+
+        ``None`` means "not supplied" and leaves that set untouched; an empty
+        collection explicitly clears it. The distinction is what makes partial
+        updates idempotent, and it lives here so no caller re-derives which of
+        the two an absent value means. ``replace`` re-runs ``__post_init__``,
+        so the merged result is subject to the same invariants.
+        """
+        return replace(
+            self,
+            opted_out_channels=(
+                self.opted_out_channels
+                if opted_out_channels is None
+                else frozenset(opted_out_channels)
+            ),
+            unsubscribed_categories=(
+                self.unsubscribed_categories
+                if unsubscribed_categories is None
+                else frozenset(unsubscribed_categories)
+            ),
+            unsubscribed_topics=(
+                self.unsubscribed_topics
+                if unsubscribed_topics is None
+                else frozenset(unsubscribed_topics)
+            ),
+        )
 
     def is_subscribed(self, category: NotificationCategory) -> bool:
         """Return whether the recipient receives this notification category.

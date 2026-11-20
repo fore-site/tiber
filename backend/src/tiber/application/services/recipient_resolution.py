@@ -1,6 +1,9 @@
 """Recipient resolution, extracted so intake (sync) owns it in one place.
 
-Registered recipient: looked up by external id.
+Registered recipient: looked up by external id, treating a deleted one as
+missing. Deletion scrubs the personal data and hides the row immediately;
+work already accepted continues, because it was accepted while the recipient
+was live.
 Address-based request: matched to an existing recipient by address, or created
 and persisted, so later requests to the same addresses reuse it.
 
@@ -40,18 +43,18 @@ class RecipientResolutionService:
         self,
         *,
         project_id: UUID,
-        recipient_id: str | None,
+        recipient_external_id: str | None,
         addresses: Mapping[DeliveryChannel, str],
     ) -> Recipient:
         """Resolve the request's recipient, creating one when needed."""
-        if recipient_id is not None:
+        if recipient_external_id is not None:
             if addresses:
-                raise ValueError("Provide either `recipient_id` or addresses, not both")
+                raise ValueError("Provide either `recipient` or addresses, not both")
             recipient = await self._recipients.get_by_external_id(
-                recipient_id, project_id
+                recipient_external_id, project_id
             )
-            if recipient is None:
-                raise EntityNotFoundError(Recipient, recipient_id)
+            if recipient is None or recipient.deleted_at is not None:
+                raise EntityNotFoundError(Recipient, recipient_external_id)
             return recipient
         return await self._resolve_adhoc(project_id, addresses)
 

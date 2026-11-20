@@ -1,5 +1,6 @@
 """Use cases for project-scoped recipient lifecycle management."""
 
+from collections.abc import Collection
 from uuid import UUID
 
 from tiber.application.pagination import (
@@ -9,13 +10,30 @@ from tiber.application.pagination import (
 )
 from tiber.application.ports.unit_of_work import UnitOfWork
 from tiber.domain.entities import Recipient
-from tiber.domain.enums import DeliveryChannel
-from tiber.domain.exceptions import ConflictError, EntityNotFoundError
+from tiber.domain.enums import DeliveryChannel, NotificationCategory
+from tiber.domain.exceptions import (
+    EntityNotFoundError,
+    InvalidEntityAttributeError,
+)
 from tiber.domain.repositories import RecipientRepository
 
 
+def _apply(mutation, *args) -> Recipient:
+    """Run an entity mutation whose invariant violation is a client error.
+
+    The entity raises ``ValueError`` for consent/address conflicts (for example
+    dropping the address of an opted-out channel). Through the API that is a
+    rejected request, not a server fault, so it is re-raised as a domain error
+    with a 422 mapping.
+    """
+    try:
+        return mutation(*args)
+    except ValueError as exc:
+        raise InvalidEntityAttributeError(str(exc)) from exc
+
+
 class RecipientManagementService:
-    """Manage recipients, including their soft and permanent deletion."""
+    """Manage recipients, including their deletion."""
 
     def __init__(
         self,
@@ -31,7 +49,7 @@ class RecipientManagementService:
         self,
         *,
         project_id: UUID,
-        external_id: str | None,
+        external_id: str,
         addresses: dict[DeliveryChannel, str],
     ) -> Recipient:
         """Register a new recipient in a project."""
@@ -48,6 +66,13 @@ class RecipientManagementService:
         recipient = await self._recipients.get_by_id(recipient_id, project_id)
         if recipient is None:
             raise EntityNotFoundError(Recipient, str(recipient_id))
+        return recipient
+
+    async def get_by_external_id(self, project_id: UUID, external_id: str) -> Recipient:
+        """Return one recipient by the client's external identifier."""
+        recipient = await self._recipients.get_by_external_id(external_id, project_id)
+        if recipient is None:
+            raise EntityNotFoundError(Recipient, external_id)
         return recipient
 
     async def list(
@@ -83,33 +108,73 @@ class RecipientManagementService:
     ) -> Recipient:
         """Replace a recipient's address book."""
         recipient = await self.get(project_id, recipient_id)
-        if recipient.deleted_at is not None:
-            raise EntityNotFoundError(Recipient, str(recipient_id))
         async with self._uow:
-            return await self._recipients.save(recipient.update_addresses(addresses))
+            return await self._recipients.save(
+                _apply(recipient.update_addresses, addresses)
+            )
+
+    async def update_by_external_id(
+        self,
+        *,
+        project_id: UUID,
+        external_id: str,
+        addresses: dict[DeliveryChannel, str],
+    ) -> Recipient:
+        """Replace a recipient's address book, addressed by external ID."""
+        recipient = await self.get_by_external_id(project_id, external_id)
+        async with self._uow:
+            return await self._recipients.save(
+                _apply(recipient.update_addresses, addresses)
+            )
+
+    async def update_preferences_by_external_id(
+        self,
+        *,
+        project_id: UUID,
+        external_id: str,
+        opted_out_channels: Collection[DeliveryChannel] | None = None,
+        unsubscribed_categories: Collection[NotificationCategory] | None = None,
+        unsubscribed_topics: Collection[UUID] | None = None,
+    ) -> Recipient:
+        """Apply a partial consent update, addressed by external ID.
+
+        Omitted collections keep their stored value; an empty one clears it.
+        """
+        recipient = await self.get_by_external_id(project_id, external_id)
+        preferences = recipient.preferences.merged_with(
+            opted_out_channels=opted_out_channels,
+            unsubscribed_categories=unsubscribed_categories,
+            unsubscribed_topics=unsubscribed_topics,
+        )
+        async with self._uow:
+            return await self._recipients.save(
+                _apply(recipient.update_preferences, preferences)
+            )
 
     async def delete(
         self,
         *,
         project_id: UUID,
         recipient_id: UUID,
-        permanent: bool = False,
     ) -> Recipient:
-        """Soft-delete a recipient, or purge an already deleted one.
+        """Delete a recipient: hide the row and scrub its personal data.
 
-        Permanent deletion requires a prior soft delete and is rejected with a
-        conflict when delivery history still references the recipient.
+        One write, so the marker and the scrubbing cannot diverge. The row
+        itself stays because delivery history references it; a scheduled purge
+        removes it later. ``get`` already ignores deleted recipients, so this
+        raises ``EntityNotFoundError`` when the recipient is already deleted.
         """
         recipient = await self.get(project_id, recipient_id)
-        if recipient.deleted_at is not None:
-            if not permanent:
-                return recipient
-            async with self._uow:
-                await self._recipients.delete(recipient)
-            return recipient
-        if permanent:
-            raise ConflictError(
-                "Recipient must be deleted before it can be permanently removed."
-            )
+        async with self._uow:
+            return await self._recipients.save(recipient.delete())
+
+    async def delete_by_external_id(
+        self,
+        *,
+        project_id: UUID,
+        external_id: str,
+    ) -> Recipient:
+        """Delete a recipient, addressed by external ID."""
+        recipient = await self.get_by_external_id(project_id, external_id)
         async with self._uow:
             return await self._recipients.save(recipient.delete())

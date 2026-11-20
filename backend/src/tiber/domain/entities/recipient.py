@@ -34,8 +34,15 @@ class Recipient:
 
     def __post_init__(self) -> None:
         """Validate the recipient's state after initialization."""
-        if not self.addresses:
-            raise InvalidEntityAttributeError("Recipient addresses must not be empty")
+        if self.deleted_at is not None:
+            # A deleted recipient is a tombstone: its personal data has been
+            # scrubbed, so the invariants below describe live recipients only.
+            return
+
+        if not self.addresses and not self.external_id:
+            raise InvalidEntityAttributeError(
+                "Recipient needs at least one address or an external_id"
+            )
 
         opted_out_channels = self.preferences.opted_out_channels
         unavailable_channels = set(opted_out_channels) - set(self.addresses)
@@ -154,8 +161,10 @@ class Recipient:
         The incoming mapping is the full new address book; an omitted
         channel is removed.
         """
-        if not addresses:
-            raise ValueError("Addresses must not be empty")
+        if not addresses and not self.external_id:
+            raise ValueError(
+                "Addresses must not be empty for an unregistered recipient"
+            )
         return replace(self, addresses=addresses, updated_at=datetime.now(UTC))
 
     def update_preferences(self, preferences: RecipientPreferences) -> Recipient:
@@ -176,5 +185,24 @@ class Recipient:
         )
 
     def delete(self) -> Recipient:
-        """Return a copy with deleted_at stamped to now."""
-        return replace(self, deleted_at=datetime.now(UTC), updated_at=datetime.now(UTC))
+        """Return a deleted copy with the personal data scrubbed.
+
+        The row is kept (``deleted_at`` marks it) because delivery history holds
+        foreign keys to it, so the personal data cannot wait for the eventual
+        purge: identity, contact addresses and locale facts are dropped here,
+        in the same copy that marks the recipient deleted.
+
+        Consent state is preserved. It is not personal data, and it is the
+        record that this person opted out - the thing a future compliance
+        question asks about.
+        """
+        now = datetime.now(UTC)
+        return replace(
+            self,
+            external_id=None,
+            addresses={},
+            timezone=None,
+            language=None,
+            deleted_at=now,
+            updated_at=now,
+        )

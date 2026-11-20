@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
@@ -17,6 +16,7 @@ from ..dependencies import (
 from ..schemas.recipient import (
     RecipientCreateRequest,
     RecipientListResponse,
+    RecipientPreferencesRequest,
     RecipientResponse,
     RecipientUpdateRequest,
 )
@@ -53,14 +53,14 @@ async def list_recipients(
     ],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
-    external_id: Annotated[str | None, Query(max_length=255)] = None,
+    recipient: Annotated[str | None, Query(max_length=255)] = None,
 ) -> RecipientListResponse:
-    """List one page of project recipients, newest first."""
+    """List project recipients; ``recipient`` narrows to one external ID."""
     page = await service.list(
         project.id,
         limit=limit,
         cursor=cursor,
-        external_id=external_id,
+        external_id=recipient,
     )
     return RecipientListResponse(
         data=[RecipientResponse.from_entity(recipient) for recipient in page.items],
@@ -68,50 +68,55 @@ async def list_recipients(
     )
 
 
-@router.get("/{recipient_id}", response_model=RecipientResponse)
-async def get_recipient(
-    recipient_id: UUID,
-    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
-    service: Annotated[
-        RecipientManagementService, Depends(get_recipient_management_service)
-    ],
-) -> RecipientResponse:
-    """Get one recipient in the authenticated project."""
-    recipient = await service.get(project.id, recipient_id)
-    return RecipientResponse.from_entity(recipient)
-
-
-@router.patch("/{recipient_id}", response_model=RecipientResponse)
+@router.patch("", response_model=RecipientResponse)
 async def update_recipient(
-    recipient_id: UUID,
     payload: RecipientUpdateRequest,
     project: Annotated[ProjectModel, Depends(get_authenticated_project)],
     service: Annotated[
         RecipientManagementService, Depends(get_recipient_management_service)
     ],
+    recipient: Annotated[str, Query(min_length=1, max_length=255)],
 ) -> RecipientResponse:
-    """Replace a recipient's address book."""
-    recipient = await service.update(
+    """Replace a recipient's address book, addressed by external ID."""
+    updated = await service.update_by_external_id(
         project_id=project.id,
-        recipient_id=recipient_id,
+        external_id=recipient,
         addresses=payload.addresses,
     )
-    return RecipientResponse.from_entity(recipient)
+    return RecipientResponse.from_entity(updated)
 
 
-@router.delete("/{recipient_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_recipient(
-    recipient_id: UUID,
+@router.put("/preferences", response_model=RecipientResponse)
+async def update_recipient_preferences(
+    payload: RecipientPreferencesRequest,
     project: Annotated[ProjectModel, Depends(get_authenticated_project)],
     service: Annotated[
         RecipientManagementService, Depends(get_recipient_management_service)
     ],
-    permanent: Annotated[bool, Query()] = False,
-) -> Response:
-    """Soft-delete a recipient, or permanently purge one already deleted."""
-    await service.delete(
+    recipient: Annotated[str, Query(min_length=1, max_length=255)],
+) -> RecipientResponse:
+    """Update a recipient's consent state, addressed by external ID."""
+    updated = await service.update_preferences_by_external_id(
         project_id=project.id,
-        recipient_id=recipient_id,
-        permanent=permanent,
+        external_id=recipient,
+        opted_out_channels=payload.opted_out_channels,
+        unsubscribed_categories=payload.unsubscribed_categories,
+        unsubscribed_topics=payload.unsubscribed_topics,
+    )
+    return RecipientResponse.from_entity(updated)
+
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_recipient(
+    project: Annotated[ProjectModel, Depends(get_authenticated_project)],
+    service: Annotated[
+        RecipientManagementService, Depends(get_recipient_management_service)
+    ],
+    recipient: Annotated[str, Query(min_length=1, max_length=255)],
+) -> Response:
+    """Delete a recipient by external ID."""
+    await service.delete_by_external_id(
+        project_id=project.id,
+        external_id=recipient,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
