@@ -33,8 +33,9 @@ fields so intent is explicit and the ambiguity of a polymorphic string is
 avoided:
 
 - `"recipient": "user_12345"` — string external_id. Unknown → **404**.
-- `"address": { "email": "jane@x.com" }` — object keyed by channel, so the
-  channel is the key and no separate `channel` field is needed here.
+- `"email": "jane@x.com"` (or `push` / `in_app`) — supplying an address is
+  what makes the request address-based; the channels present are the set, so
+  no separate `channel` field is needed.
 
 Address sends are **address-matched** against registered recipients first:
 a raw address that belongs to a registered recipient *is* that recipient —
@@ -84,16 +85,17 @@ never escalate a category upward (nothing becomes CRITICAL by guess); a
 guess, if ever introduced for un-declared topics, may only make delivery
 more restricted, never less.
 
-### D4 — Channel is optional
+### D4 — Channel is required
 
-When absent, Tiber picks from the recipient's registered, non-opted-out
-addresses by a fixed priority (initially email → push → sms, adjustable
-per project). ML channel selection may later occupy the same missing
-field. Explicit channel, when given, is honored.
+A request either names `channels` for a registered recipient, or supplies
+channel addresses, in which case the addresses are the set. Channel selection
+is explicit: there is no inferred default and no ML ranker, so a request never
+delivers to a channel the client did not name. All named channels are delivered
+in parallel; list order carries no priority.
 
-**Policy interaction, recorded:** a channel override changes which policy
-rules apply (quiet-hours windows are per-channel), so any future predicted
-channel must re-enter the policy chain. That constraint belongs to doc 05.
+**Policy interaction, recorded:** quiet-hours windows and opt-outs are
+per-channel. A named channel that policy suppresses produces a suppression
+record on that channel; nothing is re-routed to another one.
 
 ### D5 — `group_key`: opaque identity of "the same logical thing"
 
@@ -136,20 +138,19 @@ representable on a CANCELLED row.
 
 Minimum viable payloads:
 
-```json
-{ "recipient": "user_12345", "topic": "newsletter", "content": { "title": "...", "body": "..." } }
-{ "address": { "email": "jane@x.com" }, "content": { "body": "..." } }
+```json{"recipient": "user_12345", "channels": ["email"], "topic_slug": "newsletter", "content": { "title": "...", "plain_text_body": "..." }}
+{ "email": "jane@x.com", "content": { "plain_text_body": "..." } }
 ```
 
 Full field map:
 
 | Field | Status | Resolution when absent |
 |---|---|---|
-| `recipient` / `address` | exactly one, required | — |
-| `content` | required | — |
-| `topic` | optional | category must be given directly |
+| `recipient` / channel address | exactly one, required | — |
+| `template_slug` / `content` | exactly one, required | — |
+| `topic_slug` | optional | category must be given directly |
 | `category` | required iff topic absent; explicit beats topic default | — |
-| `channel` | optional | Tiber picks (D4 priority) |
+| `channels` | required with `recipient` | — (D4: explicit only) |
 | `group_key` | optional, opaque | — |
 | `send_at` | optional | basis classified at intake (CRITICAL → IMMEDIATE, others → ML_PREDICTED) |
 | `idempotency_key` | optional | — |

@@ -92,7 +92,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 - [ ] **Send-time predictor** (core): predict best send moment per recipient from engagement history; the ML-scheduled state (predicted time + ML_PREDICTED basis) is already representable in the domain
 - [ ] **Digest ranker**: order batched digest items by predicted per-item engagement, trained on per-item open/click signals collected from digest deliveries (requires per-item links/ids in the digest format)
 - [ ] ~~Priority classifier~~ — dropped: notification `category` is client-declared, so there is no undeclared priority left to predict
-- [ ] ~~Channel preference predictor~~ — deferred, not dropped: needs a per-project consent gate and policy-chain re-entry design (per-channel restricted windows must be re-evaluated for the predicted channel)
+- [x] ~~Channel preference predictor~~ — dropped: channel selection is explicit (doc 08, D4). The client names the channels; the ML's decisions are category, topic and send time.
 - [ ] Shared Feature Builder used by both training and inference to prevent training-serving skew
 - [ ] Stateless online inference module invoked through the in-process ML Engine boundary at API intake; log model version + prediction + confidence per notification (this becomes explainability data)
 - [ ] Offline training pipeline separated from online inference path: Training Data Source, Dataset Builder, Model Trainer, evaluator, and explicit promotion step
@@ -109,7 +109,7 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 ### Phase 6: Platform Features and Frontend
 
 - [ ] Project management as the active tenancy boundary; Workspace remains explicitly future scope
-- [ ] Recipient channel opt-out management (`opted_out_channels` on RecipientPreferences)
+- [✅] Recipient consent management: channel opt-outs plus category/topic unsubscribes persisted on `recipients` and written through `PUT /v1/projects/{project_id}/recipients/preferences` (partial semantics: omitted lists untouched, `[]` clears)
 - [ ] Delivery constraint management: project-level blackout periods, per-channel quiet-hours windows, and the project timezone (IANA name) in which quiet hours are evaluated
 - [ ] Auth (API key or JWT): JWT access-token signature validation first, Redis blocklist check second, fail closed with 503 when Redis is unavailable; API key auth uses the Redis authentication cache with durable database fallback on cache miss or Redis failure
 - [ ] API key lifecycle management with the durable database as the source of truth and Redis auth-cache invalidation/refresh on create, revoke, and expiry events

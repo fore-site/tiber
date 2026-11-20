@@ -90,3 +90,14 @@ def test_api_request_rejects_template_and_direct_content_together() -> None:
             template_slug="receipt",
             content=NotificationContentModel(plain_text_body="Thanks."),
         )
+
+
+def test_api_request_accepts_an_in_app_address() -> None:
+    """In-app is an address-based channel, like email and push."""
+    request = NotificationCreateRequest(
+        in_app="user-1",
+        content=NotificationContentModel(plain_text_body="Thanks."),
+    )
+
+    assert request.adhoc_channels == {"in_app"}
+    assert request.address_map() == {DeliveryChannel.IN_APP: "user-1"}

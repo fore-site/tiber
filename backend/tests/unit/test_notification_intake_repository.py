@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from tiber.api.schemas.intake import IntakeStatusResponse
+from tiber.domain.entities import Recipient
 from tiber.domain.entities.notification_intake import NotificationIntake
 from tiber.domain.enums import DeliveryChannel, IntakeStatus, NotificationCategory
 from tiber.domain.value_objects import NotificationContent
@@ -40,8 +42,6 @@ def _intake() -> NotificationIntake:
         allowed_categories=frozenset({NotificationCategory.INFORMATIONAL}),
         default_category=NotificationCategory.INFORMATIONAL,
         channel_mode="client",
-        feasible_channels=frozenset({DeliveryChannel.EMAIL}),
-        max_channels=1,
     )
     return NotificationIntake.create(
         project_id=uuid4(),
@@ -127,3 +127,40 @@ def test_notification_intake_model_serializes_direct_content() -> None:
         "actions": [],
         "images": [],
     }
+
+
+def test_completed_intake_reads_back_as_a_status_response() -> None:
+    """A finished intake is readable through the API response builder."""
+    now = datetime(2030, 1, 2, 3, 5, tzinfo=UTC)
+    intake = NotificationIntake.create(
+        project_id=uuid4(),
+        recipient_id=uuid4(),
+        payload=IntakePayload(
+            channels=(DeliveryChannel.EMAIL,),
+            content=NotificationContent(title="Hi", plain_text_body="Hi"),
+        ),
+        constraints=DecisionConstraints(
+            allowed_categories=frozenset({NotificationCategory.INFORMATIONAL}),
+            default_category=NotificationCategory.INFORMATIONAL,
+            channel_mode="client",
+        ),
+        request_fingerprint="fingerprint",
+    )
+    plan = NotificationPlan(
+        category=NotificationCategory.INFORMATIONAL,
+        category_source="default",
+        topic=None,
+        topic_source=None,
+        channels=(DeliveryChannel.EMAIL,),
+        channel_source="client",
+    )
+    completed = intake.claim(now, timedelta(minutes=5)).with_plan(plan).complete(now)
+
+    recipient = Recipient.create(
+        project_id=completed.project_id, external_id="user-1", addresses={}
+    )
+    status = IntakeStatusResponse.from_intake(completed, [], recipient)
+
+    assert status.decisions is not None
+    assert status.decisions.channel_source == "client"
+    assert status.notifications == []

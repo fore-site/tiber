@@ -96,7 +96,10 @@ async def _recipient(session, project_id: UUID, external_id: str) -> RecipientMo
     recipient = RecipientModel(
         project_id=project_id,
         external_id=external_id,
-        addresses={"email": f"{external_id}@example.com", "in_app": external_id},
+        addresses={
+            "email": f"{external_id}@example.com",
+            "in_app": external_id,
+        },
     )
     session.add(recipient)
     await session.commit()
@@ -176,7 +179,7 @@ async def test_builtin_single_channel_preset_cannot_fan_out_to_both_channels(
         f"/v1/projects/{project_id}/notifications",
         headers=_headers("preset-gap-1"),
         json={
-            "recipient_id": "preset-gap",
+            "recipient": "preset-gap",
             "channels": BOTH_CHANNELS,
             "template_slug": created.json()["template_slug"],
             "template_variables": {
@@ -219,7 +222,7 @@ async def test_combined_template_fans_out_to_email_and_in_app(
         f"/v1/projects/{project_id}/notifications",
         headers=_headers("combined-1"),
         json={
-            "recipient_id": "combined",
+            "recipient": "combined",
             "channels": BOTH_CHANNELS,
             "category": "informational",
             "template_slug": template["template_slug"],
@@ -275,7 +278,7 @@ async def test_direct_html_renders_to_email_and_in_app(
         f"/v1/projects/{project_id}/notifications",
         headers=_headers("direct-1"),
         json={
-            "recipient_id": "direct",
+            "recipient": "direct",
             "channels": BOTH_CHANNELS,
             "category": "informational",
             "content": {
@@ -321,7 +324,7 @@ async def test_plain_text_direct_content_stays_plain_text(
         f"/v1/projects/{project_id}/notifications",
         headers=_headers("plain-direct-1"),
         json={
-            "recipient_id": "plain-direct",
+            "recipient": "plain-direct",
             "channels": BOTH_CHANNELS,
             "category": "informational",
             "content": {
@@ -384,7 +387,7 @@ async def test_plain_text_template_fans_out_to_email_and_in_app(
         f"/v1/projects/{project_id}/notifications",
         headers=_headers("plain-template-1"),
         json={
-            "recipient_id": "plain-template",
+            "recipient": "plain-template",
             "channels": BOTH_CHANNELS,
             "category": "informational",
             "template_slug": template["template_slug"],
@@ -458,7 +461,7 @@ async def test_edit_preset_template_replaces_variants_and_sends(
         f"/v1/projects/{project_id}/notifications",
         headers=_headers("edited-1"),
         json={
-            "recipient_id": "edited",
+            "recipient": "edited",
             "channels": BOTH_CHANNELS,
             "category": "informational",
             "template_slug": "edited-starter",

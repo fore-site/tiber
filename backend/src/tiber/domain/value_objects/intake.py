@@ -21,20 +21,20 @@ from tiber.domain.enums import DeliveryChannel, NotificationCategory
 from tiber.domain.exceptions import InvalidEntityAttributeError
 from tiber.domain.value_objects import NotificationContent
 
-# How the channel set was chosen. ("default" = the ML was unavailable or its
-# answer was unusable and the deterministic fallback was applied.)
-ChannelSource = Literal["client", "ml", "addresses", "default"]
+# How the channel set was chosen.
+#
+# There is no ML mode: nobody is delivered to a channel the client did not pick.
+ChannelSource = Literal["client", "addresses"]
 
 # Provenance of category and topic. Only "client" values are training labels.
 DecisionSource = Literal["client", "ml", "default"]
 
 # client    -> the client listed ``channels``
 # addresses -> the client supplied addresses (the addresses are the set)
-# ml        -> the ML chooses among ``feasible_channels``
-ChannelMode = Literal["client", "addresses", "ml"]
+ChannelMode = Literal["client", "addresses"]
 
-# What the worker still needs the ML to decide.
-Want = Literal["category", "topic", "channels", "send_time"]
+# What the worker still needs the ML to decide. Never channels.
+Want = Literal["category", "topic", "send_time"]
 
 
 # Lookup results
@@ -134,15 +134,9 @@ class DecisionConstraints:
     allowed_categories: frozenset[NotificationCategory]
     default_category: NotificationCategory
     channel_mode: ChannelMode
-    feasible_channels: frozenset[DeliveryChannel]
-    max_channels: int
 
     def __post_init__(self) -> None:
         """Validate the invariants after initialization."""
-        if not self.feasible_channels:
-            raise InvalidEntityAttributeError("`feasible_channels` must not be empty")
-        if self.max_channels < 1:
-            raise InvalidEntityAttributeError("`max_channels` must be at least 1")
         if self.default_category not in self.allowed_categories:
             raise InvalidEntityAttributeError(
                 "`default_category` must be one of `allowed_categories`"
@@ -158,7 +152,6 @@ class MlSuggestion:
 
     category: NotificationCategory | None = None
     topic_slug: str | None = None
-    channels: tuple[DeliveryChannel, ...] = ()  # priority order
     send_at: Mapping[DeliveryChannel, datetime] = field(default_factory=dict)
     model_version: str | None = None
 

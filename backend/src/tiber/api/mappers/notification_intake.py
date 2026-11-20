@@ -17,7 +17,7 @@ def to_accept_command(
     """Map from NotificationCreateRequest to AcceptNotificationCommand."""
     return AcceptNotificationCommand(
         project_id=project_id,
-        recipient_id=request.recipient_id,
+        recipient_external_id=request.recipient,
         addresses=request.address_map(),  # already keyed by DeliveryChannel
         channels=request.channels,  # list[DeliveryChannel] | None
         category=request.category,  # None is meaningful: the ML infers it

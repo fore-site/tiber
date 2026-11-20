@@ -9,8 +9,8 @@ reject anything the client caused:
     template variables, channels  -> 422 (via ``compute_constraints``)
     intake + outbox row           -> one transaction
 
-No ML runs here. Open decisions (category, topic, channels, send time) are left
-to ``IntakeProcessor`` and are constrained by what was validated here.
+No ML runs here. Open decisions (category, topic, send time) are left to
+``IntakeProcessor`` and are constrained by what was validated here.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ class AcceptNotificationCommand:
     """A request to create a notification intake."""
 
     project_id: UUID
-    recipient_id: str | None
+    recipient_external_id: str | None
     addresses: Mapping[DeliveryChannel, str]  # only the channels the request supplied
     channels: Sequence[DeliveryChannel] | None
     category: NotificationCategory | None  # None -> ML infers
@@ -116,10 +116,10 @@ class NotificationIntakeService:
 
             recipient = await self._recipients.resolve(
                 project_id=cmd.project_id,
-                recipient_id=cmd.recipient_id,
+                recipient_external_id=cmd.recipient_external_id,
                 addresses=cmd.addresses,
             )
-            adhoc = cmd.recipient_id is None
+            adhoc = cmd.recipient_external_id is None
 
             constraints = compute_constraints(
                 # Address-based: the request defines the set, not whatever a
@@ -131,7 +131,6 @@ class NotificationIntakeService:
                 ),
                 adhoc=adhoc,
                 requested_channels=cmd.channels,
-                opted_out=frozenset(recipient.preferences.opted_out_channels),
                 client_category=cmd.category,
                 template=template,
                 template_variables=cmd.template_variables,
@@ -224,7 +223,8 @@ def request_fingerprint(cmd: AcceptNotificationCommand) -> str:
     Addresses are normalized and channel order is ignored (it carries no meaning).
     """
     document = {
-        "recipient_id": cmd.recipient_id,
+        # Kept stable so existing idempotency fingerprints still match.
+        "recipient_id": cmd.recipient_external_id,
         "addresses": {
             ch.value: normalize_address(ch, v) for ch, v in cmd.addresses.items()
         },

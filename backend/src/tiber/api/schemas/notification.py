@@ -146,7 +146,7 @@ class NotificationCreateRequest(BaseModel):
         str_min_length=1,
     )
 
-    recipient_id: str | None = Field(
+    recipient: str | None = Field(
         default=None,
         description=(
             "Client's own identifier for a registered recipient. "
@@ -157,9 +157,10 @@ class NotificationCreateRequest(BaseModel):
     channels: list[DeliveryChannel] | None = Field(
         default=None,
         description=(
-            "Restrict delivery to these channels. Only valid with ``recipient_id``. "
-            "Omit to let the ML ranker choose among the recipient's registered channels. "
-            "Every listed channel must have a registered address. "
+            "Channels to deliver on. Required with ``recipient``: channel "
+            "selection is explicit, never inferred. Every listed channel must "
+            "have a registered destination (``in_app`` needs an ``in_app`` "
+            "address, like any other channel). "
             "All listed channels are delivered in parallel; list order carries no priority."
         ),
         min_length=1,
@@ -169,7 +170,10 @@ class NotificationCreateRequest(BaseModel):
     # channel, omit its address.
     email: EmailStr | None = None
     push: str | None = Field(default=None)
-    in_app: str | None = Field(default=None)
+    in_app: str | None = Field(
+        default=None,
+        description="Client-side in-app user identifier used as the feed destination.",
+    )
 
     category: NotificationCategory | None = Field(
         default=None,
@@ -229,9 +233,9 @@ class NotificationCreateRequest(BaseModel):
     @classmethod
     def _validate_channels(cls, v: list[DeliveryChannel] | None, info: ValidationInfo):
         if v is not None:
-            if info.data["recipient_id"] is None:
+            if info.data.get("recipient") is None:
                 raise ValueError(
-                    "`channels` can only be used with `recipient_id`. "
+                    "`channels` can only be used with `recipient`. "
                     "For channel addresses, omit the ones you don't want delivered to."
                 )
             if len(set(v)) != len(v):
@@ -249,12 +253,12 @@ class NotificationCreateRequest(BaseModel):
     def _validate_request(self) -> Self:
         adhoc = self.adhoc_channels
 
-        if self.recipient_id and adhoc:
+        if self.recipient and adhoc:
             raise ValueError(
-                "Provide either `recipient_id` or channel addresses, not both."
+                "Provide either `recipient` or channel addresses, not both."
             )
-        if not self.recipient_id and not adhoc:
-            raise ValueError("Provide `recipient_id` or at least one channel address.")
+        if not self.recipient and not adhoc:
+            raise ValueError("Provide `recipient` or at least one channel address.")
 
         if self.channels is not None and DeliveryChannel.SMS in self.channels:
             raise ValueError("SMS delivery is coming soon.")
@@ -262,6 +266,12 @@ class NotificationCreateRequest(BaseModel):
         # Content
         if (self.template_slug is None) == (self.content is None):
             raise ValueError("Provide exactly one of `template_slug` or `content`.")
+        if self.recipient is not None and not self.channels:
+            raise ValueError(
+                "`channels` is required with `recipient`: channel selection is "
+                "explicit. List the channels to deliver on, or supply a channel "
+                "address instead of `recipient`."
+            )
         # Category
         if self.category is NotificationCategory.CRITICAL and self.send_at is not None:
             raise ValueError(
@@ -282,7 +292,14 @@ class NotificationResponse(BaseModel):
         description="Shared by every notification created from the same request.",
     )
 
-    recipient_id: str | None = None
+    recipient: str | None = Field(
+        default=None,
+        description=(
+            "The recipient's external id. Null when the recipient has none "
+            "(address-based sends) or has been deleted; the notification is "
+            "still returned, because it was still sent."
+        ),
+    )
     channel: DeliveryChannel
 
     address: str | None = Field(
@@ -314,7 +331,7 @@ class NotificationResponse(BaseModel):
         n: Notification,
         *,
         address: str | None = None,
-        recipient_id: str | None = None,
+        recipient: str | None = None,
         template_slug: str | None = None,
         topic_slug: str | None = None,
     ) -> NotificationResponse:
@@ -323,7 +340,7 @@ class NotificationResponse(BaseModel):
             id=n.id,
             project_id=n.project_id,
             transaction_id=n.transaction_id,
-            recipient_id=recipient_id,
+            recipient=recipient,
             channel=n.channel,
             address=mask_address(n.channel.value, address),
             category=n.category,
@@ -365,7 +382,7 @@ class NotificationBatchResponse(BaseModel):
         notifications: Sequence[Notification],
         *,
         addresses: Mapping[DeliveryChannel, str] | None,
-        recipient_id: str | None,
+        recipient: str | None,
         template_slugs: Mapping[UUID, str],
         topic_slugs: Mapping[UUID, str],
     ) -> NotificationBatchResponse:
@@ -380,7 +397,7 @@ class NotificationBatchResponse(BaseModel):
                 NotificationResponse.from_entity(
                     n,
                     address=addresses.get(n.channel) if addresses else None,
-                    recipient_id=recipient_id,
+                    recipient=recipient,
                     template_slug=template_slugs.get(n.template_id)
                     if n.template_id is not None
                     else None,

@@ -208,7 +208,7 @@ async def test_explicit_sms_channel_is_rejected_as_coming_soon(client, project) 
         f"/v1/projects/{project.id}/notifications",
         headers=headers("sms-channel-1"),
         json={
-            "recipient_id": "external-1",
+            "recipient": "external-1",
             "channels": ["sms"],
             "content": {"body": "Hello"},
         },
@@ -222,10 +222,10 @@ async def test_explicit_sms_channel_is_rejected_as_coming_soon(client, project) 
     )
 
 
-async def test_ml_cannot_select_sms_for_an_sms_only_recipient(
+async def test_channel_selection_is_required_for_a_registered_recipient(
     client, project, session
 ) -> None:
-    """A recipient with only an SMS address cannot reach SMS delivery."""
+    """A registered send must name its channels; nothing is inferred."""
     recipient = RecipientModel(
         project_id=project.id,
         external_id="sms-only-1",
@@ -236,16 +236,19 @@ async def test_ml_cannot_select_sms_for_an_sms_only_recipient(
 
     response = await client.post(
         f"/v1/projects/{project.id}/notifications",
-        headers=headers("sms-ml-1"),
+        headers=headers("channel-required-1"),
         json={
-            "recipient_id": "sms-only-1",
+            "recipient": "sms-only-1",
             "content": {"body": "Hello"},
         },
     )
 
     assert response.status_code == 422, response.text
-    assert response.json()["error"] == "channel_not_available"
-    assert "SMS delivery is coming soon." in response.json()["message"]
+    assert response.json()["error"] == "validation_error"
+    assert any(
+        "`channels` is required" in detail["message"]
+        for detail in response.json()["details"]
+    )
 
 
 async def test_create_notification_topic_persists_project_topic(

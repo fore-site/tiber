@@ -336,50 +336,91 @@ async def test_direct_content_without_a_variable_still_fails():
 # --- Accept-time constraints use the same per-channel variables ---
 
 
-def test_constraints_accept_a_channel_whose_variables_are_provided():
-    """Feasibility is judged per channel, using only that variant's variables."""
+def test_constraints_accept_explicit_channels():
+    """A named channel that can render is accepted as-is."""
     constraints = compute_constraints(
         available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.PUSH}),
         adhoc=False,
-        requested_channels=None,
-        opted_out=frozenset(),
+        requested_channels=[DeliveryChannel.EMAIL, DeliveryChannel.PUSH],
         client_category=None,
         template=make_template(
             email_variant("Hi {{first_name}}", "Body"),
             push_variant("Code: {{code}}"),
         ),
-        # Only the variables push needs: email stays infeasible, push does not.
-        template_variables={"code": "1234"},
+        template_variables={"first_name": "Ada", "code": "1234"},
         content=None,
     )
 
-    assert constraints.feasible_channels == frozenset({DeliveryChannel.PUSH})
+    assert constraints.channel_mode == "client"
 
 
-def test_constraints_remove_sms_from_ml_candidates():
-    """SMS is not offered to the ML ranker while delivery is disabled."""
+def test_constraints_treat_in_app_like_any_address_backed_channel():
+    """An in-app address makes the channel deliverable."""
     constraints = compute_constraints(
-        available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.SMS}),
+        available_channels=frozenset({DeliveryChannel.IN_APP}),
         adhoc=False,
-        requested_channels=None,
-        opted_out=frozenset(),
+        requested_channels=[DeliveryChannel.IN_APP],
         client_category=None,
         template=None,
         template_variables=None,
         content=NotificationContent(title="Hello", plain_text_body="Hello"),
     )
 
-    assert constraints.feasible_channels == frozenset({DeliveryChannel.EMAIL})
+    assert constraints.channel_mode == "client"
 
 
-def test_constraints_reject_an_sms_only_ml_choice():
-    """An SMS-only recipient gets a clear coming-soon rejection."""
-    with pytest.raises(ChannelNotAvailableError, match="SMS delivery is coming soon"):
+def test_constraints_reject_in_app_without_an_in_app_address():
+    """An external id alone is not an in-app destination anymore."""
+    with pytest.raises(ChannelNotAvailableError, match="in_app"):
         compute_constraints(
-            available_channels=frozenset({DeliveryChannel.SMS}),
+            available_channels=frozenset({DeliveryChannel.EMAIL}),
+            adhoc=False,
+            requested_channels=[DeliveryChannel.IN_APP],
+            client_category=None,
+            template=None,
+            template_variables=None,
+            content=NotificationContent(title="Hello", plain_text_body="Hello"),
+        )
+
+
+def test_constraints_judge_renderability_per_named_channel():
+    """A named channel whose variant lacks a variable fails the whole request."""
+    with pytest.raises(ChannelNotAvailableError, match="email: missing"):
+        compute_constraints(
+            available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.PUSH}),
+            adhoc=False,
+            requested_channels=[DeliveryChannel.EMAIL],
+            client_category=None,
+            template=make_template(
+                email_variant("Hi {{first_name}}", "Body"),
+                push_variant("Code: {{code}}"),
+            ),
+            template_variables={"code": "1234"},
+            content=None,
+        )
+
+
+def test_constraints_reject_missing_channel_selection():
+    """Nothing is inferred when the client names no channel and no address."""
+    with pytest.raises(ChannelNotAvailableError, match="Choose channels explicitly"):
+        compute_constraints(
+            available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.PUSH}),
             adhoc=False,
             requested_channels=None,
-            opted_out=frozenset(),
+            client_category=None,
+            template=None,
+            template_variables=None,
+            content=NotificationContent(title="Hello", plain_text_body="Hello"),
+        )
+
+
+def test_constraints_reject_a_named_sms_channel():
+    """SMS is rejected while delivery is disabled, and is never chosen for anyone."""
+    with pytest.raises(ChannelNotAvailableError, match="SMS delivery is coming soon"):
+        compute_constraints(
+            available_channels=frozenset({DeliveryChannel.EMAIL, DeliveryChannel.SMS}),
+            adhoc=False,
+            requested_channels=[DeliveryChannel.SMS],
             client_category=None,
             template=None,
             template_variables=None,
@@ -394,7 +435,6 @@ def test_constraints_reject_a_channel_the_template_has_no_variant_for():
             available_channels=frozenset({DeliveryChannel.EMAIL}),
             adhoc=False,
             requested_channels=[DeliveryChannel.EMAIL],
-            opted_out=frozenset(),
             client_category=None,
             template=make_template(sms_variant("Body")),
             template_variables=None,
@@ -423,7 +463,7 @@ def make_command(*, template_slug: str = "order-update", project_id=None):
     """Build an accept command whose only exercised field is the template slug."""
     return AcceptNotificationCommand(
         project_id=project_id or uuid4(),
-        recipient_id=None,
+        recipient_external_id=None,
         addresses={},
         channels=None,
         category=None,

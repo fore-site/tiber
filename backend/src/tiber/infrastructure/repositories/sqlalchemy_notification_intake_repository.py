@@ -172,10 +172,6 @@ def _constraints_to_json(constraints: DecisionConstraints) -> JsonObject:
         ),
         "default_category": constraints.default_category.value,
         "channel_mode": constraints.channel_mode,
-        "feasible_channels": sorted(
-            channel.value for channel in constraints.feasible_channels
-        ),
-        "max_channels": constraints.max_channels,
     }
 
 
@@ -191,13 +187,6 @@ def _constraints_from_json(value: object) -> DecisionConstraints:
         ),
         default_category=NotificationCategory(str(data["default_category"])),
         channel_mode=data["channel_mode"],
-        feasible_channels=frozenset(
-            DeliveryChannel(str(channel))
-            for channel in _array(
-                data.get("feasible_channels"), "constraints.feasible_channels"
-            )
-        ),
-        max_channels=int(data["max_channels"]),
     )
 
 

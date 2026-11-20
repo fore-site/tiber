@@ -1,21 +1,20 @@
 """Accept-time constraint computation (pure, no I/O).
 
-The API cannot validate ML output synchronously, because the ML runs later in a
-worker. Instead it validates the *space* the ML may choose from, so anything the
-ML returns is valid by construction:
+Channel selection is explicit: a request either lists ``channels`` for a
+registered recipient or supplies channel addresses, and this module validates
+that set — every named channel needs a destination and must be renderable by
+the template (with the supplied variables) or by the direct content. The worker
+only fans out afterwards; it never picks a channel.
 
-* Channels: only channels that have an address AND can actually be rendered
-  (a template body exists with all its variables, or the direct content passes
-  that channel's validation).
 * Categories: the client's category if given, otherwise everything except
   CRITICAL. CRITICAL bypasses quiet hours, so a client must declare it; this
   also removes any conflict between an inferred category and a client `send_at`.
-* Channel count: a template can fan out to several channels; direct content
-  yields exactly one ML-chosen channel.
+* ``in_app`` is address-backed like every other channel: it is deliverable
+  only when an ``in_app`` address is configured or supplied.
 
-Explicit selections (``channels`` or supplied addresses) are all-or-nothing: if
-any named channel cannot deliver, the request is rejected with the reason,
-because the client asked for that channel specifically.
+An explicit selection is all-or-nothing: if any named channel cannot deliver,
+the request is rejected with the reason, because the client asked for that
+channel specifically.
 """
 
 from __future__ import annotations
@@ -51,71 +50,56 @@ def compute_constraints(
     available_channels: frozenset[DeliveryChannel],
     adhoc: bool,
     requested_channels: Sequence[DeliveryChannel] | None,
-    opted_out: frozenset[DeliveryChannel],
     client_category: NotificationCategory | None,
     template: Template | None,
     template_variables: Mapping[str, Any] | None,
     content: NotificationContent | None,
 ) -> DecisionConstraints:
-    """Compute the decision space, or raise ``ChannelNotAvailableError`` (422).
+    """Validate the explicit channel set, or raise ``ChannelNotAvailableError``.
 
-    ``available_channels`` is the recipient's registered channels, or for an
-    address-based request, the channels the request supplied.
+    ``available_channels`` is the recipient's registered address-backed
+    channels, or for an address-based request, the channels the request
+    supplied.
     """
     if adhoc and requested_channels:
         raise ValueError("`channels` cannot be combined with addresses")
 
-    # 1. Candidate channels and who decides among them.
+    # 1. The explicit set. Every channel, including in-app, must have an address.
+    deliverable = set(available_channels)
+
     mode: ChannelMode
     if adhoc:
-        candidates, mode = set(available_channels), "addresses"
+        candidates, mode = deliverable, "addresses"
     elif requested_channels:
         candidates, mode = set(requested_channels), "client"
-        missing = candidates - available_channels
+        missing = candidates - deliverable
         if missing:
             raise ChannelNotAvailableError(
-                f"No registered address for: {_names(missing)}"
+                f"No registered destination for: {_names(missing)}"
             )
     else:
-        candidates, mode = set(available_channels), "ml"
+        # Reachable only by a caller that skipped the API contract: the domain
+        # does not invent channels.
+        raise ChannelNotAvailableError(
+            "Choose channels explicitly: pass `channels` with `recipient`, or "
+            "supply a channel address."
+        )
 
     if DeliveryChannel.SMS in candidates:
-        if mode != "ml":
-            raise ChannelNotAvailableError("SMS delivery is coming soon.")
-        candidates.discard(DeliveryChannel.SMS)
-        if not candidates:
-            raise ChannelNotAvailableError("SMS delivery is coming soon.")
+        raise ChannelNotAvailableError("SMS delivery is coming soon.")
 
-    # 2. Which candidates can actually be rendered and delivered?
+    # 2. Every named channel must be renderable. The client asked for these, so
+    # none of them may silently drop out.
     provided = set(template_variables or {})
     problems: dict[DeliveryChannel, str] = {}
     for channel in candidates:
         reason = _render_problem(channel, template, provided, content)
         if reason is not None:
             problems[channel] = reason
+    if problems:
+        raise ChannelNotAvailableError(_describe(problems))
 
-    # 3. Channels.
-    if mode != "ml":
-        # The client named these channels; none may silently drop out.
-        if problems:
-            raise ChannelNotAvailableError(_describe(problems))
-        feasible = frozenset(candidates)
-        max_channels = len(feasible)
-    else:
-        feasible = frozenset(candidates - set(problems))
-        if not feasible:
-            raise ChannelNotAvailableError(
-                "No channel can deliver this notification: " + _describe(problems)
-            )
-        # Don't let the ML pick a channel the recipient opted out of, which
-        # would only produce a suppressed record. If every deliverable channel
-        # is opted out, keep them all so the suppression is recorded visibly.
-        reachable = feasible - opted_out
-        if reachable:
-            feasible = reachable
-        max_channels = len(feasible) if template is not None else 1
-
-    # 4. Categories.
+    # 3. Categories.
     if client_category is not None:
         allowed, default = frozenset({client_category}), client_category
     else:
@@ -125,8 +109,6 @@ def compute_constraints(
         allowed_categories=allowed,
         default_category=default,
         channel_mode=mode,
-        feasible_channels=feasible,
-        max_channels=max_channels,
     )
 
 

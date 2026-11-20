@@ -50,8 +50,6 @@ async def test_notification_intake_persists_and_enforces_project_idempotency(
         allowed_categories=frozenset({NotificationCategory.INFORMATIONAL}),
         default_category=NotificationCategory.INFORMATIONAL,
         channel_mode="client",
-        feasible_channels=frozenset({DeliveryChannel.EMAIL}),
-        max_channels=1,
     )
     intake = NotificationIntake.create(
         project_id=project.id,
