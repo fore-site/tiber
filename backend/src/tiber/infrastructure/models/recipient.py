@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     String,
     UniqueConstraint,
     func,
@@ -44,6 +45,14 @@ class RecipientModel(Base):
         CheckConstraint(
             "jsonb_typeof(preferences) = 'object'",
             name="recipients_preferences_type_check",
+        ),
+        # Partial: the purge only ever scans tombstones, and live rows are the
+        # overwhelming majority. Without it the hourly purge reads every
+        # recipient in every project.
+        Index(
+            "ix_recipients_deleted_at",
+            "deleted_at",
+            postgresql_where=text("deleted_at IS NOT NULL"),
         ),
     )
 

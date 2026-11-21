@@ -135,6 +135,7 @@ celery_app.conf.update(
         "tiber.worker.tasks.notification",
         "tiber.worker.tasks.outbox",
         "tiber.worker.tasks.project",
+        "tiber.worker.tasks.recipient",
         "tiber.worker.tasks.webhook",
     ),
     beat_schedule={
@@ -149,6 +150,14 @@ celery_app.conf.update(
         "purge-expired-projects": {
             "task": "project.purge_expired",
             "schedule": settings.project_purge_interval_seconds,
+            "options": {
+                "queue": "tiber.internal.queue",
+                "routing_key": "internal.tasks",
+            },
+        },
+        "purge-expired-recipients": {
+            "task": "recipient.purge_expired",
+            "schedule": settings.recipient_purge_interval_seconds,
             "options": {
                 "queue": "tiber.internal.queue",
                 "routing_key": "internal.tasks",

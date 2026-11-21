@@ -1,6 +1,7 @@
 """Use cases for project-scoped recipient lifecycle management."""
 
 from collections.abc import Collection
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from tiber.application.pagination import (
@@ -16,6 +17,12 @@ from tiber.domain.exceptions import (
     InvalidEntityAttributeError,
 )
 from tiber.domain.repositories import RecipientRepository
+
+# How long a scrubbed tombstone stays addressable by id before the purge removes
+# it. The window exists so history-heavy rows are not fought over immediately and
+# so an accidental delete is still diagnosable; the personal data is already gone
+# at delete time, so this is operational slack, not a privacy guarantee.
+RECIPIENT_PURGE_GRACE_PERIOD = timedelta(days=7)
 
 
 def _apply(mutation, *args) -> Recipient:
@@ -178,3 +185,14 @@ class RecipientManagementService:
         recipient = await self.get_by_external_id(project_id, external_id)
         async with self._uow:
             return await self._recipients.save(recipient.delete())
+
+    async def purge_expired(self, *, limit: int = 500) -> int:
+        """Remove a batch of tombstones whose grace period has elapsed.
+
+        The cutoff is computed here, from the same clock the API uses, rather
+        than accepted as an argument: a caller that passes a timestamp could
+        purge rows that are still inside the window by accident.
+        """
+        cutoff = datetime.now(UTC) - RECIPIENT_PURGE_GRACE_PERIOD
+        async with self._uow:
+            return await self._recipients.purge_expired(cutoff, limit)

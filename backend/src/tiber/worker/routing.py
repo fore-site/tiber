@@ -31,4 +31,9 @@ task_routes = {
         "queue": INTERNAL_QUEUE.name,
         "routing_key": INTERNAL_QUEUE.routing_key,
     },
+    "recipient.purge_expired": {
+        "exchange": INTERNAL_EXCHANGE.name,
+        "queue": INTERNAL_QUEUE.name,
+        "routing_key": INTERNAL_QUEUE.routing_key,
+    },
 }

@@ -192,9 +192,10 @@ class Recipient:
         purge: identity, contact addresses and locale facts are dropped here,
         in the same copy that marks the recipient deleted.
 
-        Consent state is preserved. It is not personal data, and it is the
-        record that this person opted out - the thing a future compliance
-        question asks about.
+        Consent state is preserved, because it is not personal data and it is
+        the record that this person opted out. It survives only as long as the
+        tombstone: the purge removes the row (and with it the opt-outs) after
+        the grace period.
         """
         now = datetime.now(UTC)
         return replace(

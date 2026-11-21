@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Text, and_, literal_column, or_, select
+from sqlalchemy import Text, and_, delete, literal_column, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
@@ -232,12 +232,46 @@ class SQLAlchemyRecipientRepository(RecipientRepository):
         )
         return [self._to_entity(model) for model in result.scalars().all()]
 
+    async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
+        """Delete one bounded batch of tombstones past their grace period.
+
+        The ids are locked with ``SKIP LOCKED`` before the delete, following the
+        project purger: a second purger running concurrently steps over the rows
+        this one holds instead of blocking on them, so the two never deadlock on
+        the per-row ``SET NULL`` updates the delete triggers in the history
+        tables. Ordering by ``(deleted_at, id)`` keeps the lock acquisition order
+        identical between runs.
+
+        ``populate_existing`` is deliberately absent: nothing reads these rows
+        back, the ids are only used as a delete key.
+        """
+        recipient_ids = list(
+            (
+                await self._session.scalars(
+                    select(RecipientModel.id)
+                    .where(RecipientModel.deleted_at.is_not(None))
+                    .where(RecipientModel.deleted_at <= deleted_before)
+                    .order_by(RecipientModel.deleted_at, RecipientModel.id)
+                    .limit(limit)
+                    .with_for_update(skip_locked=True)
+                )
+            ).all()
+        )
+        if not recipient_ids:
+            return 0
+        result = await self._session.execute(
+            delete(RecipientModel).where(RecipientModel.id.in_(recipient_ids))
+        )
+        return result.rowcount or 0
+
     async def delete(self, recipient: Recipient) -> None:
-        """Purge the recipient row, unless delivery history references it.
+        """Permanently delete one recipient row.
 
         Not the delete use case: ``RecipientManagementService.delete`` scrubs
-        and hides the recipient with ``save``. This is the hard-delete path for
-        the scheduled purge, once history no longer blocks it.
+        and hides the recipient with ``save``. Delivery history no longer blocks
+        the hard delete - the recipient foreign keys are ``ON DELETE SET NULL``
+        - so the ``ConflictError`` below only catches a foreign key this class
+        does not know about.
         """
         model = await self._session.get(RecipientModel, recipient.id)
         if model is None or model.project_id != recipient.project_id:

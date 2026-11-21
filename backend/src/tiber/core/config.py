@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     project_purge_interval_seconds: int = Field(default=86400, ge=1)
     project_purge_batch_size: int = Field(default=100, ge=1)
 
+    # Recipient deletion lifecycle (scrubbed on delete, purged after the grace period)
+    recipient_purge_interval_seconds: int = Field(default=3600, ge=1)
+    recipient_purge_batch_size: int = Field(default=500, ge=1)
+
     # Transactional outbox relay
     outbox_relay_interval_seconds: int = Field(default=1, ge=1)
     outbox_relay_batch_size: int = Field(default=100, ge=1)

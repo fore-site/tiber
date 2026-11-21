@@ -320,8 +320,16 @@ class RecipientRepository(Protocol):
         """
         ...
 
+    async def purge_expired(self, deleted_before: datetime, limit: int) -> int:
+        """Delete tombstones deleted at or before the cutoff; return rows removed.
+
+        Only rows already marked deleted are candidates: the purge is the second
+        phase of erasure, never a way to remove a live recipient.
+        """
+        ...
+
     async def delete(self, recipient: Recipient) -> None:
-        """Permanently delete a recipient; conflicts when history references it."""
+        """Permanently delete one recipient; history detaches via SET NULL."""
         ...
 
     async def get_many_by_ids(
