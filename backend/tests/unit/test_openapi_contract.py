@@ -106,3 +106,9 @@ def test_decision_summary_only_reports_client_channel_provenance() -> None:
     """Channels come from the client, so the spec offers no ML provenance."""
     enum = _SCHEMAS["DecisionSummary"]["properties"]["channel_source"]["enum"]
     assert set(enum) == {"client", "addresses"}
+
+
+def test_language_is_not_part_of_the_contract() -> None:
+    """The removed profile fact must not linger in any schema."""
+    for schema in _SCHEMAS.values():
+        assert "language" not in schema.get("properties", {}), schema

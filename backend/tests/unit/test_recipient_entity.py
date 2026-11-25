@@ -2,22 +2,22 @@
 
 Pins:
 
-- ``timezone``/``language`` are facts about a person: ``None`` means
-  unknown, never a fabricated default (contrasts with
-  DeliveryConstraint.timezone's UTC default — facts vs configuration).
-- Facts validate on every construction path: create(), reconstitute(),
+- ``timezone`` is a fact about a person: ``None`` means unknown, never a
+  fabricated default (contrasts with DeliveryConstraint.timezone's UTC
+  default — facts vs configuration).
+- The fact validates on every construction path: create(), reconstitute(),
   direct instantiation all funnel through __post_init__, so an invalid
-  fact is unrepresentable anywhere.
-- set_profile_facts() is a full restatement, not a patch: passing None
-  withdraws a fact. The copy carries a fresh updated_at.
+  timezone is unrepresentable anywhere.
+- update_timezone() restates the fact, not a patch: passing None withdraws
+  it. The copy carries a fresh updated_at.
 - update_addresses() and update_preferences() replace their state group;
   update_addresses() enforces the non-empty invariant explicitly.
 - claim_addresses() attaches a human identity: merges addresses
   (incoming wins), rejects empty/duplicate claims, stamps updated_at.
 - delete() is the doc-less twin of claim(): it hides the row and scrubs the
-  personal data (identity, addresses, locale) in one copy, keeping consent
+  personal data (identity, addresses, timezone) in one copy, keeping consent
   state, because the row outlives the person for history's sake.
-- Facts survive persistence round-trips (model column <-> entity field).
+- The fact survives persistence round-trips (model column <-> entity field).
 """
 
 from __future__ import annotations
@@ -44,38 +44,30 @@ def make_recipient(**overrides) -> Recipient:
     return Recipient.create(**kwargs)
 
 
-# --- Facts default to unknown, never fabricated ---
+# --- The fact defaults to unknown, never fabricated ---
 
 
-def test_profile_facts_default_to_none():
-    """A recipient without stated facts has unknown ones, not UTC defaults."""
+def test_profile_timezone_defaults_to_none():
+    """A recipient without a stated timezone has an unknown one, not UTC."""
     recipient = make_recipient()
 
     assert recipient.timezone is None
-    assert recipient.language is None
 
 
-# --- create() accepts and validates facts ---
+# --- create() accepts and validates the fact ---
 
 
-def test_create_with_valid_facts():
-    """Valid IANA zone and BCP-47 tag are stored as given."""
-    recipient = make_recipient(timezone="Europe/Lisbon", language="pt-BR")
+def test_create_with_valid_timezone():
+    """A valid IANA zone is stored as given."""
+    recipient = make_recipient(timezone="Europe/Lisbon")
 
     assert recipient.timezone == "Europe/Lisbon"
-    assert recipient.language == "pt-BR"
 
 
 def test_create_rejects_unknown_timezone():
     """A non-IANA zone raises the same error shape as DeliveryConstraint."""
     with pytest.raises(InvalidEntityAttributeError, match="Invalid timezone"):
         make_recipient(timezone="Mars/Olympus_Mons")
-
-
-def test_create_rejects_malformed_language():
-    """Free text is not a language tag."""
-    with pytest.raises(InvalidEntityAttributeError, match="language"):
-        make_recipient(language="not a language!")
 
 
 # --- reconstitute() validates too: bad stored facts cannot rehydrate ---
@@ -91,46 +83,43 @@ def test_reconstitute_validates_timezone():
             preferences=RecipientPreferences(),
             external_id=None,
             timezone="Not/AZone",
-            language="en",
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
             deleted_at=None,
         )
 
 
-# --- set_profile_facts(): full restatement semantics ---
+# --- update_timezone(): restatement semantics ---
 
 
-def test_set_profile_facts_states_current_truth():
-    """Setting facts bumps updated_at; the frozen original is untouched."""
+def test_update_timezone_states_current_truth():
+    """Setting the fact bumps updated_at; the frozen original is untouched."""
     recipient = make_recipient()
     before = recipient.updated_at
 
-    updated = recipient.set_profile_facts(timezone="Europe/Lisbon", language="pt")
+    updated = recipient.update_timezone("Europe/Lisbon")
 
     assert updated.timezone == "Europe/Lisbon"
-    assert updated.language == "pt"
     assert updated.updated_at > before
     # Frozen entity: the original is untouched.
     assert recipient.timezone is None
 
 
-def test_set_profile_facts_withdraws_a_fact():
+def test_update_timezone_withdraws_the_fact():
     """None is a restatement to unknown, not a no-op patch."""
     recipient = make_recipient(timezone="Europe/Lisbon")
 
-    updated = recipient.set_profile_facts(timezone=None, language="en")
+    updated = recipient.update_timezone(None)
 
     assert updated.timezone is None
-    assert updated.language == "en"
 
 
-def test_set_profile_facts_rejects_invalid_fact():
+def test_update_timezone_rejects_invalid_fact():
     """Validation runs on the mutation path too; failure leaves no trace."""
     recipient = make_recipient(timezone="Europe/Lisbon")
 
     with pytest.raises(InvalidEntityAttributeError, match="Invalid timezone"):
-        recipient.set_profile_facts(timezone="Bogus/Zone", language="en")
+        recipient.update_timezone("Bogus/Zone")
 
     # The original survives untouched — frozen entity, invalid copy rejected.
     assert recipient.timezone == "Europe/Lisbon"
@@ -232,11 +221,11 @@ def test_claim_stamps_updated_at_and_leaves_original_frozen():
     assert ownerless.external_id is None
 
 
-# --- Facts survive the persistence round-trip ---
+# --- The fact survives the persistence round-trip ---
 
 
-def test_facts_round_trip_through_model_mapping():
-    """_to_model carries the facts into columns; _to_entity rehydrates them.
+def test_timezone_round_trips_through_model_mapping():
+    """_to_model carries the fact into the column; _to_entity rehydrates it.
 
     Uses the repository's static mappers directly — the same code path a
     session save/load exercises — so a column omission shows up here as a
@@ -246,24 +235,22 @@ def test_facts_round_trip_through_model_mapping():
         SQLAlchemyRecipientRepository,
     )
 
-    recipient = make_recipient(timezone="Europe/Lisbon", language="pt")
+    recipient = make_recipient(timezone="Europe/Lisbon")
 
     model = SQLAlchemyRecipientRepository._to_model(recipient)
     assert model.timezone == "Europe/Lisbon"
-    assert model.language == "pt"
 
     rehydrated = SQLAlchemyRecipientRepository._to_entity(model)
     assert rehydrated.timezone == "Europe/Lisbon"
-    assert rehydrated.language == "pt"
     assert rehydrated.id == recipient.id
 
 
-def test_model_columns_exist_with_nullable_facts():
-    """The persistence model has the profile columns, nullable for unknown."""
+def test_model_column_exists_nullable_and_language_is_gone():
+    """The persistence model has the profile column, and no ``language``."""
     from tiber.infrastructure.models.recipient import RecipientModel
 
     assert RecipientModel.__table__.c.timezone.nullable is True
-    assert RecipientModel.__table__.c.language.nullable is True
+    assert "language" not in RecipientModel.__table__.c
 
 
 # --- delete(): deactivate and scrub in one step ---
@@ -274,7 +261,6 @@ def test_delete_scrubs_personal_data_and_keeps_consent():
     recipient = make_recipient(
         external_id="user_12345",
         timezone="Europe/Lisbon",
-        language="pt-BR",
         preferences=RecipientPreferences(unsubscribed_categories=["promotional"]),
     )
     before = recipient.updated_at
@@ -285,7 +271,6 @@ def test_delete_scrubs_personal_data_and_keeps_consent():
     assert deleted.external_id is None
     assert deleted.addresses == {}
     assert deleted.timezone is None
-    assert deleted.language is None
     # Consent is the record that this person opted out; it is not personal data.
     assert deleted.preferences.unsubscribed_categories == frozenset({"promotional"})
     assert deleted.updated_at > before

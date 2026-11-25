@@ -73,7 +73,6 @@ def make_ctx(
         preferences=RecipientPreferences(),
         external_id=None,
         timezone=None,
-        language=None,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         updated_at=datetime(2026, 1, 1, tzinfo=UTC),
         deleted_at=None,

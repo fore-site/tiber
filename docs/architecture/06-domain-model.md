@@ -22,7 +22,7 @@ The model provides a shared ubiquitous language for the project and serves as th
 
 - **Template:** Defines reusable notification content that can be rendered before delivery. Notifications may either reference a template or provide content directly.
 
-- **Recipient:** Represents the intended destination of a notification. A recipient encapsulates channel-specific addressing information such as email addresses or push notification tokens, plus static profile facts (`timezone`, `language`) that the client sets once and updates when they change (doc 08, D1). Facts are nullable — `None` means unknown, never a fabricated default — and ownerless auto-created profiles ship bare. The ML layer reads these as its cold-start feature set (doc 05); the delivery policy chain consults them only for recipient-level restriction evaluation (below).
+- **Recipient:** Represents the intended destination of a notification. A recipient encapsulates channel-specific addressing information such as email addresses or push notification tokens, plus a static profile fact (`timezone`) that the client sets once and updates when it changes (doc 08, D1). The fact is nullable — `None` means unknown, never a fabricated default — and ownerless auto-created profiles ship bare. The ML layer reads it as a cold-start feature (doc 05); the delivery policy chain consults it only for recipient-level restriction evaluation (below).
 
 - **Preferences:** A value object that represents user-configured consent preferences controlling what messages a recipient receives and through which channels. Frequency-based controls are out of scope until a scheduling layer exists.
 

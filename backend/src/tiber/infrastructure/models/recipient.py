@@ -88,10 +88,11 @@ class RecipientModel(Base):
         server_default=text("'{}'::jsonb"),
     )
 
-    # Static profile facts (doc 08, D1). Nullable: facts are unknown until
-    # the client sets them, and ownerless auto-created profiles ship bare.
+    # Static profile fact (doc 08, D1). Nullable: the fact is unknown until
+    # the client sets it, and ownerless auto-created profiles ship bare. It is
+    # the wall clock recipient quiet hours are projected onto, so a missing
+    # value means UTC at evaluation time, not a stored default.
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    language: Mapped[str | None] = mapped_column(String(35), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

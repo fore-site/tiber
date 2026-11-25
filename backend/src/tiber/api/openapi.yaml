@@ -1002,8 +1002,8 @@ paths:
         external id).
 
         Deletion takes effect immediately: the recipient stops resolving for
-        new requests, and its personal data - external id, addresses, locale -
-        is scrubbed in the same transaction. Delivery history is retained,
+        new requests, and its personal data - external id, addresses, profile
+        facts - is scrubbed in the same transaction. Delivery history is retained,
         because notifications, engagement events and intake records reference
         the recipient record.
 

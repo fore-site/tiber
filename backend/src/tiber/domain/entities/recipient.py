@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -8,17 +7,14 @@ from ..enums import DeliveryChannel
 from ..exceptions import InvalidEntityAttributeError
 from ..value_objects import RecipientPreferences
 
-# BCP-47 language tag
-_LANGUAGE_TAG_RE = re.compile(r"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$")
-
 
 @dataclass(frozen=True, kw_only=True)
 class Recipient:
     """Recipient entity - the intended destination of a notification.
 
-    Static profile facts (``timezone``, ``language``) are set once by the
-    client and updated when they change - they are facts about
-    a person, so ``None`` means unknown.
+    Static profile facts (``timezone``) are set once by the client and updated
+    when they change - they are facts about a person, so ``None`` means
+    unknown.
     """
 
     id: UUID = field(default_factory=uuid4)
@@ -27,7 +23,6 @@ class Recipient:
     preferences: RecipientPreferences
     external_id: str | None = None
     timezone: str | None = None
-    language: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     deleted_at: datetime | None = None
@@ -60,12 +55,6 @@ class Recipient:
                     f"Invalid timezone: {self.timezone}"
                 ) from e
 
-        if self.language is not None and not _LANGUAGE_TAG_RE.fullmatch(self.language):
-            raise InvalidEntityAttributeError(
-                "Recipient language must be a language tag such as 'en' or "
-                f"'pt-BR' (got: {self.language!r})"
-            )
-
     @classmethod
     def create(
         cls,
@@ -75,7 +64,6 @@ class Recipient:
         preferences: RecipientPreferences | None = None,
         external_id: str | None = None,
         timezone: str | None = None,
-        language: str | None = None,
     ) -> Recipient:
         """Create a new recipient with a system-generated id and timestamps."""
         return cls(
@@ -84,7 +72,6 @@ class Recipient:
             preferences=preferences or RecipientPreferences(),
             external_id=external_id,
             timezone=timezone,
-            language=language,
         )
 
     @classmethod
@@ -97,7 +84,6 @@ class Recipient:
         preferences: RecipientPreferences,
         external_id: str | None,
         timezone: str | None,
-        language: str | None,
         created_at: datetime,
         updated_at: datetime,
         deleted_at: datetime | None,
@@ -114,7 +100,6 @@ class Recipient:
             preferences=preferences,
             external_id=external_id,
             timezone=timezone,
-            language=language,
             created_at=created_at,
             updated_at=updated_at,
             deleted_at=deleted_at,
@@ -171,25 +156,20 @@ class Recipient:
         """Return a copy with new consent state; stamps updated_at."""
         return replace(self, preferences=preferences, updated_at=datetime.now(UTC))
 
-    def set_profile_facts(
-        self, *, timezone: str | None, language: str | None
-    ) -> Recipient:
-        """Restate the static profile facts wholesale.
+    def update_timezone(self, timezone: str | None) -> Recipient:
+        """Restate the recipient's timezone.
 
-        Both parameters are required statements of current truth: passing
         ``None`` records the fact as *unknown* (withdrawal), which is a
         deliberate semantic, not a missing argument.
         """
-        return replace(
-            self, timezone=timezone, language=language, updated_at=datetime.now(UTC)
-        )
+        return replace(self, timezone=timezone, updated_at=datetime.now(UTC))
 
     def delete(self) -> Recipient:
         """Return a deleted copy with the personal data scrubbed.
 
         The row is kept (``deleted_at`` marks it) because delivery history holds
         foreign keys to it, so the personal data cannot wait for the eventual
-        purge: identity, contact addresses and locale facts are dropped here,
+        purge: identity, contact addresses and profile facts are dropped here,
         in the same copy that marks the recipient deleted.
 
         Consent state is preserved, because it is not personal data and it is
@@ -203,7 +183,6 @@ class Recipient:
             external_id=None,
             addresses={},
             timezone=None,
-            language=None,
             deleted_at=now,
             updated_at=now,
         )

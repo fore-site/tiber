@@ -23,7 +23,7 @@ Three earlier decisions shaped this record:
 Tiber does not read client databases, even opt-in. Trust and liability costs
 (a notification vendor reading a production users table) vastly exceed the
 benefit, and the useful training signal (opens, clicks, bounces) already
-flows through Tiber. Static facts about a recipient (timezone, language) live on the recipient profile, set once and updated when they change, never re-sent per notification.
+flows through Tiber. A static fact about a recipient (timezone) lives on the recipient profile, set once and updated when it changes, never re-sent per notification.
 
 ### D2 — Recipients are addressed by client identity or raw address
 
