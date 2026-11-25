@@ -2390,8 +2390,7 @@ components:
           items:
             $ref: "#/components/schemas/Project"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -2415,16 +2414,19 @@ components:
             the key in dashboards and audit logs.
           example: tb_abc123
         last_used_at:
-          $ref: "#/components/schemas/Timestamp"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
         created_at:
           $ref: "#/components/schemas/Timestamp"
         revoked_at:
-          $ref: "#/components/schemas/Timestamp"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
         expires_at:
-          $ref: "#/components/schemas/Timestamp"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
 
     APIKeyWithSecret:
       allOf:
@@ -2455,8 +2457,7 @@ components:
           items:
             $ref: "#/components/schemas/APIKey"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -2474,14 +2475,12 @@ components:
             From address on the domain being registered. The domain is derived
             from this address and registered with the provider.
         display_name:
-          type: string
+          type: [string, "null"]
           maxLength: 100
-          nullable: true
           description: Optional display name placed before the address.
         reply_to:
-          type: string
+          type: [string, "null"]
           format: email
-          nullable: true
           description: Optional Reply-To address.
 
     SenderIdentity:
@@ -2509,12 +2508,10 @@ components:
           format: email
           description: Normalized From address.
         display_name:
-          type: string
-          nullable: true
+          type: [string, "null"]
         reply_to:
-          type: string
+          type: [string, "null"]
           format: email
-          nullable: true
         domain:
           type: string
           description: Sending domain derived from `from_email`.
@@ -2536,8 +2533,9 @@ components:
             type: object
             additionalProperties: true
         verified_at:
-          $ref: "#/components/schemas/Timestamp"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -2695,8 +2693,7 @@ components:
           items:
             $ref: "#/components/schemas/Template"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -2968,8 +2965,7 @@ components:
           items:
             $ref: "#/components/schemas/Recipient"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -3104,13 +3100,15 @@ components:
         status:
           $ref: "#/components/schemas/NotificationStatus"
         send_at:
-          $ref: "#/components/schemas/Timestamp"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
         send_time_basis:
           $ref: "#/components/schemas/SendTimeBasis"
         delivered_at:
-          $ref: "#/components/schemas/Timestamp"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
         suppression_reason:
           type: [string, "null"]
         cancellation_reason:
@@ -3156,8 +3154,9 @@ components:
           type: [string, "null"]
           description: Client-side in-app user identifier used as the feed destination.
         category:
-          $ref: "#/components/schemas/NotificationCategory"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/NotificationCategory"
+            - type: "null"
         group_key:
           type: [string, "null"]
           maxLength: 255
@@ -3173,14 +3172,16 @@ components:
             Values for the Liquid variables in the template, or in direct
             content when no template is used.
         content:
-          $ref: "#/components/schemas/NotificationContent"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/NotificationContent"
+            - type: "null"
           description: >
             Direct content, rendered as Liquid source with `template_variables`.
             Mutually exclusive with `template_slug`.
         send_at:
-          $ref: "#/components/schemas/Timestamp"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
           description: >
             Explicit send time in UTC. Omit to send immediately or let planning
             choose the time.
@@ -3210,8 +3211,9 @@ components:
           type: [string, "null"]
           description: Set only when processing failed.
         decisions:
-          $ref: "#/components/schemas/DecisionSummary"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/DecisionSummary"
+            - type: "null"
         notifications:
           type: array
           items:
@@ -3227,8 +3229,7 @@ components:
           items:
             $ref: "#/components/schemas/Notification"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -3285,8 +3286,7 @@ components:
           items:
             $ref: "#/components/schemas/NotificationTopic"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -3343,8 +3343,7 @@ components:
           items:
             $ref: "#/components/schemas/DeliveryAttempt"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -3381,8 +3380,9 @@ components:
         notification_id:
           $ref: "#/components/schemas/UUID"
         recipient_id:
-          $ref: "#/components/schemas/UUID"
-          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/UUID"
+            - type: "null"
           description: >
             Null once the recipient has been erased. The event is still
             recorded; only its attribution to a person is gone.
@@ -3394,8 +3394,7 @@ components:
           type: string
           description: The provider that reported this engagement event
         idempotency_key:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Client-supplied dedupe key; null for provider-reported events.
         is_synthetic:
@@ -3424,8 +3423,7 @@ components:
           items:
             $ref: "#/components/schemas/EngagementEvent"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 
@@ -3532,8 +3530,7 @@ components:
           items:
             $ref: "#/components/schemas/WebhookEndpoint"
         next_cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
 

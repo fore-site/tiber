@@ -5,6 +5,7 @@ silently: how a recipient is addressed, and what a notification request and
 response actually contain.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,17 @@ _SCHEMAS: dict[str, Any] = _SPEC["components"]["schemas"]
 _COMPONENT_PARAMS: dict[str, Any] = _SPEC["components"]["parameters"]
 
 
+def _walk(node: Any) -> Iterator[dict[str, Any]]:
+    """Yield every mapping in the document, at any depth."""
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk(item)
+
+
 def _params(operation: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Named parameters of an operation, resolving component references."""
     parameters: dict[str, dict[str, Any]] = {}
@@ -27,6 +39,12 @@ def _params(operation: dict[str, Any]) -> dict[str, dict[str, Any]]:
             parameter = _COMPONENT_PARAMS[name]
         parameters[parameter["name"]] = parameter
     return parameters
+
+
+def test_document_sticks_to_openapi_3_1_keywords() -> None:
+    """3.1 removed `nullable`, so nullability is a type union, not a flag."""
+    assert _SPEC["openapi"] == "3.1.0"
+    assert [node for node in _walk(_SPEC) if "nullable" in node] == []
 
 
 def test_recipients_are_addressed_by_query_parameter() -> None:
@@ -84,7 +102,7 @@ def test_engagement_event_attribution_is_nullable_after_erasure() -> None:
     """An event outlives its recipient, so its `recipient_id` may be null."""
     recipient_id = _SCHEMAS["EngagementEvent"]["properties"]["recipient_id"]
 
-    assert recipient_id["nullable"] is True
+    assert {"type": "null"} in recipient_id["anyOf"]
     assert "erased" in recipient_id["description"].lower()
 
 
