@@ -85,6 +85,8 @@ tags:
     description: Reusable notification content templates
   - name: Recipients
     description: Notification recipients and channel addresses
+  - name: Delivery Constraints
+    description: Project-level blackout periods and quiet-hours windows
   - name: Topics
     description: Notification topics that classify and route sends
   - name: Notifications
@@ -1025,13 +1027,15 @@ paths:
 
     put:
       tags: [Recipients]
-      summary: Update a recipient's consent state
+      summary: Update a recipient's delivery preferences
       operationId: putv1projectsprojectidrecipientspreferences
       description: >
-        Applies opt-outs and unsubscribes for the recipient named by the
-        `recipient` query parameter (an external id). Partial semantics: an
-        omitted list keeps its stored value, while an explicit empty list
-        clears it. Repeating an identical request is therefore idempotent.
+        Applies opt-outs, unsubscribes, and time restrictions for the recipient
+        named by the `recipient` query parameter (an external id). Partial
+        semantics: an omitted consent list keeps its stored value, while an
+        explicit empty list clears it. For `blackout_period` and `quiet_hours`,
+        omission keeps the stored value, `null` clears it, and an object
+        replaces it. Repeating an identical request is therefore idempotent.
       parameters:
         - name: recipient
           in: query
@@ -1057,6 +1061,56 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /v1/projects/{project_id}/delivery-constraint:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    get:
+      tags: [Delivery Constraints]
+      summary: Read the project's delivery constraint
+      operationId: getv1projectsprojectiddeliveryconstraint
+      description: >
+        Returns the singleton delivery constraint for the project. An
+        unconfigured project reads as UTC with no blackout periods and no
+        quiet-hours windows; reading never creates the row.
+      responses:
+        "200":
+          description: Current delivery constraint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryConstraint"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    put:
+      tags: [Delivery Constraints]
+      summary: Replace the project's delivery constraint
+      operationId: putv1projectsprojectiddeliveryconstraint
+      description: |
+        Replaces the whole singleton configuration: an omitted list clears it.
+        Blackout periods are absolute, inclusive datetime ranges and suppress
+        matching sends. Quiet-hours windows are recurring wall-clock ranges in
+        `timezone` and postpone matching sends until the next window end plus a
+        five-minute grace period.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryConstraintUpdateRequest"
+      responses:
+        "200":
+          description: Delivery constraint replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryConstraint"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
@@ -2443,6 +2497,8 @@ components:
         - opted_out_channels
         - unsubscribed_categories
         - unsubscribed_topics
+        - blackout_period
+        - quiet_hours
         - created_at
         - updated_at
       properties:
@@ -2477,6 +2533,21 @@ components:
             $ref: "#/components/schemas/UUID"
           uniqueItems: true
           description: Topics this recipient has unsubscribed from.
+        blackout_period:
+          oneOf:
+            - $ref: "#/components/schemas/BlackoutPeriod"
+            - type: "null"
+          description: >
+            The recipient's personal absolute blackout, or null when none is
+            configured. A send inside it is suppressed.
+        quiet_hours:
+          oneOf:
+            - $ref: "#/components/schemas/QuietHours"
+            - type: "null"
+          description: >
+            The recipient's personal recurring quiet-hours window, or null when
+            none is configured. A send inside it is postponed. Evaluated on the
+            recipient's profile timezone, falling back to UTC.
         created_at:
           $ref: "#/components/schemas/Timestamp"
         updated_at:
@@ -2510,9 +2581,11 @@ components:
     RecipientPreferencesRequest:
       type: object
       description: >
-        Partial consent state. An omitted list is left untouched; an explicit
-        empty list clears it. CRITICAL cannot be unsubscribed from, and an
-        opted-out channel must have a registered address.
+        Partial delivery preferences. An omitted consent list is left untouched;
+        an explicit empty list clears it. CRITICAL cannot be unsubscribed from,
+        and an opted-out channel must have a registered address. For
+        `blackout_period` and `quiet_hours`, omission leaves the stored value
+        untouched, `null` clears it, and an object replaces it.
       properties:
         opted_out_channels:
           type: array
@@ -2529,6 +2602,106 @@ components:
           items:
             $ref: "#/components/schemas/UUID"
           uniqueItems: true
+        blackout_period:
+          oneOf:
+            - $ref: "#/components/schemas/BlackoutPeriod"
+            - type: "null"
+          description: >
+            Set to an object to replace the recipient's personal blackout, or
+            to null to clear it. Omit the field to keep the stored blackout.
+        quiet_hours:
+          oneOf:
+            - $ref: "#/components/schemas/QuietHours"
+            - type: "null"
+          description: >
+            Set to an object to replace the recipient's personal quiet-hours
+            window, or to null to clear it. Omit the field to keep the stored
+            window.
+
+    BlackoutPeriod:
+      type: object
+      required: [name, start, end]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Human-readable label for the period.
+        start:
+          $ref: "#/components/schemas/Timestamp"
+        end:
+          $ref: "#/components/schemas/Timestamp"
+      description: |
+        An absolute, inclusive datetime range. Both boundaries must be
+        timezone-aware. A matching send is suppressed, never postponed.
+
+    QuietHours:
+      type: object
+      required: [name, window_start, window_end, channel]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Human-readable label for the window.
+        window_start:
+          type: string
+          format: time
+          description: Local wall-clock time at which the restriction starts.
+        window_end:
+          type: string
+          format: time
+          description: |
+            Local wall-clock time at which the restriction ends, inclusive: a
+            send scheduled exactly at this time is still inside the window. A
+            start later than the end spans midnight. The two boundaries must
+            differ.
+        channel:
+          $ref: "#/components/schemas/Channel"
+        description:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Optional human-readable note.
+      description: |
+        A recurring time-of-day restriction for one channel. Both boundaries
+        are inclusive. A matching send is postponed to the next occurrence of
+        `window_end` plus a five-minute grace period: the same day's occurrence
+        when the send lands exactly on it, the next day's otherwise.
+
+    DeliveryConstraint:
+      type: object
+      required: [timezone, blackout_periods, quiet_hours]
+      properties:
+        timezone:
+          type: string
+          description: IANA timezone used to project quiet-hours windows.
+        blackout_periods:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlackoutPeriod"
+        quiet_hours:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuietHours"
+
+    DeliveryConstraintUpdateRequest:
+      type: object
+      required: [timezone]
+      description: >
+        Full replacement of the project's singleton delivery constraint. The
+        timezone is required. Omitted lists are cleared.
+      properties:
+        timezone:
+          type: string
+          description: IANA timezone used to project quiet-hours windows.
+        blackout_periods:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlackoutPeriod"
+        quiet_hours:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuietHours"
 
     RecipientList:
       type: object

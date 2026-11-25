@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -71,4 +71,20 @@ class DeliveryConstraint:
             timezone=timezone,
             created_at=created_at,
             updated_at=updated_at,
+        )
+
+    def replace_configuration(
+        self,
+        *,
+        blackout_periods: list[BlackoutPeriod],
+        quiet_hours: list[QuietHours],
+        timezone: str,
+    ) -> DeliveryConstraint:
+        """Return a copy with the whole configuration replaced."""
+        return replace(
+            self,
+            blackout_periods=list(blackout_periods),
+            quiet_hours=list(quiet_hours),
+            timezone=timezone,
+            updated_at=datetime.now(UTC),
         )

@@ -95,13 +95,15 @@ async def update_recipient_preferences(
     ],
     recipient: Annotated[str, Query(min_length=1, max_length=255)],
 ) -> RecipientResponse:
-    """Update a recipient's consent state, addressed by external ID."""
+    """Update a recipient's delivery preferences, addressed by external ID."""
     updated = await service.update_preferences_by_external_id(
         project_id=project.id,
         external_id=recipient,
         opted_out_channels=payload.opted_out_channels,
         unsubscribed_categories=payload.unsubscribed_categories,
         unsubscribed_topics=payload.unsubscribed_topics,
+        blackout_period=payload.blackout_period_update(),
+        quiet_hours=payload.quiet_hours_update(),
     )
     return RecipientResponse.from_entity(updated)
 

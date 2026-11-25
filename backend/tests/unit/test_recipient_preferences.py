@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, time
 from uuid import uuid4
 
 import pytest
@@ -14,10 +15,33 @@ from tiber.api.schemas.recipient import (
 )
 from tiber.domain.entities import Recipient
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
-from tiber.domain.value_objects import RecipientPreferences
+from tiber.domain.value_objects import (
+    BlackoutPeriod,
+    QuietHours,
+    RecipientPreferences,
+)
+from tiber.domain.value_objects.preferences import UNSET
 from tiber.infrastructure.repositories.sqlalchemy_recipient_repository import (
     SQLAlchemyRecipientRepository,
 )
+
+
+def time_preferences() -> tuple[BlackoutPeriod, QuietHours]:
+    """Build one blackout and one quiet-hours window for a recipient."""
+    return (
+        BlackoutPeriod(
+            name="holiday",
+            start=datetime(2026, 12, 24, tzinfo=UTC),
+            end=datetime(2026, 12, 26, tzinfo=UTC),
+        ),
+        QuietHours(
+            name="night",
+            window_start=time(22, 0),
+            window_end=time(6, 0),
+            channel=DeliveryChannel.EMAIL,
+            description="Do not email overnight",
+        ),
+    )
 
 
 def make_recipient(
@@ -100,6 +124,25 @@ def test_absent_preferences_read_as_fully_subscribed():
     assert restored.preferences == RecipientPreferences()
 
 
+def test_time_preferences_survive_a_persistence_round_trip():
+    """Recipient-level blackouts and quiet hours are stored, not dropped."""
+    blackout, quiet = time_preferences()
+    preferences = RecipientPreferences(
+        blackout_period=blackout,
+        quiet_hours=quiet,
+    )
+
+    model = SQLAlchemyRecipientRepository._to_model(make_recipient(preferences))
+    restored = SQLAlchemyRecipientRepository._to_entity(model)
+
+    assert model.preferences["blackout_period"] == {
+        "name": "holiday",
+        "start": "2026-12-24T00:00:00+00:00",
+        "end": "2026-12-26T00:00:00+00:00",
+    }
+    assert restored.preferences == preferences
+
+
 def test_preferences_serialize_to_stable_sorted_values():
     """Channel and category keys are stored as their enum values."""
     model = SQLAlchemyRecipientRepository._to_model(
@@ -135,6 +178,32 @@ def test_omitted_request_fields_mean_no_change():
     assert payload.opted_out_channels is None
     assert payload.unsubscribed_categories is None
     assert payload.unsubscribed_topics is None
+    assert payload.blackout_period_update() is UNSET
+    assert payload.quiet_hours_update() is UNSET
+
+
+def test_explicit_null_clears_a_time_preference():
+    """JSON null is a clear instruction, distinct from an omitted field."""
+    payload = RecipientPreferencesRequest.model_validate(
+        {"blackout_period": None, "quiet_hours": None}
+    )
+
+    assert payload.blackout_period_update() is None
+    assert payload.quiet_hours_update() is None
+
+
+def test_time_preferences_are_validated_by_the_domain_value_objects():
+    """An inverted blackout never reaches persistence through the API."""
+    with pytest.raises(ValidationError, match="cannot be after end"):
+        RecipientPreferencesRequest.model_validate(
+            {
+                "blackout_period": {
+                    "name": "inverted",
+                    "start": "2026-12-26T00:00:00Z",
+                    "end": "2026-12-24T00:00:00Z",
+                }
+            }
+        )
 
 
 # --- Merge semantics ---
@@ -171,6 +240,35 @@ def test_merge_still_rejects_critical_unsubscribe():
         RecipientPreferences().merged_with(unsubscribed_categories=["critical"])
 
 
+def test_merge_leaves_omitted_time_preferences_untouched():
+    """Not mentioning a time restriction is not a request to clear it."""
+    blackout, quiet = time_preferences()
+    current = RecipientPreferences(blackout_period=blackout, quiet_hours=quiet)
+
+    merged = current.merged_with(opted_out_channels=[DeliveryChannel.EMAIL])
+
+    assert merged.blackout_period == blackout
+    assert merged.quiet_hours == quiet
+
+
+def test_merge_can_clear_and_replace_time_preferences():
+    """None clears; an object replaces the stored time restriction."""
+    blackout, quiet = time_preferences()
+    replacement = BlackoutPeriod(
+        name="maintenance",
+        start=datetime(2027, 1, 1, tzinfo=UTC),
+        end=datetime(2027, 1, 2, tzinfo=UTC),
+    )
+    current = RecipientPreferences(blackout_period=blackout, quiet_hours=quiet)
+
+    cleared = current.merged_with(blackout_period=None)
+    replaced = cleared.merged_with(blackout_period=replacement)
+
+    assert cleared.blackout_period is None
+    assert cleared.quiet_hours == quiet
+    assert replaced.blackout_period == replacement
+
+
 # --- Response schema ---
 
 
@@ -190,3 +288,19 @@ def test_response_exposes_the_stored_consent_state():
     assert payload.opted_out_channels == [DeliveryChannel.SMS]
     assert payload.unsubscribed_categories == [NotificationCategory.PROMOTIONAL]
     assert payload.unsubscribed_topics == [topic]
+
+
+def test_response_exposes_recipient_time_restrictions():
+    """A stored blackout and quiet window round-trip through the response."""
+    blackout, quiet = time_preferences()
+    payload = RecipientResponse.from_entity(
+        make_recipient(
+            RecipientPreferences(blackout_period=blackout, quiet_hours=quiet)
+        )
+    )
+
+    assert payload.blackout_period is not None
+    assert payload.blackout_period.name == "holiday"
+    assert payload.quiet_hours is not None
+    assert payload.quiet_hours.window_start == time(22, 0)
+    assert payload.quiet_hours.channel is DeliveryChannel.EMAIL

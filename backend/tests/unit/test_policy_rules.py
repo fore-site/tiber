@@ -9,6 +9,9 @@ boundaries, channel filtering, and two send-time branches (``send_at`` vs
 These tests encode deliberate decisions, not accidents:
 
 - boundaries are INCLUSIVE (a send exactly at a boundary is inside);
+- postponement resumes at the window end plus the grace margin, and a send
+  landing exactly on the end resumes on that same day;
+- blackout periods are absolute datetime ranges, compared by instant;
 - a window with ``window_start > window_end`` spans midnight;
 - windows are additive prohibitions — any match rejects, so the verdict
   must be independent of registration order (see the regression test);
@@ -211,6 +214,62 @@ async def test_window_end_boundary_is_inclusive():
     assert not decision.allowed
 
 
+# --- ProjectQuietHoursRule: resume time ---
+
+
+async def test_window_end_boundary_resumes_after_grace_on_the_same_day():
+    """Pin that landing exactly on window_end costs the grace margin, not a day.
+
+    The end boundary is inclusive, so the send is postponed; but the window
+    closes at that very instant, so the resume time is end + grace on the same
+    day. Rolling over on ``candidate == local`` instead of ``<`` made an
+    exact-boundary send wait for tomorrow's window end.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(windows=(LUNCH,)),
+        send_at=datetime(2026, 9, 15, 12, 0, tzinfo=UTC),
+        now=datetime(2026, 9, 15, 8, 0, tzinfo=UTC),
+    )
+    decision = await ProjectQuietHoursRule().evaluate(ctx)
+
+    assert not decision.allowed
+    assert decision.resume_at == datetime(2026, 9, 15, 12, 5, tzinfo=UTC)
+
+
+async def test_midnight_spanning_end_boundary_resumes_on_the_same_day():
+    """Pin the same exact-boundary rule for a window that spans midnight.
+
+    06:00 is the end of 22:00-06:00, so the send is inside the window and
+    resumes at 06:05 the same day, not 06:05 the next day.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(windows=(OVERNIGHT,)),
+        send_at=datetime(2026, 9, 15, 6, 0, tzinfo=UTC),
+        now=datetime(2026, 9, 15, 2, 0, tzinfo=UTC),
+    )
+    decision = await ProjectQuietHoursRule().evaluate(ctx)
+
+    assert not decision.allowed
+    assert decision.resume_at == datetime(2026, 9, 15, 6, 5, tzinfo=UTC)
+
+
+async def test_postponement_rolls_to_the_next_day_once_the_end_has_passed():
+    """Pin that a send inside a midnight-spanning window resumes tomorrow.
+
+    23:30 has already passed 06:00 on its own local date, so the next window
+    end is tomorrow's 06:00. This is the rollover the fix must not remove.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(windows=(OVERNIGHT,)),
+        send_at=datetime(2026, 9, 15, 23, 30, tzinfo=UTC),
+        now=datetime(2026, 9, 15, 23, 0, tzinfo=UTC),
+    )
+    decision = await ProjectQuietHoursRule().evaluate(ctx)
+
+    assert not decision.allowed
+    assert decision.resume_at == datetime(2026, 9, 16, 6, 5, tzinfo=UTC)
+
+
 # --- ProjectQuietHoursRule: additive prohibitions (OR-composition) ---
 
 
@@ -366,6 +425,36 @@ async def test_window_projects_send_time_into_project_timezone():
     decision = await ProjectQuietHoursRule().evaluate(ctx)
 
     assert not decision.allowed
+
+
+async def test_window_end_inside_the_spring_forward_gap_resumes_late_not_early():
+    """Pin the DST-gap tradeoff: an end with no instant resumes after it.
+
+    Europe/London skips 01:00-01:59 on 2026-03-29, so a window ending at 01:30
+    declares a wall clock that never occurs. ``replace`` resolves it with the
+    pre-transition offset, and the instant falls at 01:35 UTC after the grace
+    margin — 02:35 BST, once the clock has already jumped past the declared
+    end. Deliberate: clock arithmetic must never *undercut* a quiet window, so
+    a gap end delivers late, never early. Clamping to the transition instant
+    would be the alternative; this pin records that nobody did.
+    """
+    ctx = make_ctx(
+        constraint=constraint_with(
+            windows=(sms_window(time(23, 0), time(1, 30)),),
+            tz="Europe/London",
+        ),
+        send_at=datetime(2026, 3, 29, 0, 45, tzinfo=UTC),  # 00:45 GMT, inside
+        now=datetime(2026, 3, 28, 20, 0, tzinfo=UTC),
+    )
+    decision = await ProjectQuietHoursRule().evaluate(ctx)
+
+    assert not decision.allowed
+    # Convert before comparing: the returned value carries the nonexistent
+    # 01:35 wall clock, and such a datetime does not compare equal to the UTC
+    # instant it denotes even though the difference between them is zero.
+    assert decision.resume_at.astimezone(UTC) == datetime(
+        2026, 3, 29, 1, 35, tzinfo=UTC
+    )
 
 
 # --- ProjectQuietHoursRule: no-constraint paths ---

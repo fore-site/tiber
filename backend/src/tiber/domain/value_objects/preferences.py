@@ -14,6 +14,24 @@ if TYPE_CHECKING:
     from .quiet_hours import QuietHours
 
 
+class Unset:
+    """Sentinel distinguishing an omitted preference from an explicit clear.
+
+    Public because it appears in application and API signatures: ``None``
+    already means "clear this preference", so "not supplied" needs a value of
+    its own that no caller can accidentally pass as a real restriction.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        """Render as the sentinel's name, so logs read ``UNSET``."""
+        return "UNSET"
+
+
+UNSET = Unset()
+
+
 @dataclass(frozen=True)
 class RecipientPreferences:
     """Value object holding a recipient's consent state."""
@@ -50,14 +68,17 @@ class RecipientPreferences:
         opted_out_channels: Collection[DeliveryChannel] | None = None,
         unsubscribed_categories: Collection[NotificationCategory] | None = None,
         unsubscribed_topics: Collection[UUID] | None = None,
+        blackout_period: BlackoutPeriod | None | Unset = UNSET,
+        quiet_hours: QuietHours | None | Unset = UNSET,
     ) -> RecipientPreferences:
-        """Return a copy with only the supplied sets replaced.
+        """Return a copy with only the supplied preferences replaced.
 
-        ``None`` means "not supplied" and leaves that set untouched; an empty
-        collection explicitly clears it. The distinction is what makes partial
-        updates idempotent, and it lives here so no caller re-derives which of
-        the two an absent value means. ``replace`` re-runs ``__post_init__``,
-        so the merged result is subject to the same invariants.
+        For the consent sets, ``None`` means "not supplied" and leaves that set
+        untouched; an empty collection explicitly clears it. Time preferences
+        use ``UNSET`` for "not supplied" because ``None`` is a meaningful
+        value: it clears the stored restriction. ``replace`` re-runs
+        ``__post_init__``, so the merged result is subject to the same
+        invariants.
         """
         return replace(
             self,
@@ -75,6 +96,14 @@ class RecipientPreferences:
                 self.unsubscribed_topics
                 if unsubscribed_topics is None
                 else frozenset(unsubscribed_topics)
+            ),
+            blackout_period=(
+                self.blackout_period
+                if isinstance(blackout_period, Unset)
+                else blackout_period
+            ),
+            quiet_hours=(
+                self.quiet_hours if isinstance(quiet_hours, Unset) else quiet_hours
             ),
         )
 

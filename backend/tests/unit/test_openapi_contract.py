@@ -108,7 +108,28 @@ def test_decision_summary_only_reports_client_channel_provenance() -> None:
     assert set(enum) == {"client", "addresses"}
 
 
+def test_recipient_preferences_expose_time_restrictions() -> None:
+    """Recipient blackout and quiet-hours configuration is part of the contract."""
+    properties = _SCHEMAS["RecipientPreferencesRequest"]["properties"]
+    recipient = _SCHEMAS["Recipient"]["properties"]
+
+    assert {"blackout_period", "quiet_hours"} <= set(properties)
+    assert {"blackout_period", "quiet_hours"} <= set(recipient)
+    assert {"blackout_period", "quiet_hours"} <= set(_SCHEMAS["Recipient"]["required"])
+
+
 def test_language_is_not_part_of_the_contract() -> None:
     """The removed profile fact must not linger in any schema."""
     for schema in _SCHEMAS.values():
         assert "language" not in schema.get("properties", {}), schema
+
+
+def test_delivery_constraint_is_a_project_singleton() -> None:
+    """Project constraints are read and replaced at one resource path."""
+    path = _PATHS["/v1/projects/{project_id}/delivery-constraint"]
+
+    assert {"get", "put"} <= set(path)
+    assert set(_SCHEMAS["DeliveryConstraintUpdateRequest"]["required"]) == {"timezone"}
+    assert {"blackout_periods", "quiet_hours"} <= set(
+        _SCHEMAS["DeliveryConstraint"]["properties"]
+    )

@@ -17,6 +17,8 @@ from tiber.domain.exceptions import (
     InvalidEntityAttributeError,
 )
 from tiber.domain.repositories import RecipientRepository
+from tiber.domain.value_objects import BlackoutPeriod, QuietHours
+from tiber.domain.value_objects.preferences import UNSET, Unset
 
 # How long a scrubbed tombstone stays addressable by id before the purge removes
 # it. The window exists so history-heavy rows are not fought over immediately and
@@ -142,17 +144,26 @@ class RecipientManagementService:
         opted_out_channels: Collection[DeliveryChannel] | None = None,
         unsubscribed_categories: Collection[NotificationCategory] | None = None,
         unsubscribed_topics: Collection[UUID] | None = None,
+        blackout_period: BlackoutPeriod | None | Unset = UNSET,
+        quiet_hours: QuietHours | None | Unset = UNSET,
     ) -> Recipient:
-        """Apply a partial consent update, addressed by external ID.
+        """Apply a partial delivery-preferences update by external ID.
 
-        Omitted collections keep their stored value; an empty one clears it.
+        Omitted consent collections keep their stored value; an empty one
+        clears it. For time restrictions, ``UNSET`` keeps the stored value
+        while ``None`` clears it.
         """
         recipient = await self.get_by_external_id(project_id, external_id)
-        preferences = recipient.preferences.merged_with(
-            opted_out_channels=opted_out_channels,
-            unsubscribed_categories=unsubscribed_categories,
-            unsubscribed_topics=unsubscribed_topics,
-        )
+        try:
+            preferences = recipient.preferences.merged_with(
+                opted_out_channels=opted_out_channels,
+                unsubscribed_categories=unsubscribed_categories,
+                unsubscribed_topics=unsubscribed_topics,
+                blackout_period=blackout_period,
+                quiet_hours=quiet_hours,
+            )
+        except ValueError as exc:
+            raise InvalidEntityAttributeError(str(exc)) from exc
         async with self._uow:
             return await self._recipients.save(
                 _apply(recipient.update_preferences, preferences)

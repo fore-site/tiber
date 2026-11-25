@@ -29,6 +29,7 @@ from .metrics import RequestMetricsMiddleware, render_metrics
 from .routers.api_keys import router as api_key_router
 from .routers.auth import router as auth_router
 from .routers.delivery_attempts import router as delivery_attempts_router
+from .routers.delivery_constraints import router as delivery_constraints_router
 from .routers.engagement_events import router as engagement_events_router
 from .routers.health import router as health_router
 from .routers.notification import router as notification_router
@@ -136,6 +137,7 @@ def create_app() -> FastAPI:
         sender_identities_router,
         topics_router,
         templates_router,
+        delivery_constraints_router,
         delivery_attempts_router,
         engagement_events_router,
         webhooks_router,

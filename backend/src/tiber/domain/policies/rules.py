@@ -1,3 +1,23 @@
+"""Delivery policy rules.
+
+Two kinds of time-based constraint live here, and they must not be confused:
+
+- Quiet hours are recurring *wall-clock* ranges, so the send instant is
+  projected into the relevant IANA timezone before comparison. Project quiet
+  hours use the delivery constraint's timezone; recipient quiet hours use the
+  recipient's profile timezone, falling back to UTC when the fact is unknown.
+- Blackout periods are absolute datetime ranges, compared as instants. They
+  have no wall-clock meaning of their own, so there is nothing to project;
+  a projection here would only invite a later comparison on local
+  wall-clock times, which the range does not define.
+
+Boundaries are inclusive at both ends (see ``covers``). Zone resolution is
+fail-closed by construction: ``Recipient`` and ``DeliveryConstraint`` reject
+an unresolvable IANA zone in ``__post_init__``, so a stored zone that tzdata
+no longer knows fails the request that loads it instead of quietly evaluating
+in the wrong zone.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -12,6 +32,20 @@ from .definitions import PolicyContext, PolicyDecision, PolicyRule
 GRACE_MINUTES = 5
 
 
+def covers(window: QuietHours, t: time) -> bool:
+    """Return whether a local wall-clock time falls inside ``window``.
+
+    Both boundaries are inclusive, and a window whose start is later than its
+    end spans midnight. The inclusive end is deliberate: a send exactly at
+    ``window_end`` is still inside the restriction, so ``next_window_end``
+    keeps that same day's occurrence — delivery resumes after the grace
+    margin instead of a day later.
+    """
+    if window.window_start <= window.window_end:
+        return window.window_start <= t <= window.window_end
+    return t >= window.window_start or t <= window.window_end
+
+
 def next_window_end(window: QuietHours, after: datetime, tz: ZoneInfo) -> datetime:
     """Return the first instant at or after ``after`` when ``window`` ends.
 
@@ -21,6 +55,15 @@ def next_window_end(window: QuietHours, after: datetime, tz: ZoneInfo) -> dateti
     (true for both normal and midnight-spanning windows, since a spanning
     window's end on the start's calendar day has already passed whenever the
     start time is behind us — checked, not assumed).
+
+    "Passed" is strict. An ``after`` exactly on the window end is still inside
+    the window (see ``covers``), so that same day's end is returned and the
+    caller's grace margin resumes delivery minutes later, not a day later.
+
+    A window end inside a DST spring-forward gap has no instant: the wall time
+    does not exist, and ``replace`` resolves it with the pre-transition offset,
+    which lands up to an hour *after* the declared wall clock. Delivery is
+    late, never early — the safe direction for quiet hours.
     """
     local = after.astimezone(tz)
     candidate = local.replace(
@@ -29,7 +72,7 @@ def next_window_end(window: QuietHours, after: datetime, tz: ZoneInfo) -> dateti
         second=window.window_end.second,
         microsecond=0,
     )
-    if candidate <= local:
+    if candidate < local:
         candidate += timedelta(days=1)
     return candidate
 
@@ -57,20 +100,15 @@ class RecipientAddressRule:
 
 
 class RecipientPreferenceRule:
-    """Reject a notification that violates the recipient's consent state.
+    """Apply a recipient's stored delivery preferences.
 
-    Covers the recipient's stored consent: unsubscribed categories, opted-out
-    channels, and unsubscribed topics. Consent is a permanent decision, so the
-    consequence is suppression, never postponement.
+    Consent — unsubscribed categories, opted-out channels, unsubscribed topics —
+    suppresses: it is a permanent decision, so postponing would not honour it.
+    Time preferences follow the same split as the project's delivery constraint:
+    a quiet-hours window postpones the send, a blackout period suppresses it.
     """
 
     name = "recipient_preference_rule"
-
-    def _covers(self, window: QuietHours, t: time) -> bool:
-        """Check if the given local time falls within the window."""
-        if window.window_start <= window.window_end:
-            return window.window_start <= t <= window.window_end
-        return t >= window.window_start or t <= window.window_end
 
     async def _evaluate_blackout_and_quiet_hours(
         self,
@@ -82,9 +120,9 @@ class RecipientPreferenceRule:
     ) -> PolicyDecision:
         """Reject a notification that violates the recipient's time preferences.
 
-        The recipient may carry their own quiet hours and blackout period
-        on top of the project's delivery constraint. Per the project's policy ruling
-        the two restriction kinds differ in consequence at BOTH levels:
+        The recipient may carry their own quiet hours and blackout period on
+        top of the project's delivery constraint. The two restriction kinds
+        differ in consequence at both levels:
 
         - a recipient quiet-hours window postpones (temporary, recurring);
         - a recipient blackout period suppresses (absolute, one-shot).
@@ -97,15 +135,11 @@ class RecipientPreferenceRule:
         notification = notif
         send_at = send_time or now
 
-        recipient_timezone = tz
-        zone = ZoneInfo(recipient_timezone) if recipient_timezone else ZoneInfo("UTC")
         if preferences.blackout_period is not None:
             blackout: BlackoutPeriod = preferences.blackout_period
-            if (
-                blackout.start.astimezone(zone)
-                <= send_at.astimezone(zone)
-                <= blackout.end.astimezone(zone)
-            ):
+            # Absolute ranges: compared by instant, so the recipient's
+            # timezone is irrelevant here and is not consulted.
+            if blackout.start <= send_at <= blackout.end:
                 return PolicyDecision.reject(
                     reason=(
                         f"recipient blackout period {blackout.name} covers the "
@@ -117,7 +151,8 @@ class RecipientPreferenceRule:
 
         if preferences.quiet_hours is not None:
             window = preferences.quiet_hours
-            if window.channel == notification.channel and self._covers(
+            zone = ZoneInfo(tz) if tz else ZoneInfo("UTC")
+            if window.channel == notification.channel and covers(
                 window, send_at.astimezone(zone).time()
             ):
                 return PolicyDecision.reject(
@@ -135,7 +170,7 @@ class RecipientPreferenceRule:
         return PolicyDecision.allow()
 
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
-        """Reject when the notification violates the recipient's consent state."""
+        """Reject when the notification violates a stored recipient preference."""
         preferences = ctx.recipient.preferences
         notification = ctx.notification
         channel = ctx.notification.channel
@@ -198,17 +233,12 @@ class ProjectBlackoutPeriodRule:
             return PolicyDecision.allow()
 
         notification = ctx.notification
-        project_timezone = delivery_constraint.timezone
-        zone = ZoneInfo(project_timezone)
-
         send_at = notification.send_at or ctx.now
 
         for blackout_period in blackout_periods:
-            if (
-                blackout_period.start.astimezone(zone)
-                <= send_at.astimezone(zone)
-                <= blackout_period.end.astimezone(zone)
-            ):
+            # Absolute ranges: the project timezone has no bearing, and the
+            # instants are compared as they are.
+            if blackout_period.start <= send_at <= blackout_period.end:
                 return PolicyDecision.reject(
                     reason=(
                         f"notification cannot be sent within "
@@ -234,12 +264,6 @@ class ProjectQuietHoursRule:
 
     name = "quiet_hours"
 
-    def _covers(self, window: QuietHours, t: time) -> bool:
-        """Check if the given time falls within the restricted window."""
-        if window.window_start <= window.window_end:
-            return t >= window.window_start and t <= window.window_end
-        return t >= window.window_start or t <= window.window_end
-
     async def evaluate(self, ctx: PolicyContext) -> PolicyDecision:
         """Reject (postpone) when the notification is sent inside a window."""
         notification = ctx.notification
@@ -254,9 +278,7 @@ class ProjectQuietHoursRule:
         send_time = send_at.astimezone(project_timezone).time()
 
         for window in quiet_hours:
-            if window.channel == notification.channel and self._covers(
-                window, send_time
-            ):
+            if window.channel == notification.channel and covers(window, send_time):
                 resume_at = next_window_end(
                     window, send_at, project_timezone
                 ) + timedelta(minutes=GRACE_MINUTES)

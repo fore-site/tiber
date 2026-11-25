@@ -15,6 +15,12 @@ from ...domain.repositories import RecipientRepository
 from ...domain.services.addresses import normalize_addresses
 from ...domain.value_objects import RecipientPreferences
 from ...infrastructure.models.recipient import RecipientModel
+from .constraint_json import (
+    blackout_from_json,
+    blackout_to_json,
+    quiet_hours_from_json,
+    quiet_hours_to_json,
+)
 
 # Per-channel partial unique indexes (see the migration). A violation message
 # names the index, which is how an address clash is told apart from any other
@@ -41,12 +47,8 @@ def _address_expr(channel: DeliveryChannel):
     )
 
 
-def _preferences_to_json(preferences: RecipientPreferences) -> dict[str, list[str]]:
-    """Serialize consent state under stable keys.
-
-    Quiet hours and blackout periods belong to the project's delivery
-    constraints, not to the recipient, so they are not stored here.
-    """
+def _preferences_to_json(preferences: RecipientPreferences) -> dict[str, object]:
+    """Serialize delivery preferences under stable keys."""
     return {
         "opted_out_channels": sorted(
             channel.value for channel in preferences.opted_out_channels
@@ -57,12 +59,24 @@ def _preferences_to_json(preferences: RecipientPreferences) -> dict[str, list[st
         "unsubscribed_topics": sorted(
             str(topic_id) for topic_id in preferences.unsubscribed_topics
         ),
+        "blackout_period": (
+            blackout_to_json(preferences.blackout_period)
+            if preferences.blackout_period is not None
+            else None
+        ),
+        "quiet_hours": (
+            quiet_hours_to_json(preferences.quiet_hours)
+            if preferences.quiet_hours is not None
+            else None
+        ),
     }
 
 
 def _preferences_from_json(value: object) -> RecipientPreferences:
-    """Rebuild consent state from the stored object (empty when absent)."""
+    """Rebuild delivery preferences from the stored object (empty when absent)."""
     data = value if isinstance(value, Mapping) else {}
+    blackout = data.get("blackout_period")
+    quiet_hours = data.get("quiet_hours")
     return RecipientPreferences(
         opted_out_channels=frozenset(
             DeliveryChannel(str(channel))
@@ -74,6 +88,14 @@ def _preferences_from_json(value: object) -> RecipientPreferences:
         ),
         unsubscribed_topics=frozenset(
             UUID(str(topic_id)) for topic_id in data.get("unsubscribed_topics", ())
+        ),
+        blackout_period=(
+            blackout_from_json(blackout) if isinstance(blackout, Mapping) else None
+        ),
+        quiet_hours=(
+            quiet_hours_from_json(quiet_hours)
+            if isinstance(quiet_hours, Mapping)
+            else None
         ),
     )
 

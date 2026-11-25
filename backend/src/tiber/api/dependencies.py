@@ -30,6 +30,9 @@ from ..application.services.authentication import (
     AuthenticationService,
 )
 from ..application.services.delivery_attempt_query import DeliveryAttemptQueryService
+from ..application.services.delivery_constraint_management import (
+    DeliveryConstraintManagementService,
+)
 from ..application.services.engagement_event import EngagementEventService
 from ..application.services.notification_cancellation import (
     NotificationCancellationService,
@@ -63,6 +66,9 @@ from ..infrastructure.repositories.sqlalchemy_auth_account_repository import (
 )
 from ..infrastructure.repositories.sqlalchemy_delivery_attempt_repository import (
     SQLAlchemyDeliveryAttemptRepository,
+)
+from ..infrastructure.repositories.sqlalchemy_delivery_constraint_repository import (
+    SQLAlchemyDeliveryConstraintRepository,
 )
 from ..infrastructure.repositories.sqlalchemy_engagement_event_repository import (
     SQLAlchemyEngagementEventRepository,
@@ -379,6 +385,13 @@ def get_recipient_repository(
     return SQLAlchemyRecipientRepository(db)
 
 
+def get_delivery_constraint_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SQLAlchemyDeliveryConstraintRepository:
+    """Provide the project delivery-constraint repository for this request."""
+    return SQLAlchemyDeliveryConstraintRepository(db)
+
+
 def get_template_repository(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SQLAlchemyTemplateRepository:
@@ -575,6 +588,20 @@ def get_recipient_management_service(
     return RecipientManagementService(
         unit_of_work=unit_of_work,
         recipient_repository=recipient_repository,
+    )
+
+
+def get_delivery_constraint_management_service(
+    unit_of_work: Annotated[UnitOfWork, Depends(get_unit_of_work)],
+    constraint_repository: Annotated[
+        SQLAlchemyDeliveryConstraintRepository,
+        Depends(get_delivery_constraint_repository),
+    ],
+) -> DeliveryConstraintManagementService:
+    """Provide project delivery-constraint read and replacement operations."""
+    return DeliveryConstraintManagementService(
+        unit_of_work=unit_of_work,
+        constraint_repository=constraint_repository,
     )
 
 

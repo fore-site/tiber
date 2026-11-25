@@ -133,6 +133,9 @@ def api_module():
 def app(api_module, session: AsyncSession, project):
     """Build the real app with only the documented stand-ins overridden."""
     from tiber.api import dependencies as deps
+    from tiber.infrastructure.models import ProjectModel
+
+    project_id = project.id
 
     class _FakeCoreLimiter:
         def __init__(self, result: RateLimitResult) -> None:
@@ -157,8 +160,25 @@ def app(api_module, session: AsyncSession, project):
     async def _db():
         yield session
 
+    async def _authenticated_project() -> ProjectModel:
+        """Resolve the fixture project the way the real dependency would.
+
+        The fixture object cannot be returned directly across requests: the
+        unit of work rolls back the read-only transaction it finds before
+        opening a write, and a rollback expires every object in the session.
+        Holding the expired instance means the next request reads ``project.id``
+        outside greenlet context and raises ``MissingGreenlet``. Going through
+        the session refreshes it lazily, inside an await, exactly as resolving
+        the project from the database does in production.
+        """
+        resolved = await session.get(ProjectModel, project_id)
+        assert resolved is not None, "the harness project disappeared mid-test"
+        return resolved
+
     application.dependency_overrides[deps.get_db] = _db
-    application.dependency_overrides[deps.get_authenticated_project] = lambda: project
+    application.dependency_overrides[deps.get_authenticated_project] = (
+        _authenticated_project
+    )
     application.dependency_overrides[deps.get_rate_limit_policies] = lambda: (
         _FakePolicies(allow_result)
     )

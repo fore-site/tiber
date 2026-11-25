@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from ...domain.entities import Recipient
 from ...domain.enums import DeliveryChannel, NotificationCategory
+from ...domain.value_objects import BlackoutPeriod, QuietHours
+from ...domain.value_objects.preferences import UNSET, Unset
+from .delivery_constraint import BlackoutPeriodModel, QuietHoursModel
 
 
 class RecipientCreateRequest(BaseModel):
@@ -48,11 +51,13 @@ class RecipientUpdateRequest(BaseModel):
 
 
 class RecipientPreferencesRequest(BaseModel):
-    """Partial consent update for one recipient.
+    """Partial delivery-preferences update for one recipient.
 
-    An omitted list is left untouched; an explicit empty list clears it. That
-    keeps repeated identical requests idempotent and stops an update of one set
-    from silently erasing the other two.
+    An omitted consent list is left untouched; an explicit empty list clears
+    it. That keeps repeated identical requests idempotent and stops an update
+    of one set from silently erasing the other two. Time restrictions use the
+    same partial rule: omitted leaves the stored value untouched, ``null``
+    clears it, and an object replaces it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -60,6 +65,8 @@ class RecipientPreferencesRequest(BaseModel):
     opted_out_channels: list[DeliveryChannel] | None = None
     unsubscribed_categories: list[NotificationCategory] | None = None
     unsubscribed_topics: list[UUID] | None = None
+    blackout_period: BlackoutPeriodModel | None = None
+    quiet_hours: QuietHoursModel | None = None
 
     @field_validator(
         "opted_out_channels", "unsubscribed_categories", "unsubscribed_topics"
@@ -86,6 +93,18 @@ class RecipientPreferencesRequest(BaseModel):
             )
         return self
 
+    def blackout_period_update(self) -> BlackoutPeriod | None | Unset:
+        """Return the requested blackout change, or ``UNSET`` when omitted."""
+        if "blackout_period" not in self.model_fields_set:
+            return UNSET
+        return self.blackout_period.to_domain() if self.blackout_period else None
+
+    def quiet_hours_update(self) -> QuietHours | None | Unset:
+        """Return the requested quiet-hours change, or ``UNSET`` when omitted."""
+        if "quiet_hours" not in self.model_fields_set:
+            return UNSET
+        return self.quiet_hours.to_domain() if self.quiet_hours else None
+
 
 class RecipientResponse(BaseModel):
     """API representation of a persisted recipient."""
@@ -99,6 +118,8 @@ class RecipientResponse(BaseModel):
     opted_out_channels: list[DeliveryChannel]
     unsubscribed_categories: list[NotificationCategory]
     unsubscribed_topics: list[UUID]
+    blackout_period: BlackoutPeriodModel | None = None
+    quiet_hours: QuietHoursModel | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -118,6 +139,16 @@ class RecipientResponse(BaseModel):
                 recipient.preferences.unsubscribed_categories
             ),
             unsubscribed_topics=sorted(recipient.preferences.unsubscribed_topics),
+            blackout_period=(
+                BlackoutPeriodModel.from_domain(recipient.preferences.blackout_period)
+                if recipient.preferences.blackout_period is not None
+                else None
+            ),
+            quiet_hours=(
+                QuietHoursModel.from_domain(recipient.preferences.quiet_hours)
+                if recipient.preferences.quiet_hours is not None
+                else None
+            ),
             created_at=recipient.created_at,
             updated_at=recipient.updated_at,
         )
