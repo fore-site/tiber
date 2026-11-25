@@ -81,6 +81,8 @@ tags:
     description: Project management, the primary tenancy boundary
   - name: API Keys
     description: Project-scoped machine authentication keys
+  - name: Senders
+    description: Project-owned email sender domains and their verification
   - name: Templates
     description: Reusable notification content templates
   - name: Recipients
@@ -684,6 +686,126 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # Senders
+
+  /v1/projects/{project_id}/senders:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+
+    post:
+      tags: [Senders]
+      summary: Register a sender domain
+      operationId: postv1projectsprojectidsenders
+      description: |
+        Registers the domain of `from_email` with the email provider and returns
+        the DNS records that must be published before the domain can send.
+
+        A project holds at most one email sender identity, and one domain can be
+        registered by one project only; either case returns `409`. The identity
+        starts in the provider's initial state, so email delivery keeps using the
+        Tiber fallback sender until `is_verified` is true.
+
+        Returns `503` when the email provider is unavailable or rejects the
+        request. No identity is stored in that case.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SenderIdentityCreateRequest"
+      responses:
+        "201":
+          description: Sender identity created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SenderIdentity"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "503":
+          $ref: "#/components/responses/ProviderUnavailable"
+
+    get:
+      tags: [Senders]
+      summary: List sender identities
+      operationId: getv1projectsprojectidsenders
+      description: >
+        Returns the project's sender identities. The list holds at most one
+        email sender. An empty list means email delivery uses the Tiber
+        fallback sender.
+      responses:
+        "200":
+          description: Sender identities configured for the project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SenderIdentityList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/projects/{project_id}/senders/{sender_id}/verification:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SenderId"
+
+    post:
+      tags: [Senders]
+      summary: Verify a sender domain
+      operationId: postv1projectsprojectidsenderssenderidverification
+      description: |
+        Asks the email provider to re-check the domain's DNS records and returns
+        the provider's current state.
+
+        Verification happens at the provider, so a `200` only means the request
+        was accepted: the returned `status` is what the provider reports now and
+        can still be pending on the first calls. Re-publishing DNS records and
+        calling this again is how a pending domain becomes `verified`.
+      responses:
+        "200":
+          description: Sender state after the verification request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SenderIdentity"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ProviderUnavailable"
+
+  /v1/projects/{project_id}/senders/{sender_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SenderId"
+
+    delete:
+      tags: [Senders]
+      summary: Delete a sender identity
+      operationId: deletev1projectsprojectidsenderssenderid
+      description: |
+        Removes the domain from the email provider, then deletes the identity.
+        Email delivery falls back to the Tiber sender immediately.
+
+        The provider call happens first, so a `503` leaves the identity in place
+        and the request can be retried. Deleting an identity that is already
+        gone at the provider still succeeds.
+      responses:
+        "204":
+          description: Sender identity deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ProviderUnavailable"
 
   # Templates
 
@@ -1815,6 +1937,13 @@ components:
       schema:
         $ref: "#/components/schemas/UUID"
 
+    SenderId:
+      name: sender_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/UUID"
+
     Limit:
       name: limit
       in: query
@@ -1937,6 +2066,18 @@ components:
             error: no_password_set
             message: This account was created via GitHub OAuth and has no password
             status: 400
+            correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+
+    ProviderUnavailable:
+      description: The email provider is unavailable or rejected the request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: provider_unavailable
+            message: Resend is currently unavailable
+            status: 503
             correlation_id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
 
   # Schemas
@@ -2318,6 +2459,98 @@ components:
           nullable: true
           description: |
             Pass as `cursor` to fetch the next page; null on the last page.
+
+    # Sender
+
+    SenderIdentityCreateRequest:
+      type: object
+      required: [from_email]
+      additionalProperties: false
+      properties:
+        from_email:
+          type: string
+          format: email
+          description: >
+            From address on the domain being registered. The domain is derived
+            from this address and registered with the provider.
+        display_name:
+          type: string
+          maxLength: 100
+          nullable: true
+          description: Optional display name placed before the address.
+        reply_to:
+          type: string
+          format: email
+          nullable: true
+          description: Optional Reply-To address.
+
+    SenderIdentity:
+      type: object
+      description: >
+        A project-owned email sender. Identities are created through the email
+        provider, so `status` and `dns_records` mirror the provider's state.
+      required:
+        [id, project_id, channel, provider, from_email, display_name, reply_to,
+         domain, status, is_verified, dns_records, verified_at, created_at,
+         updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/UUID"
+        project_id:
+          $ref: "#/components/schemas/UUID"
+        channel:
+          $ref: "#/components/schemas/Channel"
+          description: Channel the identity sends on. Always `email` today.
+        provider:
+          type: string
+          example: resend
+        from_email:
+          type: string
+          format: email
+          description: Normalized From address.
+        display_name:
+          type: string
+          nullable: true
+        reply_to:
+          type: string
+          format: email
+          nullable: true
+        domain:
+          type: string
+          description: Sending domain derived from `from_email`.
+          example: example.com
+        status:
+          type: string
+          description: >
+            Provider-reported verification state, such as `pending`,
+            `verified`, or `partially_verified`.
+        is_verified:
+          type: boolean
+          description: Whether email delivery may use this identity now.
+        dns_records:
+          type: array
+          description: >
+            DNS records to publish. Tiber passes the provider's records through
+            unchanged, so the fields within each record vary by provider.
+          items:
+            type: object
+            additionalProperties: true
+        verified_at:
+          $ref: "#/components/schemas/Timestamp"
+          nullable: true
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
+
+    SenderIdentityList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SenderIdentity"
 
     # Template
 

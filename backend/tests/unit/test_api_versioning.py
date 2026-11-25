@@ -20,17 +20,6 @@ from tiber.api.versions import VERSIONS, ApiVersion
 
 _API_DIR = Path(__file__).parents[2] / "src" / "tiber" / "api"
 
-# Endpoints a version serves but its curated document does not describe yet.
-# The set is explicit so drift fails loudly: documenting an endpoint shrinks
-# it, and a new endpoint must not be added to it silently.
-_UNDOCUMENTED: dict[str, set[str]] = {
-    "v1": {
-        "/v1/projects/{project_id}/senders",
-        "/v1/projects/{project_id}/senders/{sender_id}",
-        "/v1/projects/{project_id}/senders/{sender_id}/verification",
-    },
-}
-
 
 @pytest.fixture(scope="module")
 def app() -> FastAPI:
@@ -67,7 +56,7 @@ def test_every_version_serves_exactly_the_paths_its_document_describes(
     # currently serves them, so they must exist at the path they claim.
     assert documented - prefixed <= every_mounted_path, "documented but not served"
     assert not prefixed - mounted, "documented under the prefix but not served there"
-    assert mounted - prefixed == _UNDOCUMENTED[version.name], "served but undocumented"
+    assert mounted == prefixed, "served but undocumented"
 
 
 def test_version_prefixes_are_unique() -> None:

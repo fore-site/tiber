@@ -20,7 +20,10 @@ from tiber.api.v1.schemas.sender_identity import (
 from tiber.application.services.sender_identity import SenderIdentityService
 from tiber.infrastructure.models import ProjectModel
 
-router = APIRouter(dependencies=[Depends(enforce_authenticated_rate_limit)])
+router = APIRouter(
+    tags=["Senders"],
+    dependencies=[Depends(enforce_authenticated_rate_limit)],
+)
 
 
 @router.post(
