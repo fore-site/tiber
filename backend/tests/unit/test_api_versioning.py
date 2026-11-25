@@ -15,6 +15,7 @@ import pytest
 import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from openapi_spec_validator import validate_spec
 
 from tiber.api.versions import VERSIONS, ApiVersion
 
@@ -72,6 +73,14 @@ def test_every_version_points_at_a_readable_document() -> None:
         document = yaml.safe_load(version.spec_path.read_text())
         assert document["paths"], version.name
         assert document["info"]["title"], version.name
+
+
+@pytest.mark.parametrize("version", VERSIONS, ids=lambda v: v.name)
+def test_every_version_document_satisfies_the_openapi_meta_schema(
+    version: ApiVersion,
+) -> None:
+    """Parsing proves nothing; the document must validate as OpenAPI 3.1."""
+    validate_spec(yaml.safe_load(version.spec_path.read_text()))
 
 
 def test_no_version_imports_a_newer_one() -> None:
