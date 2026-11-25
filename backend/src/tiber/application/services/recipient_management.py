@@ -60,12 +60,14 @@ class RecipientManagementService:
         project_id: UUID,
         external_id: str,
         addresses: dict[DeliveryChannel, str],
+        timezone: str | None = None,
     ) -> Recipient:
         """Register a new recipient in a project."""
         recipient = Recipient.create(
             project_id=project_id,
             external_id=external_id,
             addresses=addresses,
+            timezone=timezone,
         )
         async with self._uow:
             return await self._recipients.add(recipient)
@@ -114,12 +116,13 @@ class RecipientManagementService:
         project_id: UUID,
         recipient_id: UUID,
         addresses: dict[DeliveryChannel, str],
+        timezone: str | None | Unset = UNSET,
     ) -> Recipient:
-        """Replace a recipient's address book."""
+        """Replace a recipient's address book and optionally its timezone."""
         recipient = await self.get(project_id, recipient_id)
         async with self._uow:
             return await self._recipients.save(
-                _apply(recipient.update_addresses, addresses)
+                self._restated(recipient, addresses, timezone)
             )
 
     async def update_by_external_id(
@@ -128,13 +131,34 @@ class RecipientManagementService:
         project_id: UUID,
         external_id: str,
         addresses: dict[DeliveryChannel, str],
+        timezone: str | None | Unset = UNSET,
     ) -> Recipient:
-        """Replace a recipient's address book, addressed by external ID."""
+        """Replace a recipient's address book, addressed by external ID.
+
+        ``timezone`` is partial: ``UNSET`` keeps the stored fact while ``None``
+        records it as unknown.
+        """
         recipient = await self.get_by_external_id(project_id, external_id)
         async with self._uow:
             return await self._recipients.save(
-                _apply(recipient.update_addresses, addresses)
+                self._restated(recipient, addresses, timezone)
             )
+
+    @staticmethod
+    def _restated(
+        recipient: Recipient,
+        addresses: dict[DeliveryChannel, str],
+        timezone: str | None | Unset,
+    ) -> Recipient:
+        """Apply a full address replacement plus an optional timezone.
+
+        Kept out of the two update use cases because they differ only in how
+        they find the recipient; the state change itself must not diverge.
+        """
+        updated = _apply(recipient.update_addresses, addresses)
+        if isinstance(timezone, Unset):
+            return updated
+        return _apply(updated.update_timezone, timezone)
 
     async def update_preferences_by_external_id(
         self,

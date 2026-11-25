@@ -41,6 +41,7 @@ async def create_recipient(
         project_id=project.id,
         external_id=payload.external_id,
         addresses=payload.addresses,
+        timezone=payload.timezone,
     )
     return RecipientResponse.from_entity(recipient)
 
@@ -77,11 +78,12 @@ async def update_recipient(
     ],
     recipient: Annotated[str, Query(min_length=1, max_length=255)],
 ) -> RecipientResponse:
-    """Replace a recipient's address book, addressed by external ID."""
+    """Replace a recipient's address book and timezone, by external ID."""
     updated = await service.update_by_external_id(
         project_id=project.id,
         external_id=recipient,
         addresses=payload.addresses,
+        timezone=payload.timezone_update(),
     )
     return RecipientResponse.from_entity(updated)
 

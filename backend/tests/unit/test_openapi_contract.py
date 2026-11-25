@@ -118,6 +118,15 @@ def test_recipient_preferences_expose_time_restrictions() -> None:
     assert {"blackout_period", "quiet_hours"} <= set(_SCHEMAS["Recipient"]["required"])
 
 
+def test_recipient_timezone_is_accepted_and_echoed() -> None:
+    """The profile fact quiet hours depend on is settable through the API."""
+    recipient = _SCHEMAS["Recipient"]
+
+    assert "timezone" in recipient["required"]
+    assert "timezone" in _SCHEMAS["CreateRecipientRequest"]["properties"]
+    assert "timezone" in _SCHEMAS["UpdateRecipientRequest"]["properties"]
+
+
 def test_language_is_not_part_of_the_contract() -> None:
     """The removed profile fact must not linger in any schema."""
     for schema in _SCHEMAS.values():

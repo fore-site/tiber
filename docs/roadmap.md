@@ -110,7 +110,8 @@ The roadmap is the implementation guide for the architecture in `docs/architectu
 
 - [ ] Project management as the active tenancy boundary; Workspace remains explicitly future scope
 - [✅] Recipient consent management: channel opt-outs plus category/topic unsubscribes persisted on `recipients` and written through `PUT /v1/projects/{project_id}/recipients/preferences` (partial semantics: omitted lists untouched, `[]` clears)
-- [ ] Delivery constraint management: project-level blackout periods, per-channel quiet-hours windows, and the project timezone (IANA name) in which quiet hours are evaluated
+- [✅] Recipient time preferences: a personal blackout period (suppress) and one quiet-hours window (postpone), written through the same partial preferences endpoint (omitted keeps, `null` clears, object replaces) and evaluated on the recipient's profile timezone (accepted at registration and restated via `PATCH` on the recipient), falling back to UTC
+- [✅] Delivery constraint management: project-level blackout periods, per-channel quiet-hours windows, and the project timezone (IANA name) in which quiet hours are evaluated, read and replaced through `GET`/`PUT /v1/projects/{project_id}/delivery-constraint`
 - [ ] Auth (API key or JWT): JWT access-token signature validation first, Redis blocklist check second, fail closed with 503 when Redis is unavailable; API key auth uses the Redis authentication cache with durable database fallback on cache miss or Redis failure
 - [ ] API key lifecycle management with the durable database as the source of truth and Redis auth-cache invalidation/refresh on create, revoke, and expiry events
 - [ ] Next.js dashboard: notification feed with status/channel/priority, "trigger test notification" form

@@ -972,7 +972,8 @@ paths:
         Replaces the recipient's whole address book, addressed by the
         `recipient` query parameter (an external id). An omitted channel is
         removed; the request cannot leave an opted-out channel without an
-        address.
+        address. The optional `timezone` follows partial semantics: omitting it
+        keeps the stored value, `null` records the fact as unknown.
       parameters:
         - $ref: "#/components/parameters/RecipientExternalId"
       requestBody:
@@ -2494,6 +2495,7 @@ components:
         - id
         - project_id
         - addresses
+        - timezone
         - opted_out_channels
         - unsubscribed_categories
         - unsubscribed_topics
@@ -2511,6 +2513,12 @@ components:
           description: Your system's stable identifier for this recipient.
         addresses:
           $ref: "#/components/schemas/RecipientAddresses"
+        timezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: |
+            The recipient's IANA timezone, such as `Europe/Lisbon`, or null
+            when unknown. Quiet hours are projected onto this wall clock.
         opted_out_channels:
           type: array
           items:
@@ -2567,6 +2575,12 @@ components:
           description: >
             Optional. Omitting it registers the recipient by external id only;
             no channel can deliver until an address exists.
+        timezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: >
+            Optional IANA timezone of the person. Unknown is stored as null and
+            evaluated as UTC; it is not guessed from an address.
 
     UpdateRecipientRequest:
       type: object
@@ -2574,9 +2588,18 @@ components:
       description: >
         The full replacement address book. Sending `{}` removes every address,
         which is only valid for a recipient that has an external id.
+
+        `timezone` is partial: omitting it keeps the stored value, `null`
+        records the fact as unknown.
       properties:
         addresses:
           $ref: "#/components/schemas/RecipientAddresses"
+        timezone:
+          type: [string, "null"]
+          maxLength: 64
+          description: |
+            IANA timezone, such as `Europe/Lisbon`. Omit to keep the stored
+            value; send null to mark it unknown.
 
     RecipientPreferencesRequest:
       type: object
