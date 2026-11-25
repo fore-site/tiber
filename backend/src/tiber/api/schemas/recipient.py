@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Self
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ...domain.entities import Recipient
 from ...domain.enums import DeliveryChannel, NotificationCategory
@@ -126,19 +125,6 @@ class RecipientPreferencesRequest(BaseModel):
         if len(set(values)) != len(values):
             raise ValueError("must not contain duplicates")
         return values
-
-    @model_validator(mode="after")
-    def _critical_is_always_deliverable(self) -> Self:
-        """CRITICAL cannot be unsubscribed from, mirroring the domain rule."""
-        if (
-            self.unsubscribed_categories is not None
-            and NotificationCategory.CRITICAL in self.unsubscribed_categories
-        ):
-            raise ValueError(
-                "CRITICAL notifications are always deliverable and cannot be "
-                "unsubscribed from."
-            )
-        return self
 
     def blackout_period_update(self) -> BlackoutPeriod | None | Unset:
         """Return the requested blackout change, or ``UNSET`` when omitted."""

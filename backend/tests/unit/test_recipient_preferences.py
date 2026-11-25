@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, time
-from uuid import uuid4
+from types import TracebackType
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -13,8 +14,12 @@ from tiber.api.schemas.recipient import (
     RecipientPreferencesRequest,
     RecipientResponse,
 )
+from tiber.application.services.recipient_management import (
+    RecipientManagementService,
+)
 from tiber.domain.entities import Recipient
 from tiber.domain.enums import DeliveryChannel, NotificationCategory
+from tiber.domain.exceptions import InvalidEntityAttributeError
 from tiber.domain.value_objects import (
     BlackoutPeriod,
     QuietHours,
@@ -159,12 +164,6 @@ def test_preferences_serialize_to_stable_sorted_values():
 # --- Request schema ---
 
 
-def test_critical_category_cannot_be_unsubscribed():
-    """CRITICAL is always deliverable; the wire contract says so up front."""
-    with pytest.raises(ValidationError, match="CRITICAL"):
-        RecipientPreferencesRequest(unsubscribed_categories=["critical"])
-
-
 def test_duplicate_entries_are_rejected():
     """Duplicates are a client mistake, not something to silently collapse."""
     with pytest.raises(ValidationError, match="duplicates"):
@@ -235,7 +234,7 @@ def test_empty_list_clears_a_set():
 
 
 def test_merge_still_rejects_critical_unsubscribe():
-    """The wire validator is not the only guard on CRITICAL."""
+    """The value object refuses to store a CRITICAL unsubscribe."""
     with pytest.raises(ValueError, match="CRITICAL"):
         RecipientPreferences().merged_with(unsubscribed_categories=["critical"])
 
@@ -304,3 +303,47 @@ def test_response_exposes_recipient_time_restrictions():
     assert payload.quiet_hours is not None
     assert payload.quiet_hours.window_start == time(22, 0)
     assert payload.quiet_hours.channel is DeliveryChannel.EMAIL
+
+
+# --- Service ---
+
+
+class _NullUnitOfWork:
+    """Stand in for the transaction boundary; rejection happens before it opens."""
+
+    async def __aenter__(self) -> _NullUnitOfWork:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        return None
+
+
+class _RecipientRepository:
+    """Resolve one stored recipient by external id."""
+
+    def __init__(self, recipient: Recipient) -> None:
+        self._recipient = recipient
+
+    async def get_by_external_id(self, external_id: str, project_id: UUID) -> Recipient:
+        """Return the stored recipient regardless of the lookup keys."""
+        return self._recipient
+
+
+async def test_update_rejects_a_critical_unsubscribe():
+    """CRITICAL is unstorable, so the service surfaces the domain rejection."""
+    service = RecipientManagementService(
+        unit_of_work=_NullUnitOfWork(),
+        recipient_repository=_RecipientRepository(make_recipient()),
+    )
+
+    with pytest.raises(InvalidEntityAttributeError, match="CRITICAL"):
+        await service.update_preferences_by_external_id(
+            project_id=uuid4(),
+            external_id="user-1",
+            unsubscribed_categories=[NotificationCategory.CRITICAL],
+        )
