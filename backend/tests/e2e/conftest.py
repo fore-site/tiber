@@ -132,7 +132,7 @@ def api_module():
 @pytest.fixture
 def app(api_module, session: AsyncSession, project):
     """Build the real app with only the documented stand-ins overridden."""
-    from tiber.api import dependencies as deps
+    from tiber.api.common import dependencies as deps
     from tiber.infrastructure.models import ProjectModel
 
     project_id = project.id

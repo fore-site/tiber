@@ -9,36 +9,25 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from tiber.domain.exceptions import TiberError
-
-from ..core.config import get_settings
-from ..core.database import engine
-from ..core.logging import (
+from tiber.api.common.exception_handlers import (
+    tiber_error_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
+from tiber.api.common.metrics import RequestMetricsMiddleware, render_metrics
+from tiber.api.docs import register_docs
+from tiber.api.v1.routers.health import router as health_router
+from tiber.api.versions import VERSIONS
+from tiber.core.config import get_settings
+from tiber.core.database import engine
+from tiber.core.logging import (
     configure_logging,
     get_logger,
     reset_correlation_id,
     set_correlation_id,
 )
-from ..core.telemetry import configure_telemetry
-from .exception_handlers import (
-    tiber_error_exception_handler,
-    unhandled_exception_handler,
-    validation_exception_handler,
-)
-from .metrics import RequestMetricsMiddleware, render_metrics
-from .routers.api_keys import router as api_key_router
-from .routers.auth import router as auth_router
-from .routers.delivery_attempts import router as delivery_attempts_router
-from .routers.delivery_constraints import router as delivery_constraints_router
-from .routers.engagement_events import router as engagement_events_router
-from .routers.health import router as health_router
-from .routers.notification import router as notification_router
-from .routers.projects import router as projects_router
-from .routers.recipients import router as recipients_router
-from .routers.sender_identities import router as sender_identities_router
-from .routers.templates import router as templates_router
-from .routers.topics import router as topics_router
-from .routers.webhooks import router as webhooks_router
+from tiber.core.telemetry import configure_telemetry
+from tiber.domain.exceptions import TiberError
 
 # Configure structlog before the first log call in this process
 configure_logging()
@@ -63,13 +52,16 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
     configure_telemetry("tiber-api")
+    # The framework's own /docs, /redoc and /openapi.json are deliberately off:
+    # one generated document would describe every mounted version at once. Each
+    # version serves its own curated document instead (see tiber.api.docs).
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
         debug=settings.debug,
-        docs_url="/docs" if settings.docs_enabled else None,
-        redoc_url="/redoc" if settings.redoc_enabled else None,
-        openapi_url="/openapi.json" if settings.openapi_enabled else None,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
         lifespan=lifespan,
     )
 
@@ -116,7 +108,9 @@ def create_app() -> FastAPI:
 
     # Add last so this middleware wraps the request-context middleware and sees
     # every response, including errors.
-    app.add_middleware(RequestMetricsMiddleware)
+    app.add_middleware(
+        RequestMetricsMiddleware, versions=tuple(version.name for version in VERSIONS)
+    )
 
     # Metrics are intentionally unversioned and unauthenticated: Prometheus
     # scrapes this path over the internal network.
@@ -128,22 +122,12 @@ def create_app() -> FastAPI:
     # need to change when the API version does.
     app.include_router(health_router)
 
-    api_routers = (
-        auth_router,
-        api_key_router,
-        projects_router,
-        notification_router,
-        recipients_router,
-        sender_identities_router,
-        topics_router,
-        templates_router,
-        delivery_constraints_router,
-        delivery_attempts_router,
-        engagement_events_router,
-        webhooks_router,
-    )
-    for router in api_routers:
-        app.include_router(router, prefix=settings.api_prefix)
+    # Every registered version is mounted side by side, so a breaking change can
+    # ship as a new prefix while existing clients keep the prefix they pin.
+    for version in VERSIONS:
+        app.include_router(version.router, prefix=version.prefix)
+        register_docs(app, version, settings)
+
     return app
 
 

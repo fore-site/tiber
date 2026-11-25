@@ -17,8 +17,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from tiber.api.schemas.engagement_event import EngagementEventResponse
-from tiber.api.schemas.intake import IntakeStatusResponse
+from tiber.api.v1.schemas.engagement_event import EngagementEventResponse
+from tiber.api.v1.schemas.intake import IntakeStatusResponse
 from tiber.application.services.notification_query import NotificationQueryService
 from tiber.domain.entities import EngagementEvent, Notification, Recipient
 from tiber.domain.entities.notification_intake import NotificationIntake

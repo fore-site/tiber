@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from tiber.api.schemas.engagement_event import EngagementEventReportRequest
+from tiber.api.v1.schemas.engagement_event import EngagementEventReportRequest
 from tiber.application.services.engagement_event import EngagementEventService
 from tiber.domain.entities import EngagementEvent
 from tiber.domain.enums import DeliveryChannel, EngagementEventType

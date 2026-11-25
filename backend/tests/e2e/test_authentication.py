@@ -92,7 +92,7 @@ async def test_register_verify_and_access_dashboard(
     monkeypatch,
 ) -> None:
     """Registration requires verification before a dashboard JWT is issued."""
-    from tiber.api import dependencies as deps
+    from tiber.api.common import dependencies as deps
     from tiber.core import security
 
     redis = MemoryRedis()
@@ -210,8 +210,8 @@ async def test_api_key_is_project_scoped_and_revoke_takes_effect(
     monkeypatch,
 ) -> None:
     """A dashboard creates a key, the key accesses only its project, and revocation works."""
-    from tiber.api import dependencies as deps
-    from tiber.api.auth_tokens import issue_tokens
+    from tiber.api.common import dependencies as deps
+    from tiber.api.common.auth_tokens import issue_tokens
     from tiber.core import security
     from tiber.infrastructure.models import AccountModel, ProjectModel
 

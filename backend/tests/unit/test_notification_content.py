@@ -1,6 +1,6 @@
 import pytest
 
-from tiber.api.schemas.notification import (
+from tiber.api.v1.schemas.notification import (
     NotificationContentModel,
     NotificationCreateRequest,
 )

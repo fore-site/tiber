@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "Tiber"
     app_version: str = "0.1.0"
-    api_prefix: str = "/v1"
     debug: bool = False
     cors_enabled: bool = True
     docs_enabled: bool = True

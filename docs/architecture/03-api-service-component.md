@@ -36,6 +36,19 @@ This diagram shows the business capabilities that make up the Tiber API Service 
 
 - **Observability treats Redis unavailability as unhealthy, not degraded:** Most health check implementations distinguish between unhealthy (the service cannot function) and degraded (the service is functioning with reduced capability). For Tiber, Redis unavailability is not a degraded state. It is an unhealthy state because the Authentication component fails closed when Redis is unreachable. A load balancer or deployment platform reading the `/health` endpoint needs to know that Redis down means the API Service is effectively down for authenticated requests. Reporting it as degraded would mask a full outage.
 
+## API Versioning
+
+Versioning is a routing and wire-contract concern, never a domain one. `tiber/api/versions.py` is the single registry of mounted versions; `create_app` iterates it, mounting each version's router bundle under `/{version}`. Two versions therefore coexist in one process: a client pinned to `/v1` is unaffected by anything added under `/v2`.
+
+- **A version owns its HTTP surface only.** `tiber/api/v1/` holds routers, schemas, mappers and the curated OpenAPI document. The domain and application layers are shared and version-agnostic: if a new version needs different *behaviour* rather than a different wire shape, that belongs in an explicit use-case parameter, not in a version switch inside a service.
+- **A new version forks only what changed.** Unchanged resources are included by reference (`from tiber.api.v1.routers import topics`) into the new bundle, so the default for a new version is reuse, not duplication.
+- **Schemas are copied for a breaking change, not subclassed.** Inheritance leaks the parent's fields into the child's contract; a forked schema states v2's shape on its own.
+- **Each version serves its own curated document.** The framework's root `/docs`, `/redoc` and `/openapi.json` are disabled, because one generated document would describe every mounted version at once. `/{version}/openapi.json`, `/{version}/docs` and `/{version}/redoc` serve that version's YAML as written; the contract tests assert the document and the mounted routes agree.
+- **Versions import downward only.** `v2` may build on `v1` and `common`; `v1` may never import `v2`. This is enforced by a test over the import graph, because it is the rule that decays silently.
+- **Usage is measured per version.** Request metrics carry `tiber.api.version`, taken from the path prefix. A version cannot be retired safely if nobody can see who still calls it.
+
+What counts as breaking: removing or renaming a field, tightening a validation rule, changing a status code or error body, changing the meaning of an existing value. Additive changes — a new optional field, a new endpoint, a new enum value a client may ignore — ship inside the current version. `tiber.core.config.github_oauth_redirect_uri` pins a `/v1` path in configuration; if a future version changes the auth callback, that setting becomes per-version rather than global.
+
 ## What This Diagram Does Not Show
 
 This diagram does not show internal class or function structure within any component — that is Level 4 detail and is not diagrammed. It does not show the Worker Service internals, which are covered in the Level 3 Worker Service component diagram.

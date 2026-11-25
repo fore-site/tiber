@@ -357,7 +357,7 @@ async def test_rate_limited_project_is_rejected(client, app, project) -> None:
     """The project policy rejects the request and preserves its rate-limit headers."""
     from pycurb.core import RateLimitResult
 
-    from tiber.api.dependencies import get_rate_limit_policies
+    from tiber.api.common.dependencies import get_rate_limit_policies
     from tiber.core.redis import RedisKeys
 
     class _DenyingCoreLimiter:

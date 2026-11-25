@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tiber.api import dependencies as deps
+from tiber.api.common import dependencies as deps
 from tiber.application.ports.sender_domain import ProviderDomain
 
 pytestmark = pytest.mark.e2e

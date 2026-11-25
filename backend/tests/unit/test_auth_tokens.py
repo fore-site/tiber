@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from tiber.api.auth_tokens import (
+from tiber.api.common.auth_tokens import (
     consume_one_time_token,
     issue_one_time_token,
     issue_tokens,

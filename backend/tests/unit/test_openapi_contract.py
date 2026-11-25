@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 
 _SPEC = yaml.safe_load(
-    (Path(__file__).parents[2] / "src/tiber/api/openapi.yaml").read_text()
+    (Path(__file__).parents[2] / "src/tiber/api/v1/openapi.yaml").read_text()
 )
 _PATHS: dict[str, Any] = _SPEC["paths"]
 _SCHEMAS: dict[str, Any] = _SPEC["components"]["schemas"]

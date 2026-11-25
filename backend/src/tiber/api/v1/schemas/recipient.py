@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from tiber.api.v1.schemas.delivery_constraint import (
+    BlackoutPeriodModel,
+    QuietHoursModel,
+)
+from tiber.domain.entities import Recipient
+from tiber.domain.enums import DeliveryChannel, NotificationCategory
+from tiber.domain.value_objects import BlackoutPeriod, QuietHours
+from tiber.domain.value_objects.preferences import UNSET, Unset
+
+
+def _iana_timezone(value: str | None) -> str | None:
+    """Validate a profile timezone the way the domain entity will.
+
+    The entity re-validates on construction; doing it here as well turns a bad
+    zone into a field-level 422 instead of a request-level domain error.
+    """
+    if value is None:
+        return None
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(f"unknown IANA timezone: {value!r}") from exc
+    return value
+
+
+class RecipientCreateRequest(BaseModel):
+    """Fields accepted when registering a recipient."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    external_id: str = Field(min_length=1, max_length=255)
+    addresses: dict[DeliveryChannel, str] = Field(default_factory=dict)
+    timezone: str | None = Field(
+        default=None,
+        max_length=64,
+        description=(
+            "IANA timezone of the person, such as 'Europe/Lisbon'. Used as the "
+            "wall clock for recipient quiet hours; unknown means UTC."
+        ),
+    )
+
+    @field_validator("addresses")
+    @classmethod
+    def addresses_are_valid(
+        cls, addresses: dict[DeliveryChannel, str]
+    ) -> dict[DeliveryChannel, str]:
+        """Reject addresses with an empty destination."""
+        if any(not address for address in addresses.values()):
+            raise ValueError("addresses must not contain an empty value")
+        return addresses
+
+    @field_validator("timezone")
+    @classmethod
+    def timezone_is_iana(cls, timezone: str | None) -> str | None:
+        """Reject zone names that the runtime cannot resolve."""
+        return _iana_timezone(timezone)
+
+
+class RecipientUpdateRequest(BaseModel):
+    """Replacement address book for a recipient, plus optional profile facts.
+
+    ``addresses`` is the full new set. ``timezone`` is partial: omitted keeps
+    the stored value, ``null`` records it as unknown.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    addresses: dict[DeliveryChannel, str]
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("addresses")
+    @classmethod
+    def addresses_are_valid(
+        cls, addresses: dict[DeliveryChannel, str]
+    ) -> dict[DeliveryChannel, str]:
+        """Reject addresses with an empty destination."""
+        if any(not address for address in addresses.values()):
+            raise ValueError("addresses must not contain an empty value")
+        return addresses
+
+    @field_validator("timezone")
+    @classmethod
+    def timezone_is_iana(cls, timezone: str | None) -> str | None:
+        """Reject zone names that the runtime cannot resolve."""
+        return _iana_timezone(timezone)
+
+    def timezone_update(self) -> str | None | Unset:
+        """Return the requested timezone change, or ``UNSET`` when omitted."""
+        if "timezone" not in self.model_fields_set:
+            return UNSET
+        return self.timezone
+
+
+class RecipientPreferencesRequest(BaseModel):
+    """Partial delivery-preferences update for one recipient.
+
+    An omitted consent list is left untouched; an explicit empty list clears
+    it. That keeps repeated identical requests idempotent and stops an update
+    of one set from silently erasing the other two. Time restrictions use the
+    same partial rule: omitted leaves the stored value untouched, ``null``
+    clears it, and an object replaces it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    opted_out_channels: list[DeliveryChannel] | None = None
+    unsubscribed_categories: list[NotificationCategory] | None = None
+    unsubscribed_topics: list[UUID] | None = None
+    blackout_period: BlackoutPeriodModel | None = None
+    quiet_hours: QuietHoursModel | None = None
+
+    @field_validator(
+        "opted_out_channels", "unsubscribed_categories", "unsubscribed_topics"
+    )
+    @classmethod
+    def _no_duplicates(cls, values: list | None) -> list | None:
+        """Reject duplicates instead of silently collapsing them."""
+        if values is None:
+            return None
+        if len(set(values)) != len(values):
+            raise ValueError("must not contain duplicates")
+        return values
+
+    def blackout_period_update(self) -> BlackoutPeriod | None | Unset:
+        """Return the requested blackout change, or ``UNSET`` when omitted."""
+        if "blackout_period" not in self.model_fields_set:
+            return UNSET
+        return self.blackout_period.to_domain() if self.blackout_period else None
+
+    def quiet_hours_update(self) -> QuietHours | None | Unset:
+        """Return the requested quiet-hours change, or ``UNSET`` when omitted."""
+        if "quiet_hours" not in self.model_fields_set:
+            return UNSET
+        return self.quiet_hours.to_domain() if self.quiet_hours else None
+
+
+class RecipientResponse(BaseModel):
+    """API representation of a persisted recipient."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: UUID
+    project_id: UUID
+    external_id: str | None = None
+    addresses: dict[str, str]
+    timezone: str | None = None
+    opted_out_channels: list[DeliveryChannel]
+    unsubscribed_categories: list[NotificationCategory]
+    unsubscribed_topics: list[UUID]
+    blackout_period: BlackoutPeriodModel | None = None
+    quiet_hours: QuietHoursModel | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_entity(cls, recipient: Recipient) -> RecipientResponse:
+        """Build the API representation from a domain recipient."""
+        return cls(
+            id=recipient.id,
+            project_id=recipient.project_id,
+            external_id=recipient.external_id,
+            addresses={
+                channel.value: address
+                for channel, address in recipient.addresses.items()
+            },
+            timezone=recipient.timezone,
+            opted_out_channels=sorted(recipient.preferences.opted_out_channels),
+            unsubscribed_categories=sorted(
+                recipient.preferences.unsubscribed_categories
+            ),
+            unsubscribed_topics=sorted(recipient.preferences.unsubscribed_topics),
+            blackout_period=(
+                BlackoutPeriodModel.from_domain(recipient.preferences.blackout_period)
+                if recipient.preferences.blackout_period is not None
+                else None
+            ),
+            quiet_hours=(
+                QuietHoursModel.from_domain(recipient.preferences.quiet_hours)
+                if recipient.preferences.quiet_hours is not None
+                else None
+            ),
+            created_at=recipient.created_at,
+            updated_at=recipient.updated_at,
+        )
+
+
+class RecipientListResponse(BaseModel):
+    """One cursor page of project recipients."""
+
+    data: list[RecipientResponse]
+    next_cursor: str | None = None

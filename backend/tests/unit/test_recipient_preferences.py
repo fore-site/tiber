@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from tiber.api.schemas.recipient import (
+from tiber.api.v1.schemas.recipient import (
     RecipientCreateRequest,
     RecipientPreferencesRequest,
     RecipientResponse,

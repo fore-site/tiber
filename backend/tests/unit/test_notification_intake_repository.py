@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from tiber.api.schemas.intake import IntakeStatusResponse
+from tiber.api.v1.schemas.intake import IntakeStatusResponse
 from tiber.domain.entities import Recipient
 from tiber.domain.entities.notification_intake import NotificationIntake
 from tiber.domain.enums import DeliveryChannel, IntakeStatus, NotificationCategory
